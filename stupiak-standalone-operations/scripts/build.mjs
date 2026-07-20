@@ -9,6 +9,7 @@ import { applyV190MonthGuard } from './apply-v190-month-guard.mjs';
 import { applyV191StaticStockFooter } from './apply-v191-static-stock-footer.mjs';
 import { applyV192FastStockSubmit } from './apply-v192-fast-stock-submit.mjs';
 import { applyV193StockFooterFilter } from './apply-v193-stock-footer-filter.mjs';
+import { applyV194DirectRelationExport } from './apply-v194-direct-relation-export.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -25,4 +26,5 @@ await applyV190MonthGuard(dist);
 await applyV191StaticStockFooter(dist);
 await applyV192FastStockSubmit(dist);
 await applyV193StockFooterFilter(dist);
+await applyV194DirectRelationExport(dist);
 console.log('Built static app into dist/');
