@@ -5,6 +5,7 @@ import { applyV163Cleanup } from './apply-v163-cleanup.mjs';
 import { applyV170OfflineWorkflow } from './apply-v170-offline-workflow.mjs';
 import { applyV180StockShare } from './apply-v180-stock-share.mjs';
 import { applyV190StockColumns } from './apply-v190-stock-columns.mjs';
+import { applyV190MonthGuard } from './apply-v190-month-guard.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -17,4 +18,5 @@ await applyV163Cleanup(dist);
 await applyV170OfflineWorkflow(dist);
 await applyV180StockShare(dist);
 await applyV190StockColumns(dist, root);
+await applyV190MonthGuard(dist);
 console.log('Built static app into dist/');
