@@ -109,4 +109,32 @@ export function cashTotal`,
   );
 
   await writeFile(cashFile, cash);
+
+  const stockFile = resolve(dist, 'src/pages/stock.js');
+  let stock = await readFile(stockFile, 'utf8');
+  stock = replaceRequired(
+    stock,
+    'export function initializeStockValues(state, data) {\n  state.values = {};',
+    'export function initializeStockValues(state, data) {\n  data.selectedWeek = weekPeriod(state.businessDate).index;\n  state.values = {};',
+    'stock selected week override'
+  );
+  stock = replaceRequired(
+    stock,
+    "<p>Original spreadsheet order, units, minimum levels and Week 1–5 structure.</p>",
+    "<p>Original spreadsheet order with calendar-style Monday–Sunday stock weeks.</p>",
+    'stock page copy'
+  );
+  stock = replaceRequired(
+    stock,
+    "function weekPeriodForIndex(dateValue,index){const d=new Date(`${String(dateValue).slice(0,7)}-01T00:00:00`); const last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate(); const start=(index-1)*7+1; const end=Math.min(index*7,last); return `${start}–${end}`;}",
+    "function weekPeriodForIndex(dateValue,index){const monthStart=new Date(`${String(dateValue).slice(0,7)}-01T00:00:00`); const offset=(monthStart.getDay()+6)%7; const start=new Date(monthStart.getFullYear(),monthStart.getMonth(),1-offset+(index-1)*7); const end=new Date(start.getFullYear(),start.getMonth(),start.getDate()+6); return `${formatDate(start,{year:false})}–${formatDate(end,{year:false})}`;}",
+    'stock calendar week headers'
+  );
+  stock = replaceRequired(
+    stock,
+    "return { action:'submitStockCount', submissionId:createId('stock'), businessDate:state.businessDate, countedBy:state.countedBy, sessionNote:state.sessionNote, sections };",
+    "return { action:'submitStockCount', submissionId:createId('stock'), businessDate:state.businessDate, weekIndex:weekPeriod(state.businessDate).index, countedBy:state.countedBy, sessionNote:state.sessionNote, sections };",
+    'stock submit week index'
+  );
+  await writeFile(stockFile, stock);
 }
