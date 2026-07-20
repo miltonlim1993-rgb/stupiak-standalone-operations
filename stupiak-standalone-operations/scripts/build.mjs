@@ -10,6 +10,7 @@ import { applyV191StaticStockFooter } from './apply-v191-static-stock-footer.mjs
 import { applyV192FastStockSubmit } from './apply-v192-fast-stock-submit.mjs';
 import { applyV193StockFooterFilter } from './apply-v193-stock-footer-filter.mjs';
 import { applyV194DirectRelationExport } from './apply-v194-direct-relation-export.mjs';
+import { applyV1100SeparateStockActions } from './apply-v1100-separate-stock-actions.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -17,6 +18,9 @@ await rm(dist, { recursive: true, force: true });
 await mkdir(dist, { recursive: true });
 await cp(resolve(root, 'public'), dist, { recursive: true });
 await cp(resolve(root, 'src'), resolve(dist, 'src'), { recursive: true });
+await mkdir(resolve(dist, 'vendor'), { recursive: true });
+await cp(resolve(root, 'node_modules/exceljs/dist/exceljs.min.js'), resolve(dist, 'vendor/exceljs.min.js'));
+await cp(resolve(root, 'node_modules/pdf-lib/dist/pdf-lib.min.js'), resolve(dist, 'vendor/pdf-lib.min.js'));
 await applyV163CashFixes(dist);
 await applyV163Cleanup(dist);
 await applyV170OfflineWorkflow(dist);
@@ -27,4 +31,5 @@ await applyV191StaticStockFooter(dist);
 await applyV192FastStockSubmit(dist);
 await applyV193StockFooterFilter(dist);
 await applyV194DirectRelationExport(dist);
+await applyV1100SeparateStockActions(dist);
 console.log('Built static app into dist/');
