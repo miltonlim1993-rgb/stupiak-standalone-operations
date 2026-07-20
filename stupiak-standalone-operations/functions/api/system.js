@@ -11,7 +11,7 @@ export function onRequestGet(context) {
     statvara: context.env.STATVARA_WEBHOOK_URL ? 'enabled' : 'reserved',
     storageProvider: context.env.FILE_STORAGE_PROVIDER || 'google_drive',
     cloudflareStorageReady: Boolean(context.env.FILE_STORAGE_PROVIDER === 'cloudflare_r2'),
-    version: '1.3.0'
+    version: '1.4.0'
   }), {
     headers: {
       'Content-Type': 'application/json;charset=utf-8',
