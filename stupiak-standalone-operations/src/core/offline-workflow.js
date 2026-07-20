@@ -35,12 +35,21 @@ export function stockBootstrapKey(outlet, businessDate) {
   return `${PREFIX}:stockBootstrap:${safeOutlet(outlet)}:${monthKey(businessDate)}`;
 }
 
+function latestStockBootstrapKey(outlet) {
+  return `${PREFIX}:stockBootstrapLatest:${safeOutlet(outlet)}`;
+}
+
 export function readStockBootstrap(outlet, businessDate) {
   return readJson(stockBootstrapKey(outlet, businessDate));
 }
 
+export function readLatestStockBootstrap(outlet) {
+  return readJson(latestStockBootstrapKey(outlet));
+}
+
 export function writeStockBootstrap(outlet, businessDate, data) {
   writeJson(stockBootstrapKey(outlet, businessDate), data);
+  writeJson(latestStockBootstrapKey(outlet), data);
 }
 
 function stockDraftKey(outlet, businessDate) {
