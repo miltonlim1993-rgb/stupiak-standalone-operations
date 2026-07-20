@@ -91,7 +91,7 @@ export function cashPage(context, state) {
         <div>
           <span class="eyebrow">CASH COUNT</span>
           <h1>${escapeHtml(outlet)}</h1>
-          <p>Opening, every handover, closing cash and all payment methods from the FeedMe report.</p>
+          <p>Actual-only entry. FeedMe backfill and the Google Sheet handle all system, variance and issue formulas.</p>
         </div>
         <div class="date-field"><label>Business date<input id="cash-date" type="date" value="${state.businessDate}"></label></div>
       </div>
@@ -115,8 +115,6 @@ function standardMarkup(state) {
   const isClosing = key === 'closing';
   const staff = state.staff[key] || '';
   const remark = state.remarks[key] || '';
-  const expectedClosing = nullableNumber(state.data?.summary?.expectedClosing);
-  const cashVariance = expectedClosing === null ? null : total - expectedClosing;
 
   return `<div class="cash-full-stack">
     <div class="cash-layout">
@@ -131,15 +129,15 @@ function standardMarkup(state) {
           <label>Other cash (RM)<input type="number" min="0" step="0.01" data-cash-other="${key}" value="${escapeHtml(other)}"></label>
           <label>Counted by<input type="text" id="cash-counted-by" value="${escapeHtml(staff)}" placeholder="Staff name"></label>
         </div>
-        <label>Remark ${isClosing && cashVariance !== null && Math.abs(cashVariance) > 0.009 ? '<em>Required when cash differs from expected closing</em>' : ''}<textarea id="cash-remark" rows="3" placeholder="Optional note">${escapeHtml(remark)}</textarea></label>
+        <label>Remark<textarea id="cash-remark" rows="3" placeholder="Optional note">${escapeHtml(remark)}</textarea></label>
       </article>
       <aside class="summary-panel cash-control-panel">
         <span>${isClosing ? 'Physical cash counted' : 'Calculated total'}</span>
         <strong>RM ${total.toFixed(2)}</strong>
-        ${isClosing ? closingControlMarkup(state, total, expectedClosing) : '<p>Calculated from the denomination quantities below.</p>'}
+        <p>No system or variance check is shown here. The Sheet calculates those after FeedMe backfill.</p>
       </aside>
     </div>
-    ${isClosing ? paymentReconciliationMarkup(state) : ''}
+    ${isClosing ? paymentActualMarkup(state) : ''}
     <button class="button primary full cash-submit-main" id="submit-cash" ${state.submitting ? 'disabled' : ''}>${state.submitting ? 'Saving…' : `Submit ${key}`}</button>
   </div>`;
 }
@@ -152,50 +150,31 @@ function savedNotice(state, phase) {
   return `<div class="cash-readback-note">${icon('check', 17)}<div><strong>Existing record loaded</strong><span>${formatDateTime(latest.savedAt)} · RM ${money(total)}</span></div></div>`;
 }
 
-function closingControlMarkup(state, total, expectedClosing) {
-  const paymentSystem = sumPayments(state.data?.payments, 'system');
-  const paymentActual = sumCurrentPaymentActuals(state);
-  const cashVariance = expectedClosing === null ? null : total - expectedClosing;
-  return `
-    <div class="cash-control-list">
-      <div><span>Expected closing</span><strong>${expectedClosing === null ? 'Not backfilled' : `RM ${expectedClosing.toFixed(2)}`}</strong></div>
-      <div><span>Cash variance</span><strong class="${cashVariance !== null && Math.abs(cashVariance) > 0.009 ? 'negative' : ''}">${cashVariance === null ? '—' : `${cashVariance >= 0 ? '+' : '−'} RM ${Math.abs(cashVariance).toFixed(2)}`}</strong></div>
-      <div><span>Payment system</span><strong>RM ${paymentSystem.toFixed(2)}</strong></div>
-      <div><span>Payment actual</span><strong>RM ${paymentActual.toFixed(2)}</strong></div>
-    </div>`;
-}
-
-function paymentReconciliationMarkup(state) {
+function paymentActualMarkup(state) {
   const payments = state.data?.payments || [];
   if (!payments.length) {
-    return `<article class="cash-card payment-empty"><strong>No payment methods detected</strong><p>The Cash GAS could not find matching “System / Actual / Remark” payment columns in _RelationDaily.</p></article>`;
+    return `<article class="cash-card payment-empty"><strong>No payment methods detected</strong><p>The Cash GAS could not find payment actual columns in _RelationDaily.</p></article>`;
   }
   return `<section class="payment-section">
     <div class="section-title-row">
-      <div><span class="eyebrow">PAYMENT RECONCILIATION</span><h2>Actual payment received</h2><p>Methods are detected from the current FeedMe report template, not hard-coded in the website.</p></div>
+      <div><span class="eyebrow">PAYMENT ACTUAL ENTRY</span><h2>Other payment received</h2><p>Enter actual payment only. System and variance remain in the Sheet.</p></div>
       <div class="payment-total-box"><span>Actual total</span><strong>RM ${sumCurrentPaymentActuals(state).toFixed(2)}</strong></div>
     </div>
-    <div class="payment-method-grid">${payments.map((payment) => paymentCard(state, payment)).join('')}</div>
+    <div class="payment-method-grid actual-only-grid">${payments.map((payment) => paymentCard(state, payment)).join('')}</div>
   </section>`;
 }
 
 function paymentCard(state, payment) {
   const value = state.payments[payment.id] || { actual: '', remark: '' };
-  const system = nullableNumber(payment.system);
-  const actual = value.actual === '' ? null : Number(value.actual);
-  const variance = actual === null ? null : actual - (system || 0);
-  const needsRemark = system !== null && actual !== null && Math.abs(variance) > 0.009;
-  return `<article class="payment-method-card ${needsRemark ? 'has-variance' : ''}">
+  return `<article class="payment-method-card actual-only">
     <div class="payment-method-head">
       <div><span>Payment method</span><h3>${escapeHtml(payment.name)}</h3></div>
-      <span class="payment-status ${needsRemark ? 'review' : actual === null ? 'pending' : 'matched'}">${actual === null ? 'Pending' : needsRemark ? 'Review' : 'Matched'}</span>
+      <span class="payment-status ${value.actual === '' ? 'pending' : 'matched'}">${value.actual === '' ? 'Pending' : 'Entered'}</span>
     </div>
-    <div class="payment-values">
-      <div><span>System</span><strong>${system === null ? '—' : `RM ${system.toFixed(2)}`}</strong></div>
+    <div class="payment-values actual-only-values">
       <label><span>Actual</span><input id="payment-actual-${payment.id}" type="number" min="0" step="0.01" data-payment-actual="${payment.id}" value="${escapeHtml(value.actual)}" placeholder="0.00"></label>
-      <div><span>Variance</span><strong class="${needsRemark ? 'negative' : ''}">${variance === null ? '—' : `${variance >= 0 ? '+' : '−'} RM ${Math.abs(variance).toFixed(2)}`}</strong></div>
     </div>
-    <label class="payment-remark">Remark ${needsRemark ? '<em>Required</em>' : ''}<input id="payment-remark-${payment.id}" data-payment-remark="${payment.id}" value="${escapeHtml(value.remark)}" placeholder="${needsRemark ? 'Explain the variance' : 'Optional'}"></label>
+    <label class="payment-remark">Remark <input id="payment-remark-${payment.id}" data-payment-remark="${payment.id}" value="${escapeHtml(value.remark)}" placeholder="Optional"></label>
   </article>`;
 }
 
@@ -335,13 +314,7 @@ export function validateCash(state) {
     for (const payment of state.data?.payments || []) {
       const value = state.payments[payment.id] || {};
       if (value.actual === '' || value.actual === null || value.actual === undefined) return `Enter the actual amount for ${payment.name}. Use 0 when there was no payment.`;
-      const system = nullableNumber(payment.system);
-      const actual = Number(value.actual);
-      if (system !== null && Math.abs(actual - system) > 0.009 && !String(value.remark || '').trim()) return `Add a remark for ${payment.name} because Actual differs from System.`;
     }
-    const expected = nullableNumber(state.data?.summary?.expectedClosing);
-    const counted = cashTotal(state.closing, state.closingOther);
-    if (expected !== null && Math.abs(counted - expected) > 0.009 && !state.remarks.closing.trim()) return 'Add a closing remark because physical cash differs from Expected Closing.';
   }
   return '';
 }
@@ -363,21 +336,11 @@ function normalizeDenominations(values) {
   return result;
 }
 
-function sumPayments(payments, field) {
-  return (payments || []).reduce((sum, payment) => sum + Number(payment?.[field] || 0), 0);
-}
-
 function sumCurrentPaymentActuals(state) {
   return (state.data?.payments || []).reduce((sum, payment) => {
     const value = state.payments[payment.id]?.actual;
     return sum + (value === '' || value === null || value === undefined ? 0 : Number(value || 0));
   }, 0);
-}
-
-function nullableNumber(value) {
-  if (value === '' || value === null || value === undefined) return null;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : null;
 }
 
 function numberOrBlank(value) {
@@ -397,7 +360,7 @@ function formatDateTime(value) {
 }
 
 function loadingMarkup() {
-  return `<div class="loading-state"><span class="spinner"></span><strong>Reading FeedMe cash report…</strong><small>Loading payment methods, existing values and handover history.</small></div>`;
+  return `<div class="loading-state"><span class="spinner"></span><strong>Reading cash actual history…</strong><small>Loading saved opening, handovers, closing and payment method names.</small></div>`;
 }
 
 function errorMarkup(error) {
