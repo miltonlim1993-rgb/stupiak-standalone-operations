@@ -19,6 +19,14 @@ export async function onRequestPost(context) {
       outlet: body.payload?.outlet || context.env.OUTLET_NAME || '',
       secret
     };
+
+    const descriptor = cacheDescriptor(service, payload);
+    const edgeCache = globalThis.caches?.default;
+    if (descriptor && edgeCache && !payload.refresh) {
+      const cached = await edgeCache.match(descriptor.request);
+      if (cached) return cached;
+    }
+
     const gasResponse = await fetch(targetUrl, {
       method:'POST',
       headers:{'Content-Type':'text/plain;charset=utf-8'},
@@ -41,15 +49,54 @@ export async function onRequestPost(context) {
     if (data.ok && data.saved && !data.duplicate) {
       const event = buildEvent(service,payload,data);
       if (context.env.STATVARA_WEBHOOK_URL) context.waitUntil(sendStatvaraEvent(context.env,event));
+      if (edgeCache) context.waitUntil(invalidateBootstrapCache(edgeCache, service, payload));
     }
     data.integration = {
       statvara: context.env.STATVARA_WEBHOOK_URL ? 'queued_when_saved' : 'reserved',
       storageProvider: context.env.FILE_STORAGE_PROVIDER || 'google_drive'
     };
-    return json(data,gasResponse.ok?200:502);
+
+    const response = json(data,gasResponse.ok?200:502,descriptor?.ttl || 0);
+    if (descriptor && edgeCache && data.ok && gasResponse.ok) {
+      context.waitUntil(edgeCache.put(descriptor.request,response.clone()));
+    }
+    return response;
   } catch (error) {
     return json({ok:false,error:String(error?.message||error)},500);
   }
+}
+
+function cacheDescriptor(service,payload) {
+  const action=String(payload.action||'');
+  let ttl=0;
+  if(action==='getStandaloneCashBootstrap'||action==='getBootstrap') ttl=90;
+  else if(action==='getStandaloneCashDashboard'||action==='getStockDashboard') ttl=45;
+  if(!ttl) return null;
+  const params=new URLSearchParams({
+    service,
+    action,
+    outlet:String(payload.outlet||''),
+    businessDate:String(payload.businessDate||''),
+    dateFrom:String(payload.dateFrom||''),
+    dateTo:String(payload.dateTo||'')
+  });
+  return {
+    ttl,
+    request:new Request(`https://operations-cache.internal/read?${params.toString()}`,{method:'GET'})
+  };
+}
+
+async function invalidateBootstrapCache(cache,service,payload){
+  const action=service==='cash'?'getStandaloneCashBootstrap':'getBootstrap';
+  const params=new URLSearchParams({
+    service,
+    action,
+    outlet:String(payload.outlet||''),
+    businessDate:String(payload.businessDate||''),
+    dateFrom:'',
+    dateTo:''
+  });
+  await cache.delete(new Request(`https://operations-cache.internal/read?${params.toString()}`,{method:'GET'}));
 }
 
 function buildEvent(service,payload,result){
@@ -66,7 +113,7 @@ function buildEvent(service,payload,result){
     storage:{provider:'google_drive',spreadsheetId:result.spreadsheetId||'',spreadsheetUrl:result.spreadsheetUrl||''},
     payload:isStock
       ? {monthKey:result.monthKey,weekIndex:result.weekIndex,orderCount:result.orderCount,changedCellCount:result.changedCellCount}
-      : {phase:payload.phase,countedTotal:payload.countedTotal,outgoingTotal:payload.outgoingTotal,incomingTotal:payload.incomingTotal,variance:payload.incomingTotal!=null?Number(payload.incomingTotal)-Number(payload.outgoingTotal):null}
+      : {phase:payload.phase,countedTotal:payload.countedTotal,outgoingTotal:payload.outgoingTotal,incomingTotal:payload.incomingTotal,variance:payload.incomingTotal!=null?Number(payload.incomingTotal)-Number(payload.outgoingTotal):null,payments:payload.payments||[]}
   };
 }
 
@@ -76,6 +123,9 @@ async function sendStatvaraEvent(env,event){
   if(env.STATVARA_API_KEY) headers.Authorization=`Bearer ${env.STATVARA_API_KEY}`;
   await fetch(env.STATVARA_WEBHOOK_URL,{method:'POST',headers,body});
 }
-function json(value,status=200){
-  return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'}});
+function json(value,status=200,ttl=0){
+  return new Response(JSON.stringify(value),{status,headers:{
+    'Content-Type':'application/json;charset=utf-8',
+    'Cache-Control':ttl>0?`public, max-age=0, s-maxage=${ttl}`:'no-store'
+  }});
 }
