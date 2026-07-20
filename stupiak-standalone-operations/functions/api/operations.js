@@ -19,7 +19,16 @@ export async function onRequestPost(context) {
     const gasResponse = await fetch(targetUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload), redirect:'follow' });
     const text = await gasResponse.text();
     let data;
-    try { data = JSON.parse(text); } catch { return json({ok:false,error:'Google Apps Script returned unreadable content',status:gasResponse.status},502); }
+    try {
+      data = JSON.parse(text);
+    } catch {
+      const looksLikeHtml = /<!doctype|<html|accounts\.google\.com|authorization required|sign in/i.test(text);
+      const label = service === 'stock' ? 'Stock' : 'Cash';
+      const error = looksLikeHtml
+        ? `${label} GAS returned a Google HTML page. Open Apps Script → Deploy → Manage deployments → Edit, choose New version, Execute as Me, Who has access: Anyone, then deploy the existing /exec URL.`
+        : `${label} GAS did not return JSON. Confirm the latest code is deployed as a new Web App version and that Cloudflare uses the same /exec URL.`;
+      return json({ok:false,error,status:gasResponse.status,gasUrl:targetUrl},502);
+    }
 
     if (data.ok && data.saved && !data.duplicate) {
       const event = buildEvent(service,payload,data);
