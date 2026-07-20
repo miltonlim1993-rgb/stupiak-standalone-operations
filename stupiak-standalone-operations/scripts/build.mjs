@@ -7,6 +7,7 @@ import { applyV180StockShare } from './apply-v180-stock-share.mjs';
 import { applyV190StockColumns } from './apply-v190-stock-columns.mjs';
 import { applyV190MonthGuard } from './apply-v190-month-guard.mjs';
 import { applyV191StaticStockFooter } from './apply-v191-static-stock-footer.mjs';
+import { applyV192FastStockSubmit } from './apply-v192-fast-stock-submit.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -21,4 +22,5 @@ await applyV180StockShare(dist);
 await applyV190StockColumns(dist, root);
 await applyV190MonthGuard(dist);
 await applyV191StaticStockFooter(dist);
+await applyV192FastStockSubmit(dist);
 console.log('Built static app into dist/');
