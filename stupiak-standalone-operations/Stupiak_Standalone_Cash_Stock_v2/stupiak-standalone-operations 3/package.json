@@ -1,0 +1,13 @@
+{
+  "name": "stupiak-standalone-operations",
+  "version": "1.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "preview": "npx wrangler pages dev dist"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
