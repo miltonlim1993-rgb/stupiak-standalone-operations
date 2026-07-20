@@ -118,12 +118,40 @@ export function validateCash(state) {`,
     'closing payment validation'
   );
 
+  source = replaceRequired(
+    source,
+    "    result[String(value)] = raw === null || raw === undefined || raw === 0 ? (raw === 0 ? '0' : '') : String(raw);",
+    "    result[String(value)] = raw === null || raw === undefined || Number(raw) === 0 ? '' : String(raw);",
+    'blank zero denomination values'
+  );
+
+  source = replaceRequired(
+    source,
+    '<input type="number" inputmode="numeric" min="0" step="1" data-cash-scope="${scope}" data-denomination="${value}" value="${escapeHtml(raw)}" placeholder="0">',
+    '<input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-cash-scope="${scope}" data-denomination="${value}" value="${escapeHtml(raw)}" placeholder="0">',
+    'cash quantity input mode'
+  );
+
+  source = replaceRequired(
+    source,
+    '<input id="payment-actual-${payment.id}" type="number" min="0" step="0.01" data-payment-actual="${payment.id}" value="${escapeHtml(value.actual)}" placeholder="0.00">',
+    '<input id="payment-actual-${payment.id}" type="text" inputmode="decimal" autocomplete="off" data-payment-actual="${payment.id}" value="${escapeHtml(value.actual)}" placeholder="0.00">',
+    'payment amount input mode'
+  );
+
   await writeFile(file, source);
 }
 
 async function patchMainRuntime(dist) {
   const file = resolve(dist, 'src/main.js');
   let source = await readFile(file, 'utf8');
+
+  source = replaceRequired(
+    source,
+    "import { cashPage, createCashState, initializeCashFromBootstrap, buildCashPayload, validateCash } from './pages/cash.js';",
+    "import { cashPage, createCashState, initializeCashFromBootstrap, buildCashPayload, validateCash, cashTotal } from './pages/cash.js';",
+    'cash total import'
+  );
 
   source = replaceRequired(
     source,
@@ -165,6 +193,146 @@ async function patchMainRuntime(dist) {
     "  const paymentLines = payload.phase === 'closing'\n    ? (payload.payments || []).map((payment) => `*${payment.name}:* RM ${Number(payment.actual || 0).toFixed(2)}`)\n    : [];",
     "  const paymentLines = ['handover', 'closing'].includes(payload.phase)\n    ? (payload.payments || []).map((payment) => `*${payment.name}:* RM ${Number(payment.actual || 0).toFixed(2)}`)\n    : [];",
     'handover WhatsApp payments'
+  );
+
+  source = replaceRequired(
+    source,
+    `  document.querySelectorAll('[data-cash-scope]').forEach((element) => element.addEventListener('input', (event) => {
+    state.cash[event.target.dataset.cashScope][event.target.dataset.denomination] = event.target.value;
+    renderCashPreservingActive();
+  }));`,
+    `  document.querySelectorAll('[data-cash-scope]').forEach((element) => {
+    element.addEventListener('focus', (event) => {
+      if (event.target.value === '0') event.target.value = '';
+      event.target.select?.();
+    });
+    element.addEventListener('input', (event) => {
+      const scope = event.target.dataset.cashScope;
+      const denomination = event.target.dataset.denomination;
+      const cleaned = String(event.target.value || '').replace(/[^0-9]/g, '').replace(/^0+(?=\\d)/, '');
+      if (event.target.value !== cleaned) event.target.value = cleaned;
+      state.cash[scope][denomination] = cleaned;
+      updateCashInputPreview(event.target);
+    });
+  });`,
+    'smooth denomination input'
+  );
+
+  source = replaceRequired(
+    source,
+    `  document.querySelectorAll('[data-cash-other]').forEach((element) => element.addEventListener('input', (event) => {
+    state.cash[\`${'${'}event.target.dataset.cashOther}Other\`] = event.target.value;
+    renderCashPreservingActive();
+  }));`,
+    `  document.querySelectorAll('[data-cash-other]').forEach((element) => {
+    element.addEventListener('focus', (event) => event.target.select?.());
+    element.addEventListener('input', (event) => {
+      const key = \`${'${'}event.target.dataset.cashOther}Other\`;
+      const cleaned = normalizeMoneyInput(event.target.value);
+      if (event.target.value !== cleaned) event.target.value = cleaned;
+      state.cash[key] = cleaned;
+      updateCashInputPreview(event.target);
+    });
+  });`,
+    'smooth other cash input'
+  );
+
+  source = replaceRequired(
+    source,
+    `  document.querySelectorAll('[data-payment-actual]').forEach((element) => element.addEventListener('input', (event) => {
+    const id = event.target.dataset.paymentActual;
+    state.cash.payments[id].actual = event.target.value;
+    renderCashPreservingActive();
+  }));`,
+    `  document.querySelectorAll('[data-payment-actual]').forEach((element) => {
+    element.addEventListener('focus', (event) => event.target.select?.());
+    element.addEventListener('input', (event) => {
+      const id = event.target.dataset.paymentActual;
+      const cleaned = normalizeMoneyInput(event.target.value);
+      if (event.target.value !== cleaned) event.target.value = cleaned;
+      state.cash.payments[id].actual = cleaned;
+      updatePaymentInputPreview(event.target, id);
+    });
+  });`,
+    'smooth payment input'
+  );
+
+  source = replaceRequired(
+    source,
+    'function renderCashPreservingActive() {',
+    `function normalizeMoneyInput(value) {
+  const raw = String(value || '').replace(/[^0-9.]/g, '');
+  const firstDot = raw.indexOf('.');
+  if (firstDot < 0) return raw.replace(/^0+(?=\\d)/, '');
+  const whole = raw.slice(0, firstDot).replace(/^0+(?=\\d)/, '') || '0';
+  const decimals = raw.slice(firstDot + 1).replace(/\\./g, '').slice(0, 2);
+  return \`${'${'}whole}.${'${'}decimals}\`;
+}
+
+function scopeTotal(scope) {
+  return cashTotal(state.cash[scope] || {}, state.cash[\`${'${'}scope}Other\`] || 0);
+}
+
+function updateCashInputPreview(input) {
+  const scope = input.dataset.cashScope || input.dataset.cashOther;
+  if (!scope) return;
+  if (input.dataset.denomination) {
+    const subtotal = Number(input.value || 0) * Number(input.dataset.denomination || 0);
+    const small = input.closest('.denomination')?.querySelector('small');
+    if (small) small.textContent = \`RM ${'${'}subtotal.toFixed(2)}\`;
+  }
+  const total = scopeTotal(scope);
+  const card = input.closest('.cash-card');
+  const cardTotal = card?.querySelector('.money-total');
+  if (cardTotal) cardTotal.textContent = \`RM ${'${'}total.toFixed(2)}\`;
+
+  if (state.cash.phase === 'handover') {
+    const outgoing = scopeTotal('outgoing');
+    const incoming = scopeTotal('incoming');
+    const variance = incoming - outgoing;
+    const varianceCard = document.querySelector('.variance-card');
+    if (varianceCard) {
+      varianceCard.classList.toggle('warning', Math.abs(variance) > 0.009);
+      varianceCard.classList.toggle('ok', Math.abs(variance) <= 0.009);
+      const strong = varianceCard.querySelector('strong');
+      if (strong) strong.textContent = \`${'${'}variance >= 0 ? '+' : '−'} RM ${'${'}Math.abs(variance).toFixed(2)}\`;
+    }
+  } else {
+    const controlTotal = document.querySelector('.cash-control-panel > strong');
+    if (controlTotal) controlTotal.textContent = \`RM ${'${'}total.toFixed(2)}\`;
+  }
+}
+
+function updatePaymentInputPreview(input, id) {
+  const payment = state.cash.data?.payments?.find((entry) => entry.id === id);
+  if (!payment) return;
+  const actualText = state.cash.payments[id]?.actual;
+  const actual = actualText === '' ? null : Number(actualText);
+  const system = payment.system === '' || payment.system === null || payment.system === undefined ? null : Number(payment.system);
+  const variance = actual === null ? null : actual - Number(system || 0);
+  const card = input.closest('.payment-method-card');
+  const varianceStrong = card?.querySelector('.payment-values > :last-child strong');
+  if (varianceStrong) {
+    varianceStrong.textContent = variance === null ? '—' : \`${'${'}variance >= 0 ? '+' : '−'} RM ${'${'}Math.abs(variance).toFixed(2)}\`;
+    varianceStrong.classList.toggle('negative', variance !== null && Math.abs(variance) > 0.009);
+  }
+  const needsReview = variance !== null && system !== null && Math.abs(variance) > 0.009;
+  card?.classList.toggle('has-variance', needsReview);
+  const status = card?.querySelector('.payment-status');
+  if (status) {
+    status.textContent = actual === null ? 'Pending' : needsReview ? 'Review' : 'Matched';
+    status.className = \`payment-status ${'${'}actual === null ? 'pending' : needsReview ? 'review' : 'matched'}\`;
+  }
+  const total = (state.cash.data?.payments || []).reduce((sum, item) => {
+    const value = state.cash.payments[item.id]?.actual;
+    return sum + (value === '' || value === null || value === undefined ? 0 : Number(value || 0));
+  }, 0);
+  const totalNode = document.querySelector('.payment-total-box strong');
+  if (totalNode) totalNode.textContent = \`RM ${'${'}total.toFixed(2)}\`;
+}
+
+function renderCashPreservingActive() {`,
+    'cash live preview helpers'
   );
 
   await writeFile(file, source);
