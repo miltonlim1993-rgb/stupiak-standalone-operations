@@ -221,16 +221,9 @@ async function patchStockPage(dist) {
     'two-stage result action'
   );
 
-  source = replaceRequired(
-    source,
-    `function submitSuccess(result) {`,
-    `function submitSuccess(result) {`,
-    'stock success function exists'
-  );
-
   source = source.replace(
-    `${state.submitResult ? submitSuccess(state.submitResult) : ''}`,
-    `${state.submitResult ? submitSuccess(state.submitResult, state) : ''}`
+    "${state.submitResult ? submitSuccess(state.submitResult) : ''}",
+    "${state.submitResult ? submitSuccess(state.submitResult, state) : ''}"
   );
   source = source.replace(`function submitSuccess(result) {`, `function submitSuccess(result, state) {`);
 
