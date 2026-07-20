@@ -2,6 +2,7 @@ import { cp, mkdir, rm } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { applyV163CashFixes } from './apply-v163-cash-fixes.mjs';
 import { applyV163Cleanup } from './apply-v163-cleanup.mjs';
+import { applyV170OfflineWorkflow } from './apply-v170-offline-workflow.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -11,4 +12,5 @@ await cp(resolve(root, 'public'), dist, { recursive: true });
 await cp(resolve(root, 'src'), resolve(dist, 'src'), { recursive: true });
 await applyV163CashFixes(dist);
 await applyV163Cleanup(dist);
+await applyV170OfflineWorkflow(dist);
 console.log('Built static app into dist/');
