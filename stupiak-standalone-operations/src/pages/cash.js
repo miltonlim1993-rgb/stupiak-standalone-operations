@@ -126,7 +126,7 @@ function standardMarkup(state) {
         ${savedNotice(state, key)}
         ${denominationGrid(counts, key)}
         <div class="form-grid two">
-          <label>Other cash (RM)<input type="number" min="0" step="0.01" data-cash-other="${key}" value="${escapeHtml(other)}"></label>
+          <label>Other cash (RM)<input type="text" inputmode="decimal" autocomplete="off" data-cash-other="${key}" value="${escapeHtml(other)}"></label>
           <label>Counted by<input type="text" id="cash-counted-by" value="${escapeHtml(staff)}" placeholder="Staff name"></label>
         </div>
         <label>Remark<textarea id="cash-remark" rows="3" placeholder="Optional note">${escapeHtml(remark)}</textarea></label>
@@ -166,14 +166,13 @@ function paymentActualMarkup(state) {
 
 function paymentCard(state, payment) {
   const value = state.payments[payment.id] || { actual: '', remark: '' };
+  const actualEntered = value.actual !== '' && value.actual !== null && value.actual !== undefined;
   return `<article class="payment-method-card actual-only">
     <div class="payment-method-head">
       <div><span>Payment method</span><h3>${escapeHtml(payment.name)}</h3></div>
-      <span class="payment-status ${value.actual === '' ? 'pending' : 'matched'}">${value.actual === '' ? 'Pending' : 'Entered'}</span>
+      <span class="payment-status ${actualEntered ? 'matched' : 'pending'}">${actualEntered ? 'Entered' : 'Pending'}</span>
     </div>
-    <div class="payment-values actual-only-values">
-      <label><span>Actual</span><input id="payment-actual-${payment.id}" type="number" min="0" step="0.01" data-payment-actual="${payment.id}" value="${escapeHtml(value.actual)}" placeholder="0.00"></label>
-    </div>
+    <label class="payment-actual-only"><span>Actual received</span><input id="payment-actual-${payment.id}" type="text" inputmode="decimal" autocomplete="off" data-payment-actual="${payment.id}" value="${escapeHtml(value.actual)}" placeholder="0.00"></label>
     <label class="payment-remark">Remark <input id="payment-remark-${payment.id}" data-payment-remark="${payment.id}" value="${escapeHtml(value.remark)}" placeholder="Optional"></label>
   </article>`;
 }
@@ -193,16 +192,16 @@ function handoverMarkup(state) {
       <article class="cash-card compact">
         <div class="cash-card-head"><div><span>Outgoing count</span><h2>Cash handed over</h2></div><strong class="money-total">RM ${outgoing.toFixed(2)}</strong></div>
         ${denominationGrid(state.outgoing, 'outgoing')}
-        <label>Other cash (RM)<input type="number" min="0" step="0.01" data-cash-other="outgoing" value="${escapeHtml(state.outgoingOther)}"></label>
+        <label>Other cash (RM)<input type="text" inputmode="decimal" autocomplete="off" data-cash-other="outgoing" value="${escapeHtml(state.outgoingOther)}"></label>
       </article>
       <article class="cash-card compact">
         <div class="cash-card-head"><div><span>Incoming count</span><h2>Cash received</h2></div><strong class="money-total">RM ${incoming.toFixed(2)}</strong></div>
         ${denominationGrid(state.incoming, 'incoming')}
-        <label>Other cash (RM)<input type="number" min="0" step="0.01" data-cash-other="incoming" value="${escapeHtml(state.incomingOther)}"></label>
+        <label>Other cash (RM)<input type="text" inputmode="decimal" autocomplete="off" data-cash-other="incoming" value="${escapeHtml(state.incomingOther)}"></label>
       </article>
     </div>
-    <article class="variance-card ${Math.abs(variance) > 0.009 ? 'warning' : 'ok'}"><div><span>Handover variance</span><strong>${variance >= 0 ? '+' : '−'} RM ${Math.abs(variance).toFixed(2)}</strong></div><small>Incoming − outgoing</small></article>
-    <label>Remark ${Math.abs(variance) > 0.009 ? '<em>Required when variance is not zero</em>' : ''}<textarea id="cash-remark" rows="3">${escapeHtml(state.remarks.handover)}</textarea></label>
+    <article class="variance-card ${Math.abs(variance) > 0.009 ? 'warning' : 'ok'}"><div><span>Handover difference</span><strong>${variance >= 0 ? '+' : '−'} RM ${Math.abs(variance).toFixed(2)}</strong></div><small>Incoming − outgoing, for staff reference only</small></article>
+    <label>Remark <textarea id="cash-remark" rows="3" placeholder="Optional note">${escapeHtml(state.remarks.handover)}</textarea></label>
     <button class="button primary full" id="submit-cash" ${state.submitting ? 'disabled' : ''}>${state.submitting ? 'Saving…' : 'Submit new handover'}</button>
   </div>`;
 }
@@ -211,7 +210,7 @@ function denominationGrid(counts, scope) {
   return `<div class="denomination-grid">${DENOMINATIONS.map((value) => {
     const raw = counts[String(value)] ?? '';
     const count = Number(raw || 0);
-    return `<label class="denomination"><span>RM ${value.toFixed(value < 1 ? 2 : 0)}</span><input type="number" inputmode="numeric" min="0" step="1" data-cash-scope="${scope}" data-denomination="${value}" value="${escapeHtml(raw)}" placeholder="0"><small>RM ${(count * value).toFixed(2)}</small></label>`;
+    return `<label class="denomination"><span>RM ${value.toFixed(value < 1 ? 2 : 0)}</span><input type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" data-cash-scope="${scope}" data-denomination="${value}" value="${escapeHtml(raw)}" placeholder="0"><small>RM ${(count * value).toFixed(2)}</small></label>`;
   }).join('')}</div>`;
 }
 
@@ -225,17 +224,13 @@ function historyMarkup(events) {
 
 function historyRow(event) {
   const phase = event.phase || '';
-  const amount = phase === 'handover'
-    ? `RM ${money(event.outgoingTotal)} → RM ${money(event.incomingTotal)}`
-    : `RM ${money(event.countedTotal)}`;
-  const staff = phase === 'handover'
-    ? `${event.fromStaff || '—'} → ${event.toStaff || '—'}`
-    : event.countedBy || '—';
+  const amount = phase === 'handover' ? `RM ${money(event.outgoingTotal)} → RM ${money(event.incomingTotal)}` : `RM ${money(event.countedTotal)}`;
+  const staff = phase === 'handover' ? `${event.fromStaff || '—'} → ${event.toStaff || '—'}` : event.countedBy || '—';
   return `<article class="cash-history-row">
     <div class="history-phase ${phase}">${escapeHtml(phase)}</div>
     <div><strong>${amount}</strong><span>${escapeHtml(staff)}</span></div>
     <div><strong>${formatDateTime(event.savedAt)}</strong><span>${escapeHtml(event.remark || '')}</span></div>
-    ${phase === 'handover' ? `<div class="${Math.abs(Number(event.variance || 0)) > 0.009 ? 'negative' : ''}"><strong>${Number(event.variance || 0) >= 0 ? '+' : '−'} RM ${Math.abs(Number(event.variance || 0)).toFixed(2)}</strong><span>Variance</span></div>` : '<div></div>'}
+    ${phase === 'handover' ? `<div class="${Math.abs(Number(event.variance || 0)) > 0.009 ? 'negative' : ''}"><strong>${Number(event.variance || 0) >= 0 ? '+' : '−'} RM ${Math.abs(Number(event.variance || 0)).toFixed(2)}</strong><span>Difference</span></div>` : '<div></div>'}
   </article>`;
 }
 
@@ -251,15 +246,7 @@ function resultMarkup(result) {
 }
 
 export function buildCashPayload(state, outlet) {
-  const common = {
-    action: 'saveStandaloneCashCount',
-    eventId: createId('cash'),
-    businessDate: state.businessDate,
-    outlet,
-    phase: state.phase,
-    remark: state.remarks[state.phase] || ''
-  };
-
+  const common = { action: 'saveStandaloneCashCount', eventId: createId('cash'), businessDate: state.businessDate, outlet, phase: state.phase, remark: state.remarks[state.phase] || '' };
   if (state.phase === 'handover') {
     const outgoingTotal = cashTotal(state.outgoing, state.outgoingOther);
     const incomingTotal = cashTotal(state.incoming, state.incomingOther);
@@ -281,21 +268,9 @@ export function buildCashPayload(state, outlet) {
 
   const counts = state[state.phase];
   const otherCash = state[`${state.phase}Other`];
-  const payload = {
-    ...common,
-    countedBy: state.staff[state.phase],
-    countedTotal: cashTotal(counts, otherCash),
-    denominations: numericDenominations(counts),
-    otherCash: Number(otherCash || 0)
-  };
-
+  const payload = { ...common, countedBy: state.staff[state.phase], countedTotal: cashTotal(counts, otherCash), denominations: numericDenominations(counts), otherCash: Number(otherCash || 0) };
   if (state.phase === 'closing') {
-    payload.payments = (state.data?.payments || []).map((payment) => ({
-      id: payment.id,
-      name: payment.name,
-      actual: state.payments[payment.id]?.actual ?? '',
-      remark: state.payments[payment.id]?.remark || ''
-    }));
+    payload.payments = (state.data?.payments || []).map((payment) => ({ id: payment.id, name: payment.name, actual: state.payments[payment.id]?.actual ?? '', remark: state.payments[payment.id]?.remark || '' }));
   }
   return payload;
 }
@@ -303,13 +278,9 @@ export function buildCashPayload(state, outlet) {
 export function validateCash(state) {
   if (state.phase === 'handover') {
     if (!state.handover.fromStaff.trim() || !state.handover.toStaff.trim()) return 'Enter both handover staff names.';
-    const variance = cashTotal(state.incoming, state.incomingOther) - cashTotal(state.outgoing, state.outgoingOther);
-    if (Math.abs(variance) > 0.009 && !state.remarks.handover.trim()) return 'A handover remark is required when the variance is not zero.';
     return '';
   }
-
   if (!state.staff[state.phase].trim()) return 'Enter the staff name before submitting.';
-
   if (state.phase === 'closing') {
     for (const payment of state.data?.payments || []) {
       const value = state.payments[payment.id] || {};
@@ -331,7 +302,7 @@ function normalizeDenominations(values) {
   const result = emptyCounts();
   for (const value of DENOMINATIONS) {
     const raw = values?.[String(value)];
-    result[String(value)] = raw === null || raw === undefined || raw === 0 ? (raw === 0 ? '0' : '') : String(raw);
+    result[String(value)] = raw === null || raw === undefined || Number(raw) === 0 ? '' : String(raw);
   }
   return result;
 }
@@ -344,7 +315,7 @@ function sumCurrentPaymentActuals(state) {
 }
 
 function numberOrBlank(value) {
-  return value === '' || value === null || value === undefined ? '' : String(value);
+  return value === '' || value === null || value === undefined || Number(value) === 0 ? '' : String(value);
 }
 
 function money(value) {
