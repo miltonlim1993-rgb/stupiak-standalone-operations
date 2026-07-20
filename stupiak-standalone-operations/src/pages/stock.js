@@ -3,11 +3,15 @@ import { createId } from '../core/ids.js';
 import { formatDate, monthPeriod, todayIso, weekPeriod } from '../core/dates.js';
 import { icon } from '../ui/icons.js';
 
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
+
 export function createStockState() {
   return { businessDate: todayIso(), loading: false, error: '', data: null, activeTab: 'Inventory', mobileWeek: 1, search: '', countedBy: '', sessionNote: '', values: {}, submitting: false, submitResult: null };
 }
 
 export function initializeStockValues(state, data) {
+  const selectedWeek = weekPeriod(state.businessDate).index;
+  data.selectedWeek = selectedWeek;
   state.values = {};
   for (const section of data.sections || []) {
     state.values[section.sheetName] = {};
@@ -15,14 +19,14 @@ export function initializeStockValues(state, data) {
       if (section.type === 'monthly-stationary') {
         state.values[section.sheetName][row.row] = { quantity: row.quantityValue === '' ? '' : row.quantityValue };
       } else {
-        const week = row.weeks.find((entry) => entry.index === data.selectedWeek) || row.weeks[0];
+        const week = row.weeks.find((entry) => entry.index === selectedWeek) || row.weeks[0];
         state.values[section.sheetName][row.row] = section.type === 'weekly-inventory'
           ? { primary: week.primaryValue === '' ? '' : week.primaryValue, secondary: week.secondaryValue === '' ? '' : week.secondaryValue }
           : { quantity: week.quantityValue === '' ? '' : week.quantityValue };
       }
     }
   }
-  state.mobileWeek = data.selectedWeek;
+  state.mobileWeek = selectedWeek;
   state.submitResult = null;
 }
 
@@ -30,7 +34,7 @@ export function stockPage(context, state) {
   const weekly = weekPeriod(state.businessDate);
   const monthly = monthPeriod(state.businessDate);
   return `<section class="page stock-page">
-    <div class="page-heading stock-heading"><div><span class="eyebrow">STOCK COUNT</span><h1>${escapeHtml(state.data?.outlet || context.outlet || 'Connecting…')}</h1><p>Original spreadsheet order, units, minimum levels and Week 1–5 structure.</p></div><div class="date-field"><label>Count date<input id="stock-date" type="date" value="${state.businessDate}"></label></div></div>
+    <div class="page-heading stock-heading"><div><span class="eyebrow">STOCK COUNT</span><h1>${escapeHtml(state.data?.outlet || context.outlet || 'Connecting…')}</h1><p>Original spreadsheet order, units, minimum levels and calendar Week 1–5 structure.</p></div><div class="date-field"><label>Count date<input id="stock-date" type="date" value="${state.businessDate}"></label></div></div>
     <div class="period-banner">
       <div class="period-main"><span class="period-status">CURRENT PERIOD</span><strong>${weekly.label}</strong><small>${weekly.rangeLabel}</small></div>
       <div class="period-facts"><div><span>Writes to</span><strong>${weekly.label}</strong></div><div><span>Monthly file</span><strong>${escapeHtml(state.data?.monthKey || state.businessDate.slice(0,7))}</strong></div><div><span>Next period</span><strong>${formatDate(weekly.nextStart, {year:false})} – ${formatDate(weekly.nextEnd)}</strong></div></div>
@@ -67,7 +71,7 @@ function sectionPage(state, weekly, monthly) {
 
 function inventoryTable(state, section, rows) {
   return `<div class="week-selector mobile-only">${[1,2,3,4,5].map((i)=>`<button class="${state.mobileWeek===i?'active':''}" data-mobile-week="${i}">W${i}</button>`).join('')}</div>
-  <div class="sheet-table-wrap"><table class="sheet-table stock-grid inventory-grid"><thead><tr><th class="item-col">ITEM</th>${section.rows[0]?.weeks.map((week)=>weekHeader(week, state.data.selectedWeek, state.mobileWeek)).join('') || ''}<th class="minimum-col">MIN</th></tr></thead><tbody>${rows.map((row)=>`<tr><th class="item-col"><strong>${escapeHtml(row.item)}</strong>${row.hasSecondaryQuantity ? `<small>1 ${escapeHtml(row.weeks[0]?.primaryUnit)} = ${row.conversion} ${escapeHtml(row.weeks[0]?.secondaryUnit)}</small>`:''}</th>${row.weeks.map((week)=>inventoryWeekCell(state,row,week)).join('')}<td class="minimum-col">${row.minimum}</td></tr>`).join('')}</tbody></table></div>`;
+  <div class="sheet-table-wrap"><table class="sheet-table stock-grid inventory-grid"><thead><tr><th class="item-col">ITEM</th>${section.rows[0]?.weeks.map((week)=>weekHeader(week, state.data.selectedWeek, state.mobileWeek, state.data.monthKey)).join('') || ''}<th class="minimum-col">MIN</th></tr></thead><tbody>${rows.map((row)=>`<tr><th class="item-col"><strong>${escapeHtml(row.item)}</strong>${row.hasSecondaryQuantity ? `<small>1 ${escapeHtml(row.weeks[0]?.primaryUnit)} = ${row.conversion} ${escapeHtml(row.weeks[0]?.secondaryUnit)}</small>`:''}</th>${row.weeks.map((week)=>inventoryWeekCell(state,row,week)).join('')}<td class="minimum-col">${row.minimum}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function inventoryWeekCell(state,row,week) {
@@ -78,18 +82,29 @@ function inventoryWeekCell(state,row,week) {
 }
 
 function utensilTable(state, section, rows) {
-  return `<div class="week-selector mobile-only">${[1,2,3,4,5].map((i)=>`<button class="${state.mobileWeek===i?'active':''}" data-mobile-week="${i}">W${i}</button>`).join('')}</div><div class="sheet-table-wrap"><table class="sheet-table stock-grid"><thead><tr><th class="item-col">ITEM</th>${section.rows[0]?.weeks.map((week)=>weekHeader(week,state.data.selectedWeek,state.mobileWeek)).join('')||''}<th class="minimum-col">MIN</th></tr></thead><tbody>${rows.map((row)=>`<tr><th class="item-col"><strong>${escapeHtml(row.item)}</strong></th>${row.weeks.map((week)=>{const value=state.values[section.sheetName]?.[row.row]?.quantity; const editable=week.index===state.data.selectedWeek; const status=editable?utensilStatus(section.sheetName,row,Number(value||0)):week.status; return `<td class="week-cell ${editable?'current-week':''} ${state.mobileWeek===week.index?'mobile-current':''}"><div class="quantity-line">${editable?`<input type="number" min="0" step="0.01" data-stock-sheet="${section.sheetName}" data-stock-row="${row.row}" data-stock-field="quantity" value="${value}"><span>${escapeHtml(week.unit)}</span>`:`<strong>${displayNumber(week.quantityValue)}</strong><span>${escapeHtml(week.unit)}</span>`}</div><span class="row-status ${statusClass(status)}">${status||'OK'}</span></td>`}).join('')}<td class="minimum-col">${row.minimum}</td></tr>`).join('')}</tbody></table></div>`;
+  return `<div class="week-selector mobile-only">${[1,2,3,4,5].map((i)=>`<button class="${state.mobileWeek===i?'active':''}" data-mobile-week="${i}">W${i}</button>`).join('')}</div><div class="sheet-table-wrap"><table class="sheet-table stock-grid"><thead><tr><th class="item-col">ITEM</th>${section.rows[0]?.weeks.map((week)=>weekHeader(week,state.data.selectedWeek,state.mobileWeek,state.data.monthKey)).join('')||''}<th class="minimum-col">MIN</th></tr></thead><tbody>${rows.map((row)=>`<tr><th class="item-col"><strong>${escapeHtml(row.item)}</strong></th>${row.weeks.map((week)=>{const value=state.values[section.sheetName]?.[row.row]?.quantity; const editable=week.index===state.data.selectedWeek; const status=editable?utensilStatus(section.sheetName,row,Number(value||0)):week.status; return `<td class="week-cell ${editable?'current-week':''} ${state.mobileWeek===week.index?'mobile-current':''}"><div class="quantity-line">${editable?`<input type="number" min="0" step="0.01" data-stock-sheet="${section.sheetName}" data-stock-row="${row.row}" data-stock-field="quantity" value="${value}"><span>${escapeHtml(week.unit)}</span>`:`<strong>${displayNumber(week.quantityValue)}</strong><span>${escapeHtml(week.unit)}</span>`}</div><span class="row-status ${statusClass(status)}">${status||'OK'}</span></td>`}).join('')}<td class="minimum-col">${row.minimum}</td></tr>`).join('')}</tbody></table></div>`;
 }
 
 function stationaryTable(state, section, rows) {
   return `<div class="sheet-table-wrap stationary-wrap"><table class="sheet-table stationary-table"><thead><tr><th class="item-col">ITEM</th><th>QUANTITY</th><th>UNIT</th><th>STATUS</th><th>MIN</th></tr></thead><tbody>${rows.map((row)=>{const value=state.values.Stationary?.[row.row]?.quantity; const status=Number(value||0)<=row.minimum?'Order':''; return `<tr><th class="item-col"><strong>${escapeHtml(row.item)}</strong></th><td><input type="number" min="0" step="0.01" data-stock-sheet="Stationary" data-stock-row="${row.row}" data-stock-field="quantity" value="${value}"></td><td>${escapeHtml(row.unit)}</td><td><span class="row-status ${statusClass(status)}">${status||'OK'}</span></td><td>${row.minimum}</td></tr>`}).join('')}</tbody></table></div>`;
 }
 
-function weekHeader(week, selected, mobileWeek) {
-  const period = weekPeriodForIndex(week.date || todayIso(), week.index);
+function weekHeader(week, selected, mobileWeek, monthKey) {
+  const period = week.periodLabel || week.rangeLabel || weekPeriodForIndex(monthKey || week.date || todayIso(), week.index);
   return `<th class="week-head ${week.index===selected?'current-week':''} ${mobileWeek===week.index?'mobile-current':''}"><span>WEEK ${week.index}</span><small>${period}</small>${week.date?`<em>Saved ${formatDate(week.date,{year:false})}</em>`:''}</th>`;
 }
-function weekPeriodForIndex(dateValue,index){const d=new Date(`${String(dateValue).slice(0,7)}-01T00:00:00`); const last=new Date(d.getFullYear(),d.getMonth()+1,0).getDate(); const start=(index-1)*7+1; const end=Math.min(index*7,last); return `${start}–${end}`;}
+
+function weekPeriodForIndex(monthKeyOrDate,index){
+  const monthKey = String(monthKeyOrDate || todayIso()).slice(0,7);
+  const monthStart = new Date(`${monthKey}-01T00:00:00`);
+  const gridStart = startOfCalendarWeek(monthStart);
+  const start = addDays(gridStart, (Number(index || 1) - 1) * 7);
+  const end = addDays(start, 6);
+  return `${formatDate(start,{year:false})}–${formatDate(end,{year:false})}`;
+}
+
+function startOfCalendarWeek(date){const result=new Date(date.getFullYear(),date.getMonth(),date.getDate()); const offset=(result.getDay()+6)%7; result.setDate(result.getDate()-offset); return result;}
+function addDays(date,days){const result=new Date(date.getFullYear(),date.getMonth(),date.getDate()); result.setTime(result.getTime()+Number(days||0)*MS_PER_DAY); return result;}
 
 function orderPage(orderPage) {
   const rows = orderPage?.values || [];
@@ -108,12 +123,12 @@ export function buildStockPayload(state) {
     const section = state.data.sections.find((entry)=>entry.sheetName===name);
     sections[name] = section.rows.map((row)=>({ row: row.row, ...(section.type==='weekly-inventory'?{primary:state.values[name][row.row].primary, ...(row.hasSecondaryQuantity?{secondary:state.values[name][row.row].secondary}:{})}:{quantity:state.values[name][row.row].quantity}) }));
   }
-  return { action:'submitStockCount', submissionId:createId('stock'), businessDate:state.businessDate, countedBy:state.countedBy, sessionNote:state.sessionNote, sections };
+  return { action:'submitStockCount', submissionId:createId('stock'), businessDate:state.businessDate, countedBy:state.countedBy, sessionNote:state.sessionNote, selectedWeek: state.data?.selectedWeek || weekPeriod(state.businessDate).index, sections };
 }
 
 export function validateStock(state) {
   if (!state.countedBy.trim()) return 'Enter the staff name before submitting.';
-  const names = state.activeTab === 'Stationary' ? ['Stationary'] : ['Inventory','Untensil PG1','Untensil PG2'];
+  const names = state.activeTab === 'Stationary' ? ['Stationary'] : ['Inventory','Untensil PG1','Utensil PG2'];
   for (const name of names) {
     const section = state.data.sections.find((entry)=>entry.sheetName===name);
     for (const row of section.rows) {
