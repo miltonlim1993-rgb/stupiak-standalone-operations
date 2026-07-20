@@ -23,6 +23,7 @@
 .payment-total-box strong{font-size:20px;margin-top:4px}
 .payment-method-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .payment-method-card{border:1px solid var(--line);background:#faf9f6;border-radius:14px;padding:16px}
+.payment-method-card.actual-only{display:grid;gap:12px;min-width:0}
 .payment-method-card.has-variance{border-color:#e3aaa3;background:#fff8f6}
 .payment-method-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .payment-method-head span,.payment-method-head h3{display:block;margin:0}
@@ -38,9 +39,18 @@
 .payment-values span{font-size:9px;color:var(--muted);text-transform:uppercase}
 .payment-values strong{font-size:13px;margin-top:6px;white-space:nowrap}
 .payment-values input{width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:6px 0 3px;margin-top:2px;font-size:15px;font-weight:800;background:transparent}
+.payment-actual-only{display:grid;grid-template-columns:minmax(118px,150px) minmax(0,1fr);align-items:center;gap:12px;padding:12px 13px;border:1px solid var(--line);border-radius:11px;background:#fff}
+.payment-actual-only>span{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.payment-actual-only input{width:100%;min-width:0;border:0;border-bottom:1px solid #d8d6cf;border-radius:0;background:transparent;padding:7px 0 5px;outline:0;font-size:20px;font-weight:850;color:var(--ink);text-align:right}
+.payment-actual-only input:focus{border-bottom-color:#b98100;box-shadow:none}
 .payment-remark{display:grid;gap:6px;font-size:11px;font-weight:700}
+.payment-remark>span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .payment-remark em,.cash-full-page label em{font-style:normal;color:var(--red);font-size:10px}
-.payment-remark input{border:1px solid var(--line);border-radius:9px;padding:9px 10px;background:#fff}
+.payment-remark input{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 11px;background:#fff;outline:0}
+.payment-remark input:focus{border-color:#b98100;box-shadow:0 0 0 3px rgba(242,170,0,.12)}
+.payment-section-handover{margin-top:0}
+.handover-remark{display:grid;gap:7px;font-size:12px;font-weight:700;color:#5e605e}
+.handover-remark textarea{width:100%}
 .cash-submit-main{margin:0}
 .history-count{background:#efede7;border-radius:999px;padding:7px 10px;font-size:11px;font-weight:800}
 .cash-history-list{display:grid;gap:8px}
@@ -65,6 +75,8 @@
   .payment-total-box{width:100%;text-align:left}
   .payment-method-grid{grid-template-columns:1fr}
   .payment-values{grid-template-columns:1fr}
+  .payment-actual-only{grid-template-columns:1fr;gap:6px}
+  .payment-actual-only input{text-align:left}
   .cash-history-row{grid-template-columns:72px 1fr}
   .cash-history-row>div:nth-child(3),.cash-history-row>div:nth-child(4){grid-column:2}
 }
