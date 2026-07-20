@@ -10,10 +10,21 @@ export async function onRequestPost(context) {
       return json({ ok:false, error:`${service === 'stock' ? 'Stock' : 'Cash'} connection is missing from Cloudflare Production Variables` },400);
     }
     const parsed = new URL(targetUrl);
-    if (!ALLOWED_GAS_HOSTS.has(parsed.hostname) || !parsed.pathname.endsWith('/exec')) return json({ok:false,error:'Only deployed Google Apps Script /exec URLs are allowed'},400);
+    if (!ALLOWED_GAS_HOSTS.has(parsed.hostname) || !parsed.pathname.endsWith('/exec')) {
+      return json({ok:false,error:'Only deployed Google Apps Script /exec URLs are allowed'},400);
+    }
 
-    const payload = { ...(body.payload || {}), secret };
-    const gasResponse = await fetch(targetUrl, { method:'POST', headers:{'Content-Type':'text/plain;charset=utf-8'}, body:JSON.stringify(payload), redirect:'follow' });
+    const payload = {
+      ...(body.payload || {}),
+      outlet: body.payload?.outlet || context.env.OUTLET_NAME || '',
+      secret
+    };
+    const gasResponse = await fetch(targetUrl, {
+      method:'POST',
+      headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload),
+      redirect:'follow'
+    });
     const text = await gasResponse.text();
     let data;
     try {
@@ -36,7 +47,9 @@ export async function onRequestPost(context) {
       storageProvider: context.env.FILE_STORAGE_PROVIDER || 'google_drive'
     };
     return json(data,gasResponse.ok?200:502);
-  } catch (error) { return json({ok:false,error:String(error?.message||error)},500); }
+  } catch (error) {
+    return json({ok:false,error:String(error?.message||error)},500);
+  }
 }
 
 function buildEvent(service,payload,result){
@@ -51,13 +64,18 @@ function buildEvent(service,payload,result){
     businessDate:result.businessDate||payload.businessDate,
     actor:{name:payload.countedBy||payload.toStaff||''},
     storage:{provider:'google_drive',spreadsheetId:result.spreadsheetId||'',spreadsheetUrl:result.spreadsheetUrl||''},
-    payload:isStock?{monthKey:result.monthKey,weekIndex:result.weekIndex,orderCount:result.orderCount,changedCellCount:result.changedCellCount}:{phase:payload.phase,countedTotal:payload.countedTotal,outgoingTotal:payload.outgoingTotal,incomingTotal:payload.incomingTotal,variance:payload.incomingTotal!=null?Number(payload.incomingTotal)-Number(payload.outgoingTotal):null}
+    payload:isStock
+      ? {monthKey:result.monthKey,weekIndex:result.weekIndex,orderCount:result.orderCount,changedCellCount:result.changedCellCount}
+      : {phase:payload.phase,countedTotal:payload.countedTotal,outgoingTotal:payload.outgoingTotal,incomingTotal:payload.incomingTotal,variance:payload.incomingTotal!=null?Number(payload.incomingTotal)-Number(payload.outgoingTotal):null}
   };
 }
 
 async function sendStatvaraEvent(env,event){
-  const body=JSON.stringify(event); const headers={'Content-Type':'application/json','X-Stupiak-Event':event.type};
+  const body=JSON.stringify(event);
+  const headers={'Content-Type':'application/json','X-Stupiak-Event':event.type};
   if(env.STATVARA_API_KEY) headers.Authorization=`Bearer ${env.STATVARA_API_KEY}`;
   await fetch(env.STATVARA_WEBHOOK_URL,{method:'POST',headers,body});
 }
-function json(value,status=200){return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'}});}
+function json(value,status=200){
+  return new Response(JSON.stringify(value),{status,headers:{'Content-Type':'application/json;charset=utf-8','Cache-Control':'no-store'}});
+}
