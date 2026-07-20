@@ -8,10 +8,11 @@ export function onRequestGet(context) {
     stockConnectionMode: stockGasConfigured ? 'cloudflare_server' : 'missing',
     cashConnectionMode: cashGasConfigured ? 'cloudflare_server' : 'missing',
     outletName: context.env.OUTLET_NAME || '',
+    outletRouting: 'url_or_device_registry',
     statvara: context.env.STATVARA_WEBHOOK_URL ? 'enabled' : 'reserved',
     storageProvider: context.env.FILE_STORAGE_PROVIDER || 'google_drive',
     cloudflareStorageReady: Boolean(context.env.FILE_STORAGE_PROVIDER === 'cloudflare_r2'),
-    version: '1.4.1'
+    version: '1.5.0'
   }), {
     headers: {
       'Content-Type': 'application/json;charset=utf-8',
