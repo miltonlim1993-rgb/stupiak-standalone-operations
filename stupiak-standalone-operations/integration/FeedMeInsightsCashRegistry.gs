@@ -2,17 +2,18 @@
  * ONE-TIME FeedMe Insights integration for Standalone Cash Count.
  *
  * Add this file to the EXISTING FeedMe Insights / Close Up Apps Script project.
- * After Insights resolves or creates `<Outlet Name> Sales <Year>`, call:
+ * Inside resolveTarget_(payload, cache), immediately before `if (cache) ...`, call:
  *
- *   registerResolvedFeedMeReportForCash_(payload, target);
+ *   try { registerResolvedFeedMeReportForCash_(payload, target); }
+ *   catch (error) { console.warn('Cash registry sync failed:', error); }
  *
  * Required Script Properties in the FeedMe Insights GAS project:
  * STANDALONE_CASH_GAS_URL    = deployed Cash GAS /exec URL
  * STANDALONE_CASH_GAS_SECRET = same secret used by Cash GAS
  * STANDALONE_OPERATIONS_URL  = https://stupiak-standalone-operations.pages.dev
  *
- * No outlet-specific properties are required. outletId / restaurantId is the
- * stable key and every future outlet/year is registered automatically.
+ * No outlet-specific properties are entered manually. outletId / restaurantId
+ * is the stable key and every future outlet/year is registered automatically.
  */
 
 function registerResolvedFeedMeReportForCash_(payload, target) {
@@ -27,7 +28,7 @@ function registerResolvedFeedMeReportForCash_(payload, target) {
     payload.outletId || payload.restaurantId || payload.feedmeOutletId || target.outletId || ''
   ).trim();
   const outletName = String(
-    payload.outletName || payload.restaurantName || target.outlet || target.outletName || ''
+    payload.outlet || payload.outletName || payload.restaurantName || target.outlet || target.outletName || ''
   ).trim();
   const year = Number(
     target.year || payload.year || String(payload.businessDate || payload.date || '').slice(0, 4)
@@ -38,12 +39,13 @@ function registerResolvedFeedMeReportForCash_(payload, target) {
   const outletFolderId = String(target.outletFolderId || target.folderId || '').trim();
 
   if (!outletId) throw new Error('Cannot register Cash report: FeedMe outletId / restaurantId is missing');
-  if (!outletName) throw new Error('Cannot register Cash report: outletName is missing');
+  if (!outletName) throw new Error('Cannot register Cash report: outlet name is missing');
   if (!year || !spreadsheetId) throw new Error('Cannot register Cash report: year or spreadsheetId is missing');
 
-  const cache = CacheService.getScriptCache();
-  const cacheKey = 'cash-registry:' + outletId + ':' + year + ':' + spreadsheetId;
-  if (cache.get(cacheKey)) return { ok: true, cached: true };
+  const syncKey = 'CASH_REGISTRY_SYNC_' + outletId.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 80) + '_' + year;
+  if (String(props.getProperty(syncKey) || '') === spreadsheetId) {
+    return { ok: true, cached: true, outletId: outletId, year: year, spreadsheetId: spreadsheetId };
+  }
 
   const body = {
     action: 'registerOutletReport',
@@ -71,7 +73,7 @@ function registerResolvedFeedMeReportForCash_(payload, target) {
   if (response.getResponseCode() >= 400 || result.ok === false) {
     throw new Error(result.error || 'Cash registry request failed (' + response.getResponseCode() + ')');
   }
-  cache.put(cacheKey, '1', 21600);
+  props.setProperty(syncKey, spreadsheetId);
   return result;
 }
 
