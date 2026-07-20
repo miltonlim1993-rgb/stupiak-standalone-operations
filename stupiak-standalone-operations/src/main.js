@@ -6,6 +6,7 @@ import { homePage } from './pages/home.js';
 import { cashPage, createCashState, buildCashPayload, cashTotal } from './pages/cash.js';
 import { settingsPage } from './pages/settings.js';
 import { stockPage, createStockState, initializeStockValues, buildStockPayload, validateStock } from './pages/stock.js';
+import { dashboardPage, createDashboardState, dashboardPayload } from './pages/dashboard.js';
 import { icon } from './ui/icons.js';
 import { showToast } from './ui/toast.js';
 
@@ -13,11 +14,11 @@ const app = document.querySelector('#app');
 const state = {
   route: location.hash.replace('#/','') || 'home',
   settings: loadSettings(), outlet: '', systemStatus: null,
-  stock: createStockState(), cash: createCashState(), deferredPrompt: null
+  stock: createStockState(), cash: createCashState(), dashboard: createDashboardState(), deferredPrompt: null
 };
 
 function shell(content) {
-  const nav = [['home','home','Home'],['cash','cash','Cash Count'],['stock','stock','Stock Count'],['settings','settings','Dev Settings']];
+  const nav = [['home','home','Home'],['dashboard','dashboard','Dashboard'],['cash','cash','Cash Count'],['stock','stock','Stock Count'],['settings','settings','Dev Settings']];
   return `<div class="app-shell">
     <aside class="sidebar">
       <div class="brand"><div class="brand-mark">S</div><div><strong>Stupiak</strong><span>Operations</span></div></div>
@@ -25,15 +26,16 @@ function shell(content) {
       <div class="sidebar-foot"><button id="install-app" class="install-button" ${state.deferredPrompt?'':'hidden'}>Install App</button><span>v${APP_VERSION}</span></div>
     </aside>
     <main class="main"><header class="topbar"><button class="mobile-brand" data-route="home"><span>S</span> Stupiak Ops</button><div class="topbar-status"><span class="status-dot ${state.outlet?'online':''}"></span>${state.outlet||'Standalone mode'}</div></header>${content}</main>
-    <nav class="bottom-nav">${nav.slice(0,3).concat([nav[3]]).map(([route,ico,label])=>`<button class="${state.route===route?'active':''}" data-route="${route}">${icon(ico)}<span>${label.replace(' Count','')}</span></button>`).join('')}</nav>
+    <nav class="bottom-nav">${nav.map(([route,ico,label])=>`<button class="${state.route===route?'active':''}" data-route="${route}">${icon(ico)}<span>${label.replace(' Count','')}</span></button>`).join('')}</nav>
   </div>`;
 }
 
 function render() {
   const context = { settings: state.settings, outlet: state.outlet, systemStatus: state.systemStatus };
-  const page = state.route === 'cash' ? cashPage(context,state.cash) : state.route === 'stock' ? stockPage(context,state.stock) : state.route === 'settings' ? settingsPage(context) : homePage(context);
+  const page = state.route === 'dashboard' ? dashboardPage(context,state.dashboard) : state.route === 'cash' ? cashPage(context,state.cash) : state.route === 'stock' ? stockPage(context,state.stock) : state.route === 'settings' ? settingsPage(context) : homePage(context);
   app.innerHTML = shell(page);
   bindCommon();
+  if (state.route === 'dashboard') bindDashboard();
   if (state.route === 'stock') bindStock();
   if (state.route === 'cash') bindCash();
   if (state.route === 'settings') bindSettings();
@@ -44,6 +46,7 @@ function navigate(route) {
   location.hash = `#/${route}`;
   render();
   if (route === 'stock' && !state.stock.data && !state.stock.loading) loadStock();
+  if (route === 'dashboard' && !state.dashboard.data && !state.dashboard.loading) loadDashboard();
 }
 
 function bindCommon() {
@@ -58,6 +61,58 @@ async function loadStock() {
     state.stock.data = data; state.outlet = data.outlet || state.outlet; initializeStockValues(state.stock,data);
   } catch (error) { state.stock.error = error.message; }
   finally { state.stock.loading = false; render(); }
+}
+
+async function ensureOutlet() {
+  if (state.outlet) return state.outlet;
+  const data = await callOperations('stock',{action:'getBootstrap',businessDate:todayIso()},state.settings);
+  state.outlet = data.outlet || '';
+  return state.outlet;
+}
+
+async function loadDashboard() {
+  state.dashboard.loading = true; state.dashboard.error = ''; render();
+  try {
+    if (state.dashboard.service === 'cash' && !state.outlet) await ensureOutlet();
+    const data = await callOperations(state.dashboard.service,dashboardPayload(state.dashboard,state.outlet),state.settings);
+    state.dashboard.data = data;
+    state.outlet = data.outlet || state.outlet;
+  } catch (error) { state.dashboard.error = error.message; state.dashboard.data = null; }
+  finally { state.dashboard.loading = false; render(); }
+}
+
+function bindDashboard() {
+  document.querySelector('#refresh-dashboard')?.addEventListener('click',loadDashboard);
+  document.querySelector('#retry-dashboard')?.addEventListener('click',loadDashboard);
+  document.querySelectorAll('[data-dashboard-service]').forEach((el)=>el.addEventListener('click',()=>{
+    const service=el.dataset.dashboardService;
+    if(state.dashboard.service===service)return;
+    state.dashboard.service=service;state.dashboard.data=null;state.dashboard.error='';state.dashboard.phase='all';loadDashboard();
+  }));
+  document.querySelector('#dashboard-date-from')?.addEventListener('change',(e)=>state.dashboard.dateFrom=e.target.value);
+  document.querySelector('#dashboard-date-to')?.addEventListener('change',(e)=>state.dashboard.dateTo=e.target.value);
+  document.querySelector('#apply-dashboard-range')?.addEventListener('click',()=>{
+    if(!state.dashboard.dateFrom||!state.dashboard.dateTo){showToast('Select both dates.','error');return;}
+    if(state.dashboard.dateFrom>state.dashboard.dateTo){showToast('From date cannot be after To date.','error');return;}
+    loadDashboard();
+  });
+  document.querySelectorAll('[data-dashboard-range]').forEach((el)=>el.addEventListener('click',()=>{
+    setDashboardQuickRange(el.dataset.dashboardRange);loadDashboard();
+  }));
+  document.querySelector('#dashboard-item-search')?.addEventListener('input',(e)=>{state.dashboard.itemQuery=e.target.value;renderPreservingFocus('dashboard-item-search',state.dashboard.itemQuery.length);});
+  document.querySelector('#dashboard-category')?.addEventListener('change',(e)=>{state.dashboard.category=e.target.value;render();});
+  document.querySelector('#dashboard-status')?.addEventListener('change',(e)=>{state.dashboard.status=e.target.value;render();});
+  document.querySelector('#dashboard-phase')?.addEventListener('change',(e)=>{state.dashboard.phase=e.target.value;render();});
+  document.querySelectorAll('[data-stock-dashboard-view]').forEach((el)=>el.addEventListener('click',()=>{state.dashboard.stockView=el.dataset.stockDashboardView;render();}));
+}
+
+function setDashboardQuickRange(range) {
+  const today=todayIso();
+  const now=new Date(`${today}T00:00:00`);
+  state.dashboard.dateTo=today;
+  if(range==='month') state.dashboard.dateFrom=`${today.slice(0,7)}-01`;
+  else if(range==='ytd') state.dashboard.dateFrom=`${today.slice(0,4)}-01-01`;
+  else { const start=new Date(now.getFullYear(),now.getMonth()-2,1); state.dashboard.dateFrom=`${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,'0')}-01`; }
 }
 
 function bindStock() {
@@ -112,8 +167,8 @@ function bindCash() {
 function renderCashTotalsOnly(){const active=document.activeElement;const info=active&&{scope:active.dataset.cashScope,denom:active.dataset.denomination,other:active.dataset.cashOther,pos:active.selectionStart};render();let next;if(info?.scope)next=document.querySelector(`[data-cash-scope="${info.scope}"][data-denomination="${info.denom}"]`);else if(info?.other)next=document.querySelector(`[data-cash-other="${info.other}"]`);next?.focus();try{next?.setSelectionRange(info.pos,info.pos);}catch{}}
 
 async function submitCash() {
-  if(!state.settings.cashCountGasUrl){showToast('Configure the Cash GAS URL first.','error');return;}
-  if(!state.outlet){showToast('Open Stock Count once so the outlet can be identified.','error');return;}
+  if(!state.settings.cashCountGasUrl&&!state.systemStatus?.cashGasConfigured){showToast('Configure the Cash GAS URL first.','error');return;}
+  if(!state.outlet){try{await ensureOutlet();}catch(error){showToast(error.message,'error');return;}}
   if(state.cash.phase==='handover'){
     if(!state.cash.fromStaff.trim()||!state.cash.toStaff.trim()){showToast('Enter both staff names.','error');return;}
     const variance=cashTotal(state.cash.incoming,state.cash.incomingOther)-cashTotal(state.cash.outgoing,state.cash.outgoingOther);
@@ -154,9 +209,10 @@ function bindSettings() {
 }
 
 function renderPreservingFocus(id,pos){render();const input=document.getElementById(id);input?.focus();input?.setSelectionRange(pos,pos);}
-window.addEventListener('hashchange',()=>{state.route=location.hash.replace('#/','')||'home';render();if(state.route==='stock'&&!state.stock.data&&!state.stock.loading)loadStock();});
+window.addEventListener('hashchange',()=>{state.route=location.hash.replace('#/','')||'home';render();if(state.route==='stock'&&!state.stock.data&&!state.stock.loading)loadStock();if(state.route==='dashboard'&&!state.dashboard.data&&!state.dashboard.loading)loadDashboard();});
 window.addEventListener('beforeinstallprompt',(event)=>{event.preventDefault();state.deferredPrompt=event;render();});
 if('serviceWorker'in navigator)window.addEventListener('load',()=>navigator.serviceWorker.register('/sw.js').catch(()=>{}));
 getSystemStatus().then((status)=>{state.systemStatus=status;render();});
 render();
 if(state.route==='stock')loadStock();
+if(state.route==='dashboard')loadDashboard();
