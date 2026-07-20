@@ -1,5 +1,5 @@
-const CACHE = 'stupiak-ops-v1.9.4';
-const SHELL = ['/', '/index.html', '/src/app.css', '/src/dashboard.css', '/src/cash-full.css', '/src/offline-workflow.css', '/src/main.js', '/src/core/offline-workflow.js', '/manifest.webmanifest', '/icons/app-icon.svg'];
+const CACHE = 'stupiak-ops-v1.10.0';
+const SHELL = ['/', '/index.html', '/src/app.css', '/src/dashboard.css', '/src/cash-full.css', '/src/offline-workflow.css', '/src/main.js', '/src/core/offline-workflow.js', '/src/core/stock-local-export.js', '/vendor/exceljs.min.js', '/vendor/pdf-lib.min.js', '/manifest.webmanifest', '/icons/app-icon.svg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
