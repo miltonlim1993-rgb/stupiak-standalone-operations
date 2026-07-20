@@ -4,14 +4,11 @@ export async function onRequestPost(context) {
   try {
     const body = await context.request.json();
     const service = body.service === 'cash' ? 'cash' : 'stock';
-    const settings = body.clientSettings || {};
-    const envUrl = service === 'stock' ? context.env.STOCK_GAS_URL : context.env.CASH_GAS_URL;
-    const envSecret = service === 'stock' ? context.env.STOCK_GAS_SECRET : context.env.CASH_GAS_SECRET;
-    const clientUrl = service === 'stock' ? settings.stockCountGasUrl : settings.cashCountGasUrl;
-    const clientSecret = service === 'stock' ? settings.stockCountGasSecret : settings.cashCountGasSecret;
-    const targetUrl = String(envUrl || clientUrl || '').trim();
-    const secret = String(envSecret || clientSecret || '');
-    if (!targetUrl) return json({ ok:false, error:`${service} GAS URL is not configured` },400);
+    const targetUrl = String(service === 'stock' ? context.env.STOCK_GAS_URL || '' : context.env.CASH_GAS_URL || '').trim();
+    const secret = String(service === 'stock' ? context.env.STOCK_GAS_SECRET || '' : context.env.CASH_GAS_SECRET || '');
+    if (!targetUrl || !secret) {
+      return json({ ok:false, error:`${service === 'stock' ? 'Stock' : 'Cash'} connection is missing from Cloudflare Production Variables` },400);
+    }
     const parsed = new URL(targetUrl);
     if (!ALLOWED_GAS_HOSTS.has(parsed.hostname) || !parsed.pathname.endsWith('/exec')) return json({ok:false,error:'Only deployed Google Apps Script /exec URLs are allowed'},400);
 
