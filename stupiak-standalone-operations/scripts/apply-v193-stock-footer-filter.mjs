@@ -18,8 +18,8 @@ export async function applyV193StockFooterFilter(dist) {
   source = replaceRequired(
     source,
     `function dirtyWeekIndexes(state) {`,
-    `function sanitizeStockSectionRows(section) {\n  const sourceRows = Array.isArray(section?.rows) ? section.rows.slice().sort((a, b) => Number(a.row || 0) - Number(b.row || 0)) : [];\n  const rows = [];\n  let previousRow = null;\n  for (const row of sourceRows) {\n    const item = String(row?.item || '').trim();\n    if (!item) continue;\n    const commaCount = (item.match(/,/g) || []).length;\n    const footerLike = commaCount >= 4 || item.length > 180;\n    const gap = previousRow === null ? 0 : Number(row.row || 0) - previousRow;\n    if (footerLike || (gap >= 4 && commaCount >= 2)) break;\n    rows.push(row);\n    previousRow = Number(row.row || 0);\n  }\n  return { ...section, rows };\n}\n\nfunction dirtyWeekIndexes(state) {`,
-    'footer row sanitizer helper'
+    `function sanitizeStockSectionRows(section) {\n  const sourceRows = Array.isArray(section?.rows) ? section.rows.slice().sort((a, b) => Number(a.row || 0) - Number(b.row || 0)) : [];\n  const rows = [];\n  let previousRow = null;\n  for (const sourceRow of sourceRows) {\n    const item = String(sourceRow?.item || '').trim();\n    if (!item) continue;\n    const commaCount = (item.match(/,/g) || []).length;\n    const footerLike = commaCount >= 4 || item.length > 180;\n    const gap = previousRow === null ? 0 : Number(sourceRow.row || 0) - previousRow;\n    if (footerLike || (gap >= 4 && commaCount >= 2)) break;\n    const row = { ...sourceRow };\n    if (Array.isArray(sourceRow.weeks)) {\n      row.weeks = sourceRow.weeks.map((week) => {\n        if (week?.date) return { ...week };\n        return {\n          ...week,\n          primaryValue: '',\n          secondaryValue: '',\n          quantityValue: '',\n          status: ''\n        };\n      });\n    }\n    rows.push(row);\n    previousRow = Number(sourceRow.row || 0);\n  }\n  return { ...section, rows };\n}\n\nfunction dirtyWeekIndexes(state) {`,
+    'footer and unsaved week sanitizer helper'
   );
   await writeFile(file, source);
 }
