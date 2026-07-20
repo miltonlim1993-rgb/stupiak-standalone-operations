@@ -1,6 +1,8 @@
-# Google Apps Script backends
+# Google Apps Script backend contract
 
-- `cash-count-v2.6.0.gs` — multi-outlet Cash Count, actual-only, no WhatsApp workflow.
-- `stock-count-v3.0.0.gs` — relation-first Stock Count. Fast submit writes `_StockRelation`; PDF/XLSX/WhatsApp package is prepared by a separate action.
+The production frontend now expects:
 
-Deploy each file as its own Apps Script Web App (`Execute as: Me`, `Who has access: Anyone`).
+- Cash Count v2.6 or newer: actual-only save, no WhatsApp workflow.
+- Stock Count v3.0 or newer: fast relation-first save to `_StockRelation`; PDF/XLSX and the WhatsApp message are prepared through a separate `prepareStockShare` action.
+
+Deploy Cash and Stock as separate Apps Script Web Apps (`Execute as: Me`, `Who has access: Anyone`) and keep their Cloudflare variables separate.
