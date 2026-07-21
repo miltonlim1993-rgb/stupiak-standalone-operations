@@ -1,7 +1,6 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
-import { applyV163CashFixes } from './apply-v163-cash-fixes.mjs';
 import { applyV163Cleanup } from './apply-v163-cleanup.mjs';
 import { applyV170OfflineWorkflow } from './apply-v170-offline-workflow.mjs';
 import { applyV180StockShare } from './apply-v180-stock-share.mjs';
@@ -38,7 +37,6 @@ await cp(resolve(root, 'src'), resolve(dist, 'src'), { recursive: true });
 await mkdir(resolve(dist, 'vendor'), { recursive: true });
 await cp(resolve(root, 'node_modules/exceljs/dist/exceljs.min.js'), resolve(dist, 'vendor/exceljs.min.js'));
 await cp(resolve(root, 'node_modules/pdf-lib/dist/pdf-lib.min.js'), resolve(dist, 'vendor/pdf-lib.min.js'));
-await applyV163CashFixes(dist);
 await applyV163Cleanup(dist);
 await applyV170OfflineWorkflow(dist);
 await applyV180StockShare(dist);
