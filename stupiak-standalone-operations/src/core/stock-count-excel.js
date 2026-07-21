@@ -21,12 +21,14 @@ function importWeeklySection(workbook, state, section) {
   if (!sheet) throw missingSheetError(workbook, section.sheetName);
 
   const detectedWeeks = detectImportWeeks(sheet, state).filter(({ weekIndex }) => weekIndex >= 1 && weekIndex <= 5);
+  const activeWeek = Number(state.lastEditedWeek || state.mobileWeek || state.data?.selectedWeek || 1);
   const targetWeeks = detectedWeeks.length
     ? uniqueWeeks(detectedWeeks)
-    : [{ weekIndex: Number(state.lastEditedWeek || state.mobileWeek || state.data?.selectedWeek || 1), col: WEEK_GROUPS[Math.max(0, Math.min(4, Number(state.lastEditedWeek || state.mobileWeek || state.data?.selectedWeek || 1) - 1))][0], date: '' }];
+    : [{ weekIndex: activeWeek, col: WEEK_GROUPS[Math.max(0, Math.min(4, activeWeek - 1))][0], date: '' }];
 
   let imported = 0;
   const importedWeeks = [];
+  const dateOnlyWeeks = [];
   state.values[section.sheetName] = state.values[section.sheetName] || {};
   state.dirtyColumns = state.dirtyColumns || {};
   state.dirtyColumns[section.sheetName] = { ...(state.dirtyColumns[section.sheetName] || {}) };
@@ -56,23 +58,22 @@ function importWeeklySection(workbook, state, section) {
       state.values[section.sheetName][row.row] = target;
     }
 
-    if (targetWeek.date) state.sheetWeekDates[section.sheetName][weekIndex] = targetWeek.date;
-    else {
-      const headerDate = detectWeekDate(sheet, primaryCol, state);
-      if (headerDate) state.sheetWeekDates[section.sheetName][weekIndex] = headerDate;
-    }
+    const date = targetWeek.date || detectWeekDate(sheet, primaryCol, state);
+    if (date) state.sheetWeekDates[section.sheetName][weekIndex] = date;
 
-    if (importedThisWeek > 0 || targetWeek.date) {
+    if (importedThisWeek > 0) {
       state.dirtyColumns[section.sheetName][weekIndex] = true;
       importedWeeks.push(weekIndex);
+    } else if (date) {
+      dateOnlyWeeks.push(weekIndex);
     }
   }
 
-  const focusWeek = importedWeeks[0] || targetWeeks[0]?.weekIndex || 1;
+  const focusWeek = importedWeeks[0] || activeWeek || targetWeeks[0]?.weekIndex || 1;
   state.lastEditedWeek = focusWeek;
   state.mobileWeek = focusWeek;
 
-  return { sectionName: section.sheetName, weekIndex: focusWeek, imported, importedWeeks, matchedTab: sheet.name };
+  return { sectionName: section.sheetName, weekIndex: focusWeek, imported, importedWeeks, dateOnlyWeeks, matchedTab: sheet.name };
 }
 
 function uniqueWeeks(entries) {
@@ -125,7 +126,7 @@ function importStationary(workbook, state, section) {
     state.values.Stationary[row.row] = { quantity };
     if (quantity !== '') imported += 1;
   }
-  state.stationaryDirty = true;
+  state.stationaryDirty = imported > 0;
   return { sectionName: 'Stationary', weekIndex: 0, imported, matchedTab: sheet.name };
 }
 
