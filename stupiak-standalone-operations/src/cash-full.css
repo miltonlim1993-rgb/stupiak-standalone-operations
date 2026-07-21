@@ -1,4 +1,4 @@
-/* v1.3 cash workspace and no-top-panel overrides */
+/* cash workspace */
 .no-top-panel .main{min-height:100vh}
 .no-top-panel .page{padding-top:36px}
 .cash-full-stack{display:grid;gap:18px}
@@ -7,10 +7,7 @@
 .cash-readback-note strong{font-size:13px}
 .cash-readback-note span{font-size:11px;margin-top:2px;color:#557064}
 .cash-control-panel{display:grid;align-content:start}
-.cash-control-list{display:grid;gap:0;margin-top:12px;border-top:1px solid #303233}
-.cash-control-list>div{display:flex;justify-content:space-between;gap:14px;padding:12px 0;border-bottom:1px solid #303233}
-.cash-control-list span{color:#9da09f;text-transform:none;font-size:11px}
-.cash-control-list strong{font-size:13px;margin:0;text-align:right}
+.cash-control-panel p{font-size:11px;line-height:1.45}
 .negative{color:#b33c32!important}
 .payment-section,.cash-history-section{background:#fff;border:1px solid var(--line);border-radius:18px;padding:22px}
 .section-title-row{display:flex;justify-content:space-between;align-items:flex-start;gap:18px;margin-bottom:18px}
@@ -19,12 +16,11 @@
 .section-title-row p{font-size:12px;color:var(--muted);margin-top:5px}
 .payment-total-box{min-width:160px;background:var(--dark);color:#fff;padding:14px 16px;border-radius:13px;text-align:right}
 .payment-total-box span,.payment-total-box strong{display:block}
-.payment-total-box span{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.08em}
+.payment-total-box span{font-size:10px;color:#aaa;text-transform:uppercase;letter-spacing:.08em}
 .payment-total-box strong{font-size:20px;margin-top:4px}
 .payment-method-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
 .payment-method-card{border:1px solid var(--line);background:#faf9f6;border-radius:14px;padding:16px}
 .payment-method-card.actual-only{display:grid;gap:12px;min-width:0}
-.payment-method-card.has-variance{border-color:#e3aaa3;background:#fff8f6}
 .payment-method-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
 .payment-method-head span,.payment-method-head h3{display:block;margin:0}
 .payment-method-head>div>span{font-size:9px;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}
@@ -32,22 +28,17 @@
 .payment-status{font-size:9px!important;font-weight:800;border-radius:999px;padding:5px 8px;text-transform:uppercase}
 .payment-status.pending{background:#eeeae1;color:#716d62}
 .payment-status.matched{background:var(--green-soft);color:var(--green)}
-.payment-status.review{background:var(--red-soft);color:var(--red)}
-.payment-values{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0 12px}
-.payment-values>div,.payment-values>label{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px;min-width:0}
-.payment-values span,.payment-values strong{display:block}
-.payment-values span{font-size:9px;color:var(--muted);text-transform:uppercase}
-.payment-values strong{font-size:13px;margin-top:6px;white-space:nowrap}
-.payment-values input{width:100%;border:0;border-bottom:1px solid var(--line);border-radius:0;padding:6px 0 3px;margin-top:2px;font-size:15px;font-weight:800;background:transparent}
 .payment-actual-only{display:grid;grid-template-columns:minmax(118px,150px) minmax(0,1fr);align-items:center;gap:12px;padding:12px 13px;border:1px solid var(--line);border-radius:11px;background:#fff}
 .payment-actual-only>span{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
 .payment-actual-only input{width:100%;min-width:0;border:0;border-bottom:1px solid #d8d6cf;border-radius:0;background:transparent;padding:7px 0 5px;outline:0;font-size:20px;font-weight:850;color:var(--ink);text-align:right}
 .payment-actual-only input:focus{border-bottom-color:#b98100;box-shadow:none}
 .payment-remark{display:grid;gap:6px;font-size:11px;font-weight:700}
-.payment-remark>span{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
-.payment-remark em,.cash-full-page label em{font-style:normal;color:var(--red);font-size:10px}
 .payment-remark input{width:100%;border:1px solid var(--line);border-radius:9px;padding:10px 11px;background:#fff;outline:0}
 .payment-remark input:focus{border-color:#b98100;box-shadow:0 0 0 3px rgba(242,170,0,.12)}
+.cash-auto-payment{background:#f3f7f4;border-color:#c6dfd1}
+.payment-auto-value{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px;border-radius:11px;background:#fff;border:1px solid #c6dfd1}
+.payment-auto-value span{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.payment-auto-value strong{font-size:21px;color:var(--green)}
 .payment-section-handover{margin-top:0}
 .handover-remark{display:grid;gap:7px;font-size:12px;font-weight:700;color:#5e605e}
 .handover-remark textarea{width:100%}
@@ -63,7 +54,6 @@
 .history-phase.handover{background:#e7eef8;color:#315985}
 .history-phase.closing{background:#e8f4ee;color:#217a55}
 .compact-empty{min-height:140px}
-.payment-empty p{color:var(--muted);font-size:12px}
 @media(max-width:1100px){
   .payment-method-grid{grid-template-columns:1fr}
   .cash-history-row{grid-template-columns:80px 1fr 1fr}
@@ -74,9 +64,9 @@
   .section-title-row{display:grid}
   .payment-total-box{width:100%;text-align:left}
   .payment-method-grid{grid-template-columns:1fr}
-  .payment-values{grid-template-columns:1fr}
   .payment-actual-only{grid-template-columns:1fr;gap:6px}
   .payment-actual-only input{text-align:left}
+  .payment-auto-value{align-items:flex-start;flex-direction:column}
   .cash-history-row{grid-template-columns:72px 1fr}
   .cash-history-row>div:nth-child(3),.cash-history-row>div:nth-child(4){grid-column:2}
 }
