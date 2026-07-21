@@ -28,7 +28,6 @@ import { applyV1141StockReadiness } from './apply-v1141-stock-readiness.mjs';
 import { applyV1150StockSetup } from './apply-v1150-stock-setup.mjs';
 import { applyV1151StockD1Operator } from './apply-v1151-stock-d1-operator.mjs';
 import { applyV1155StockReliability } from './apply-v1155-stock-reliability.mjs';
-import { applyV1156StockSetupParser } from './apply-v1156-stock-setup-parser.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -66,11 +65,11 @@ await applyV1141StockReadiness(dist);
 await applyV1150StockSetup(dist);
 await applyV1151StockD1Operator(dist);
 await applyV1155StockReliability(dist);
-await applyV1156StockSetupParser(dist);
 
 for (const relativePath of [
   'src/main.js',
   'src/pages/stock.js',
+  'src/pages/cash.js',
   'src/core/stock-local-export.js',
   'src/core/offline-workflow.js',
   'src/core/stock-setup-excel.js',
