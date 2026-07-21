@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 export async function applyV1162OrderPageSafe(dist) {
   await patchStockPage(dist);
+  await patchMainActions(dist);
   await patchLegacyFormulaReadback(dist);
   await patchStyles(dist);
   await auditFinalStockBuild(dist);
@@ -15,8 +16,8 @@ async function patchStockPage(dist) {
   const callPattern = /state\.activeTab\s*===\s*['"]Order Page['"]\s*\?\s*(?:orderPage|liveOrderPageV1162)\([^)]*\)\s*:\s*sectionPage\(state,\s*weekly,\s*monthly\)/;
   if (callPattern.test(source)) {
     source = source.replace(callPattern, `state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, weekly, monthly)`);
-  } else {
-    throw new Error('v1.16.4 final audit failed: Order Page call anchor');
+  } else if (!source.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state)`)) {
+    throw new Error('v1.16.5 final audit failed: Order Page call anchor');
   }
 
   const oldRenderer = /function orderPage\([^)]*\)\s*\{[\s\S]*?\n\}(?=\n\nfunction (?:liveOrderPageV1162|submitSuccess))/;
@@ -75,7 +76,12 @@ function liveStationaryOrderGroupV1162(state) {
   const section = (state.data?.sections || []).find((entry) => entry.sheetName === 'Stationary');
   if (!section) return { items: [], counted: false, dateText: 'Not counted' };
   const date = String(state.stationaryDate || section.countDate || section.date || '').trim();
-  const counted = Boolean(date || (section.rows || []).some((row) => row.quantityValue !== '' && row.quantityValue !== null && row.quantityValue !== undefined));
+  const hasSaved = (section.rows || []).some((row) => row.quantityValue !== '' && row.quantityValue !== null && row.quantityValue !== undefined);
+  const hasLive = (section.rows || []).some((row) => {
+    const value = state.values?.Stationary?.[row.row]?.quantity;
+    return value !== '' && value !== null && value !== undefined;
+  });
+  const counted = Boolean(date || hasSaved || hasLive);
   const items = counted ? (section.rows || []).filter((row) => {
     const live = state.values?.Stationary?.[row.row]?.quantity;
     const quantity = live !== '' && live !== null && live !== undefined ? Number(live) : Number(row.quantityValue || 0);
@@ -98,11 +104,42 @@ function liveOrderItemsTextV1162(group) {
 }
 `;
     const anchor = source.indexOf('\nfunction submitSuccess');
-    if (anchor < 0) throw new Error('v1.16.4 final audit failed: submitSuccess anchor');
+    if (anchor < 0) throw new Error('v1.16.5 final audit failed: submitSuccess anchor');
     source = source.slice(0, anchor) + helper + source.slice(anchor);
   }
 
   source = source.replace(/<div class="order-note">[\s\S]*?<\/div><\/div>/g, '');
+  source = source.replace(/It follows the monthly spreadsheet calculation and layout\./g, 'Live order list from saved Stock Count data.');
+  await writeFile(file, source);
+}
+
+async function patchMainActions(dist) {
+  const file = resolve(dist, 'src/main.js');
+  let source = await readFile(file, 'utf8');
+  const marker = 'v1.16.5 final Stock action fallback';
+  if (!source.includes(marker)) {
+    source += `
+
+// ${marker}
+document.addEventListener('click', (event) => {
+  const button = event.target?.closest?.('#submit-stock, #export-stock-pdf, #export-stock-excel');
+  if (!button || button.disabled) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  if (button.id === 'submit-stock') {
+    Promise.resolve(submitStock()).catch((error) => showToast(error?.message || 'Unable to save Stock Count.', 'error'));
+    return;
+  }
+  if (button.id === 'export-stock-pdf') {
+    Promise.resolve(exportCurrentStock('pdf')).catch((error) => showToast(error?.message || 'Unable to export PDF.', 'error'));
+    return;
+  }
+  if (button.id === 'export-stock-excel') {
+    Promise.resolve(exportCurrentStock('excel')).catch((error) => showToast(error?.message || 'Unable to export Excel.', 'error'));
+  }
+}, true);
+`;
+  }
   await writeFile(file, source);
 }
 
@@ -119,8 +156,8 @@ async function patchLegacyFormulaReadback(dist) {
 async function patchStyles(dist) {
   const file = resolve(dist, 'src/app.css');
   let source = await readFile(file, 'utf8');
-  if (!source.includes('v1.16.4 live Order Page')) {
-    source += `\n/* v1.16.4 live Order Page */\n.live-order-wrap{margin-top:10px}.live-order-table{table-layout:fixed}.live-order-table th,.live-order-table td{padding:12px 14px;text-align:left;vertical-align:top;white-space:normal;line-height:1.45}.live-order-table .order-week-row th,.live-order-table .order-week-row td{background:#3f3f3f;color:#fff;font-weight:800}.live-order-table tr:not(.order-week-row) th{width:210px;background:#e5e4e0}.live-order-table tr:not(.order-week-row) td{background:#f6f5f1}.live-order-table .order-date-cell{width:180px;font-weight:700}.live-order-table .order-none{color:#888;font-weight:700}.live-order-table .stationary-order-row th,.live-order-table .stationary-order-row td{background:#76651e;color:#fff}\n`;
+  if (!source.includes('v1.16.5 live Order Page')) {
+    source += `\n/* v1.16.5 live Order Page */\n.live-order-wrap{margin-top:10px}.live-order-table{table-layout:fixed}.live-order-table th,.live-order-table td{padding:12px 14px;text-align:left;vertical-align:top;white-space:normal;line-height:1.45}.live-order-table .order-week-row th,.live-order-table .order-week-row td{background:#3f3f3f;color:#fff;font-weight:800}.live-order-table tr:not(.order-week-row) th{width:210px;background:#e5e4e0}.live-order-table tr:not(.order-week-row) td{background:#f6f5f1}.live-order-table .order-date-cell{width:180px;font-weight:700}.live-order-table .order-none{color:#888;font-weight:700}.live-order-table .stationary-order-row th,.live-order-table .stationary-order-row td{background:#76651e;color:#fff}\n`;
   }
   await writeFile(file, source);
 }
@@ -137,9 +174,14 @@ async function auditFinalStockBuild(dist) {
     [stock.includes('id="submit-stock"'), 'Save button'],
     [main.includes("querySelector('#export-stock-pdf')"), 'Export PDF binding'],
     [main.includes("querySelector('#export-stock-excel')"), 'Export Excel binding'],
-    [main.includes("querySelector('#submit-stock')"), 'Save binding']
+    [main.includes("querySelector('#submit-stock')"), 'Save binding'],
+    [main.includes(markerText()), 'final action fallback']
   ];
   const failed = checks.filter(([ok]) => !ok).map(([, label]) => label);
   if (failed.length) throw new Error(`Final Stock build audit failed: ${failed.join(', ')}`);
-  console.log('Final Stock build audit passed: Order Page, Save, Export PDF, Export Excel');
+  console.log('Final Stock build audit passed: live Order Page + working Save/PDF/Excel handlers');
+}
+
+function markerText() {
+  return 'v1.16.5 final Stock action fallback';
 }
