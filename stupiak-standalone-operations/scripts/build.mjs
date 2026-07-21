@@ -16,6 +16,7 @@ import { applyV1103TemplateStockExport } from './apply-v1103-template-stock-expo
 import { applyV1110ExportLock } from './apply-v1110-export-lock.mjs';
 import { applyV1111PdfHeaderContrast } from './apply-v1111-pdf-header-contrast.mjs';
 import { applyV1112StockSaveRetry } from './apply-v1112-stock-save-retry.mjs';
+import { applyV1120IndependentTabDrafts } from './apply-v1120-independent-tab-drafts.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -42,4 +43,5 @@ await applyV1103TemplateStockExport(dist, root);
 await applyV1110ExportLock(dist, root);
 await applyV1111PdfHeaderContrast(dist);
 await applyV1112StockSaveRetry(dist);
+await applyV1120IndependentTabDrafts(dist);
 console.log('Built static app into dist/');
