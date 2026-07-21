@@ -27,6 +27,7 @@ import { applyV1140D1Stock } from './apply-v1140-d1-stock.mjs';
 import { applyV1141StockReadiness } from './apply-v1141-stock-readiness.mjs';
 import { applyV1150StockSetup } from './apply-v1150-stock-setup.mjs';
 import { applyV1151StockD1Operator } from './apply-v1151-stock-d1-operator.mjs';
+import { applyV1155StockReliability } from './apply-v1155-stock-reliability.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -63,6 +64,7 @@ await applyV1140D1Stock(dist);
 await applyV1141StockReadiness(dist);
 await applyV1150StockSetup(dist);
 await applyV1151StockD1Operator(dist);
+await applyV1155StockReliability(dist);
 
 for (const relativePath of [
   'src/main.js',
