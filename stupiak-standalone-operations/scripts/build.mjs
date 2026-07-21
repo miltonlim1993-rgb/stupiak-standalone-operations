@@ -14,6 +14,7 @@ import { applyV1100SeparateStockActions } from './apply-v1100-separate-stock-act
 import { applyV1101StockSharePermission } from './apply-v1101-stock-share-permission.mjs';
 import { applyV1103TemplateStockExport } from './apply-v1103-template-stock-export.mjs';
 import { applyV1110ExportLock } from './apply-v1110-export-lock.mjs';
+import { applyV1111PdfHeaderContrast } from './apply-v1111-pdf-header-contrast.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -38,4 +39,5 @@ await applyV1100SeparateStockActions(dist);
 await applyV1101StockSharePermission(dist);
 await applyV1103TemplateStockExport(dist, root);
 await applyV1110ExportLock(dist, root);
+await applyV1111PdfHeaderContrast(dist);
 console.log('Built static app into dist/');
