@@ -29,7 +29,7 @@ import { applyV1151StockD1Operator } from './apply-v1151-stock-d1-operator.mjs';
 import { applyV1155StockReliability } from './apply-v1155-stock-reliability.mjs';
 import { applyV1161StockLegacyWorkbook } from './apply-v1161-stock-legacy-workbook.mjs';
 import { applyV1161StockOrderOutlet } from './apply-v1161-stock-order-outlet.mjs';
-import { applyV1162OrderPage } from './apply-v1162-order-page.mjs';
+import { applyV1162OrderPageSafe } from './apply-v1162-order-page-safe.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -68,7 +68,7 @@ await applyV1151StockD1Operator(dist);
 await applyV1155StockReliability(dist);
 await applyV1161StockLegacyWorkbook(dist);
 await applyV1161StockOrderOutlet(dist);
-await applyV1162OrderPage(dist);
+await applyV1162OrderPageSafe(dist);
 
 for (const relativePath of [
   'src/main.js',
