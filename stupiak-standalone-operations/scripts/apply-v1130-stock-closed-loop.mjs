@@ -20,25 +20,27 @@ async function patchOfflineWorkflow(dist) {
   const dirtyColumns = state.dirtyColumns || {};
   const values = {};
   for (const sheetName of ${JSON.stringify(WEEKLY)}) {
-    const dirtyWeeks = Object.entries(dirtyColumns[sheetName] || {}).filter(([, dirty]) => Boolean(dirty)).map(([week]) => Number(week));
+    const dirtyWeeks = Object.entries(dirtyColumns[sheetName] || {})
+      .filter(([, dirty]) => Boolean(dirty))
+      .map(([week]) => Number(week));
     if (!dirtyWeeks.length) continue;
     values[sheetName] = {};
     for (const [rowNo, rowValues] of Object.entries(state.values?.[sheetName] || {})) {
       const kept = {};
       for (const weekIndex of dirtyWeeks) {
-        if (rowValues?.[weekIndex] !== undefined) kept[weekIndex] = structuredCloneSafe(rowValues[weekIndex]);
+        if (rowValues?.[weekIndex] !== undefined) kept[weekIndex] = cloneDraftValue(rowValues[weekIndex]);
       }
       if (Object.keys(kept).length) values[sheetName][rowNo] = kept;
     }
   }
-  if (state.stationaryDirty) values.Stationary = structuredCloneSafe(state.values?.Stationary || {});
+  if (state.stationaryDirty) values.Stationary = cloneDraftValue(state.values?.Stationary || {});
   writeJson(stockDraftKey(outlet, state.businessDate), {
     draftVersion: 3,
     businessDate: state.businessDate,
     monthKey: state.monthKey,
     values,
-    sheetWeekDates: structuredCloneSafe(state.sheetWeekDates || {}),
-    dirtyColumns: structuredCloneSafe(dirtyColumns),
+    sheetWeekDates: cloneDraftValue(state.sheetWeekDates || {}),
+    dirtyColumns: cloneDraftValue(dirtyColumns),
     stationaryDate: state.stationaryDate,
     stationaryDirty: Boolean(state.stationaryDirty),
     countedBy: state.countedBy,
@@ -51,7 +53,7 @@ async function patchOfflineWorkflow(dist) {
   });
 }
 
-function structuredCloneSafe(value) {
+function cloneDraftValue(value) {
   try { return JSON.parse(JSON.stringify(value)); } catch { return value; }
 }`
   );
@@ -89,18 +91,20 @@ function structuredCloneSafe(value) {
       if (!dirty) continue;
       const weekIndex = Number(weekKey);
       state.dirtyColumns[sheetName][weekIndex] = true;
-      if (draft.sheetWeekDates?.[sheetName]?.[weekIndex]) state.sheetWeekDates[sheetName][weekIndex] = draft.sheetWeekDates[sheetName][weekIndex];
+      if (draft.sheetWeekDates?.[sheetName]?.[weekIndex]) {
+        state.sheetWeekDates[sheetName][weekIndex] = draft.sheetWeekDates[sheetName][weekIndex];
+      }
       for (const [rowNo, rowValues] of Object.entries(draft.values?.[sheetName] || {})) {
         const draftValue = rowValues?.[weekIndex];
         if (draftValue === undefined || !state.values?.[sheetName]?.[rowNo]) continue;
-        state.values[sheetName][rowNo][weekIndex] = structuredCloneSafe(draftValue);
+        state.values[sheetName][rowNo][weekIndex] = cloneDraftValue(draftValue);
       }
     }
   }
 
   if (draft.stationaryDirty) {
     for (const [rowNo, value] of Object.entries(draft.values?.Stationary || {})) {
-      if (state.values?.Stationary?.[rowNo]) state.values.Stationary[rowNo] = structuredCloneSafe(value);
+      if (state.values?.Stationary?.[rowNo]) state.values.Stationary[rowNo] = cloneDraftValue(value);
     }
     state.stationaryDate = draft.stationaryDate || state.stationaryDate || '';
     state.stationaryDirty = true;
@@ -125,7 +129,7 @@ async function patchMain(dist) {
 
   source = source.replace(
     `  document.querySelector('#retry-stock')?.addEventListener('click', () => loadStock({ forceFresh: true }));`,
-    `  document.querySelector('#retry-stock')?.addEventListener('click', () => loadStock({ forceFresh: true }));\n  document.querySelector('#refresh-stock-sheet')?.addEventListener('click', () => { persistStockDraft(); showToast('Refreshing from Google Sheet…'); loadStock({ forceFresh: true, preserveResult: true }); });`
+    `  document.querySelector('#retry-stock')?.addEventListener('click', () => loadStock({ forceFresh: true }));\n  document.querySelector('#refresh-stock-sheet')?.addEventListener('click', () => {\n    persistStockDraft();\n    showToast('Refreshing from Google Sheet…');\n    loadStock({ forceFresh: true, preserveResult: true });\n  });`
   );
 
   source = source.replace(
@@ -140,12 +144,12 @@ async function patchMain(dist) {
 
   source = source.replace(
     `  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistStockDraft(); });`,
-    `  document.addEventListener('visibilitychange', () => {\n    if (document.visibilityState === 'hidden') { persistStockDraft(); return; }\n    if (state.route === 'stock' && !state.stock.syncing && Date.now() - Number(state.stock.sheetLoadedAt || 0) > 15000) loadStock({ forceFresh: true, preserveResult: true });\n  });`
+    `  document.addEventListener('visibilitychange', () => {\n    if (document.visibilityState === 'hidden') { persistStockDraft(); return; }\n    if (state.route === 'stock' && !state.stock.syncing && Date.now() - Number(state.stock.sheetLoadedAt || 0) > 15000) {\n      loadStock({ forceFresh: true, preserveResult: true });\n    }\n  });`
   );
 
   source = source.replace(
     `  window.addEventListener('pagehide', persistStockDraft);`,
-    `  window.addEventListener('pagehide', persistStockDraft);\n  window.addEventListener('focus', () => { if (state.route === 'stock' && !state.stock.syncing && Date.now() - Number(state.stock.sheetLoadedAt || 0) > 15000) loadStock({ forceFresh: true, preserveResult: true }); });`
+    `  window.addEventListener('pagehide', persistStockDraft);\n  window.addEventListener('focus', () => {\n    if (state.route === 'stock' && !state.stock.syncing && Date.now() - Number(state.stock.sheetLoadedAt || 0) > 15000) {\n      loadStock({ forceFresh: true, preserveResult: true });\n    }\n  });`
   );
 
   await writeFile(file, source);
@@ -156,13 +160,13 @@ async function patchStockPage(dist) {
   let source = await readFile(file, 'utf8');
 
   source = source.replace(
-    `<div class="stock-month-field"><label>Month<input id="stock-month" type="month" value="\${escapeHtml(state.monthKey || state.businessDate.slice(0, 7))}"></label></div>`,
-    `<div class="stock-heading-actions"><div class="stock-month-field"><label>Month<input id="stock-month" type="month" value="\${escapeHtml(state.monthKey || state.businessDate.slice(0, 7))}"></label></div><button class="button secondary compact-refresh-button" id="refresh-stock-sheet" \${state.syncing ? 'disabled' : ''}>\${state.syncing ? 'Refreshing…' : 'Refresh from Sheet'}</button></div>`
+    '<div class="stock-month-field"><label>Month<input id="stock-month" type="month" value="${escapeHtml(state.monthKey || state.businessDate.slice(0, 7))}"></label></div>',
+    '<div class="stock-heading-actions"><div class="stock-month-field"><label>Month<input id="stock-month" type="month" value="${escapeHtml(state.monthKey || state.businessDate.slice(0, 7))}"></label></div><button class="button secondary compact-refresh-button" id="refresh-stock-sheet" ${state.syncing ? \'disabled\' : \'\'}>${state.syncing ? \'Refreshing…\' : \'Refresh from Sheet\'}</button></div>'
   );
 
   source = source.replace(
-    `${'${stockSyncStatusMarkup(state)}'}`,
-    `${'${state.draftNotice ? `<div class="sync-strip warning draft-isolated"><span class="sync-dot"></span><div><strong>Older browser draft isolated</strong><span>${escapeHtml(state.draftNotice)}</span></div></div>` : \'\'}${stockSyncStatusMarkup(state)}'}`
+    '    ${stockSyncStatusMarkup(state)}',
+    '    ${state.draftNotice ? `<div class="sync-strip warning draft-isolated"><span class="sync-dot"></span><div><strong>Older browser draft isolated</strong><span>${escapeHtml(state.draftNotice)}</span></div></div>` : \'\'}\n    ${stockSyncStatusMarkup(state)}'
   );
 
   await writeFile(file, source);
