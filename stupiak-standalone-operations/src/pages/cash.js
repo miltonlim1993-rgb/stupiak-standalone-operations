@@ -3,12 +3,22 @@ import { createId } from '../core/ids.js';
 import { todayIso } from '../core/dates.js';
 import { icon } from '../ui/icons.js';
 
+const PAYMENT_METHODS = [
+  { id: 'grabfood', name: 'GrabFood', aliases: ['grabfood', 'grab food', 'gf delivery'] },
+  { id: 'grab-dine-out', name: 'Grab Dine-Out', aliases: ['grab dine-out', 'grab dine out', 'grab dineout', 'grabpay pos'] },
+  { id: 'foodpanda', name: 'Foodpanda', aliases: ['foodpanda', 'food panda'] },
+  { id: 'pay-go', name: 'Pay & Go', aliases: ['pay & go', 'pay and go', 'pay go'] },
+  { id: 'shopee-food', name: 'ShopeeFood', aliases: ['shopeefood', 'shopee food'] },
+  { id: 'spay', name: 'S Pay', aliases: ['spay', 's pay', 's pay global'] },
+  { id: 'duitnow', name: 'DuitNow', aliases: ['duitnow', 'duit now', 'duitnow/card', 'duitnow card'] }
+];
+
 function emptyCounts() {
   return Object.fromEntries(DENOMINATIONS.map((value) => [String(value), '']));
 }
 
 function emptyPaymentValues() {
-  return {};
+  return Object.fromEntries(PAYMENT_METHODS.map((payment) => [payment.id, { actual: '', remark: '' }]));
 }
 
 export function createCashState() {
@@ -35,11 +45,18 @@ export function createCashState() {
   };
 }
 
-export function initializeCashFromBootstrap(state, data) {
+export function initializeCashFromBootstrap(state, sourceData) {
+  const backendPayments = Array.isArray(sourceData?.payments) ? sourceData.payments : [];
+  const canonicalPayments = PAYMENT_METHODS.map((payment) => {
+    const backend = backendPayments.find((entry) => paymentMatches(payment, entry));
+    return { ...payment, actual: backend?.actual ?? '', remark: backend?.remark || '' };
+  });
+  const data = { ...(sourceData || {}), payments: canonicalPayments };
+
   state.data = data;
   state.error = '';
-  state.payments = {};
-  for (const payment of data.payments || []) {
+  state.payments = emptyPaymentValues();
+  for (const payment of canonicalPayments) {
     state.payments[payment.id] = {
       actual: payment.actual === '' || payment.actual === null || payment.actual === undefined ? '' : String(payment.actual),
       remark: payment.remark || ''
@@ -88,11 +105,7 @@ export function cashPage(context, state) {
   return `
     <section class="page cash-page cash-full-page">
       <div class="page-heading">
-        <div>
-          <span class="eyebrow">CASH COUNT</span>
-          <h1>${escapeHtml(outlet)}</h1>
-          <p>Actual-only entry. FeedMe backfill and the Google Sheet handle all system, variance and issue formulas.</p>
-        </div>
+        <div><span class="eyebrow">CASH COUNT</span><h1>${escapeHtml(outlet)}</h1><p>Enter actual cash and payments.</p></div>
         <div class="date-field"><label>Business date<input id="cash-date" type="date" value="${state.businessDate}"></label></div>
       </div>
       <div class="segmented cash-phases">${phases.map(([key, label]) => `<button class="${state.phase === key ? 'active' : ''}" data-cash-phase="${key}">${label}</button>`).join('')}</div>
@@ -102,9 +115,7 @@ export function cashPage(context, state) {
 }
 
 function cashContent(state) {
-  return `
-    ${state.phase === 'handover' ? handoverMarkup(state) : standardMarkup(state)}
-    ${historyMarkup(state.data?.events || [])}`;
+  return `${state.phase === 'handover' ? handoverMarkup(state) : standardMarkup(state)}${historyMarkup(state.data?.events || [])}`;
 }
 
 function standardMarkup(state) {
@@ -113,33 +124,64 @@ function standardMarkup(state) {
   const other = state[`${key}Other`];
   const total = cashTotal(counts, other);
   const isClosing = key === 'closing';
-  const staff = state.staff[key] || '';
-  const remark = state.remarks[key] || '';
-
   return `<div class="cash-full-stack">
     <div class="cash-layout">
       <article class="cash-card">
-        <div class="cash-card-head">
-          <div><span>${key === 'opening' ? 'Start of shift' : 'End of shift'}</span><h2>${key === 'opening' ? 'Opening cash' : 'Physical closing cash'}</h2></div>
-          <strong class="money-total">RM ${total.toFixed(2)}</strong>
-        </div>
+        <div class="cash-card-head"><div><span>${key === 'opening' ? 'Start of shift' : 'End of shift'}</span><h2>${key === 'opening' ? 'Opening cash' : 'Closing cash'}</h2></div><strong class="money-total">RM ${total.toFixed(2)}</strong></div>
         ${savedNotice(state, key)}
         ${denominationGrid(counts, key)}
         <div class="form-grid two">
           <label>Other cash (RM)<input type="text" inputmode="decimal" autocomplete="off" data-cash-other="${key}" value="${escapeHtml(other)}"></label>
-          <label>Counted by<input type="text" id="cash-counted-by" value="${escapeHtml(staff)}" placeholder="Staff name"></label>
+          <label>Counted by<input type="text" id="cash-counted-by" value="${escapeHtml(state.staff[key] || '')}" placeholder="Staff name"></label>
         </div>
-        <label>Remark<textarea id="cash-remark" rows="3" placeholder="Optional note">${escapeHtml(remark)}</textarea></label>
+        <label>Remark<textarea id="cash-remark" rows="3" placeholder="Optional">${escapeHtml(state.remarks[key] || '')}</textarea></label>
       </article>
-      <aside class="summary-panel cash-control-panel">
-        <span>${isClosing ? 'Physical cash counted' : 'Calculated total'}</span>
-        <strong>RM ${total.toFixed(2)}</strong>
-        <p>No system or variance check is shown here. The Sheet calculates those after FeedMe backfill.</p>
-      </aside>
+      <aside class="summary-panel cash-control-panel"><span>Cash counted</span><strong>RM ${total.toFixed(2)}</strong><p>Cash is calculated automatically from the denomination count.</p></aside>
     </div>
-    ${isClosing ? paymentActualMarkup(state) : ''}
-    <button class="button primary full cash-submit-main" id="submit-cash" ${state.submitting ? 'disabled' : ''}>${state.submitting ? 'Saving…' : `Submit ${key}`}</button>
+    ${isClosing ? paymentActualMarkup(state, total) : ''}
+    <button class="button primary full cash-submit-main" id="submit-cash" ${state.submitting ? 'disabled' : ''}>${state.submitting ? 'Saving…' : `Save ${key}`}</button>
   </div>`;
+}
+
+function handoverMarkup(state) {
+  const outgoing = cashTotal(state.outgoing, state.outgoingOther);
+  const incoming = cashTotal(state.incoming, state.incomingOther);
+  const handovers = (state.data?.events || []).filter((event) => event.phase === 'handover');
+  return `<div class="handover-stack">
+    ${handovers.length ? `<div class="cash-readback-note">${icon('check', 17)}<div><strong>${handovers.length} handover saved</strong><span>This creates a new handover.</span></div></div>` : ''}
+    <div class="handover-people form-grid two">
+      <label>From staff<input id="cash-from-staff" value="${escapeHtml(state.handover.fromStaff)}"></label>
+      <label>To staff<input id="cash-to-staff" value="${escapeHtml(state.handover.toStaff)}"></label>
+    </div>
+    <div class="cash-pair">
+      <article class="cash-card compact"><div class="cash-card-head"><div><span>Outgoing</span><h2>Cash handed over</h2></div><strong class="money-total">RM ${outgoing.toFixed(2)}</strong></div>${denominationGrid(state.outgoing, 'outgoing')}<label>Other cash (RM)<input type="text" inputmode="decimal" autocomplete="off" data-cash-other="outgoing" value="${escapeHtml(state.outgoingOther)}"></label></article>
+      <article class="cash-card compact"><div class="cash-card-head"><div><span>Incoming</span><h2>Cash received</h2></div><strong class="money-total">RM ${incoming.toFixed(2)}</strong></div>${denominationGrid(state.incoming, 'incoming')}<label>Other cash (RM)<input type="text" inputmode="decimal" autocomplete="off" data-cash-other="incoming" value="${escapeHtml(state.incomingOther)}"></label></article>
+    </div>
+    ${paymentActualMarkup(state, incoming)}
+    <label class="handover-remark">Remark<textarea id="cash-remark" rows="3" placeholder="Optional">${escapeHtml(state.remarks.handover)}</textarea></label>
+    <button class="button primary full" id="submit-cash" ${state.submitting ? 'disabled' : ''}>${state.submitting ? 'Saving…' : 'Save handover'}</button>
+  </div>`;
+}
+
+function paymentActualMarkup(state, cashAmount) {
+  const payments = state.data?.payments || PAYMENT_METHODS;
+  return `<section class="payment-section ${state.phase === 'handover' ? 'payment-section-handover' : ''}">
+    <div class="section-title-row"><div><span class="eyebrow">PAYMENTS</span><h2>Payment received</h2><p>Cash is automatic. Enter 0 when none.</p></div><div class="payment-total-box"><span>Total received</span><strong>RM ${sumCurrentPaymentActuals(state, cashAmount).toFixed(2)}</strong></div></div>
+    <div class="payment-method-grid actual-only-grid">
+      ${cashAutoCard(cashAmount)}
+      ${payments.map((payment) => paymentCard(state, payment)).join('')}
+    </div>
+  </section>`;
+}
+
+function cashAutoCard(cashAmount) {
+  return `<article class="payment-method-card actual-only cash-auto-payment"><div class="payment-method-head"><div><span>Payment method</span><h3>Cash</h3></div><span class="payment-status matched">Auto</span></div><div class="payment-auto-value"><span>From cash count</span><strong>RM ${Number(cashAmount || 0).toFixed(2)}</strong></div></article>`;
+}
+
+function paymentCard(state, payment) {
+  const value = state.payments[payment.id] || { actual: '', remark: '' };
+  const entered = value.actual !== '' && value.actual !== null && value.actual !== undefined;
+  return `<article class="payment-method-card actual-only"><div class="payment-method-head"><div><span>Payment method</span><h3>${escapeHtml(payment.name)}</h3></div><span class="payment-status ${entered ? 'matched' : 'pending'}">${entered ? 'Entered' : 'Pending'}</span></div><label class="payment-actual-only"><span>Actual received</span><input id="payment-actual-${escapeHtml(payment.id)}" type="text" inputmode="decimal" autocomplete="off" data-payment-actual="${escapeHtml(payment.id)}" value="${escapeHtml(value.actual)}" placeholder="0.00"></label><label class="payment-remark">Remark <input id="payment-remark-${escapeHtml(payment.id)}" data-payment-remark="${escapeHtml(payment.id)}" value="${escapeHtml(value.remark)}" placeholder="Optional"></label></article>`;
 }
 
 function savedNotice(state, phase) {
@@ -147,63 +189,7 @@ function savedNotice(state, phase) {
   if (!saved.length) return '';
   const latest = saved[saved.length - 1];
   const total = phase === 'handover' ? latest.incomingTotal : latest.countedTotal;
-  return `<div class="cash-readback-note">${icon('check', 17)}<div><strong>Existing record loaded</strong><span>${formatDateTime(latest.savedAt)} · RM ${money(total)}</span></div></div>`;
-}
-
-function paymentActualMarkup(state) {
-  const payments = state.data?.payments || [];
-  if (!payments.length) {
-    return `<article class="cash-card payment-empty"><strong>No payment methods detected</strong><p>The Cash GAS could not find payment actual columns in _RelationDaily.</p></article>`;
-  }
-  return `<section class="payment-section">
-    <div class="section-title-row">
-      <div><span class="eyebrow">PAYMENT ACTUAL ENTRY</span><h2>Other payment received</h2><p>Enter actual payment only. System and variance remain in the Sheet.</p></div>
-      <div class="payment-total-box"><span>Actual total</span><strong>RM ${sumCurrentPaymentActuals(state).toFixed(2)}</strong></div>
-    </div>
-    <div class="payment-method-grid actual-only-grid">${payments.map((payment) => paymentCard(state, payment)).join('')}</div>
-  </section>`;
-}
-
-function paymentCard(state, payment) {
-  const value = state.payments[payment.id] || { actual: '', remark: '' };
-  const actualEntered = value.actual !== '' && value.actual !== null && value.actual !== undefined;
-  return `<article class="payment-method-card actual-only">
-    <div class="payment-method-head">
-      <div><span>Payment method</span><h3>${escapeHtml(payment.name)}</h3></div>
-      <span class="payment-status ${actualEntered ? 'matched' : 'pending'}">${actualEntered ? 'Entered' : 'Pending'}</span>
-    </div>
-    <label class="payment-actual-only"><span>Actual received</span><input id="payment-actual-${payment.id}" type="text" inputmode="decimal" autocomplete="off" data-payment-actual="${payment.id}" value="${escapeHtml(value.actual)}" placeholder="0.00"></label>
-    <label class="payment-remark">Remark <input id="payment-remark-${payment.id}" data-payment-remark="${payment.id}" value="${escapeHtml(value.remark)}" placeholder="Optional"></label>
-  </article>`;
-}
-
-function handoverMarkup(state) {
-  const outgoing = cashTotal(state.outgoing, state.outgoingOther);
-  const incoming = cashTotal(state.incoming, state.incomingOther);
-  const variance = incoming - outgoing;
-  const handovers = (state.data?.events || []).filter((event) => event.phase === 'handover');
-  return `<div class="handover-stack">
-    ${handovers.length ? `<div class="cash-readback-note">${icon('check', 17)}<div><strong>${handovers.length} handover${handovers.length === 1 ? '' : 's'} already saved</strong><span>Every handover remains in Today History below. This form creates a new event.</span></div></div>` : ''}
-    <div class="handover-people form-grid two">
-      <label>From staff<input id="cash-from-staff" value="${escapeHtml(state.handover.fromStaff)}"></label>
-      <label>To staff<input id="cash-to-staff" value="${escapeHtml(state.handover.toStaff)}"></label>
-    </div>
-    <div class="cash-pair">
-      <article class="cash-card compact">
-        <div class="cash-card-head"><div><span>Outgoing count</span><h2>Cash handed over</h2></div><strong class="money-total">RM ${outgoing.toFixed(2)}</strong></div>
-        ${denominationGrid(state.outgoing, 'outgoing')}
-        <label>Other cash (RM)<input type="text" inputmode="decimal" autocomplete="off" data-cash-other="outgoing" value="${escapeHtml(state.outgoingOther)}"></label>
-      </article>
-      <article class="cash-card compact">
-        <div class="cash-card-head"><div><span>Incoming count</span><h2>Cash received</h2></div><strong class="money-total">RM ${incoming.toFixed(2)}</strong></div>
-        ${denominationGrid(state.incoming, 'incoming')}
-        <label>Other cash (RM)<input type="text" inputmode="decimal" autocomplete="off" data-cash-other="incoming" value="${escapeHtml(state.incomingOther)}"></label>
-      </article>
-    </div>
-    <article class="variance-card ${Math.abs(variance) > 0.009 ? 'warning' : 'ok'}"><div><span>Handover difference</span><strong>${variance >= 0 ? '+' : '−'} RM ${Math.abs(variance).toFixed(2)}</strong></div><small>Incoming − outgoing, for staff reference only</small></article>
-    <label>Remark <textarea id="cash-remark" rows="3" placeholder="Optional note">${escapeHtml(state.remarks.handover)}</textarea></label>
-    <button class="button primary full" id="submit-cash" ${state.submitting ? 'disabled' : ''}>${state.submitting ? 'Saving…' : 'Submit new handover'}</button>
-  </div>`;
+  return `<div class="cash-readback-note">${icon('check', 17)}<div><strong>Saved record loaded</strong><span>${formatDateTime(latest.savedAt)} · RM ${money(total)}</span></div></div>`;
 }
 
 function denominationGrid(counts, scope) {
@@ -216,33 +202,18 @@ function denominationGrid(counts, scope) {
 
 function historyMarkup(events) {
   const sorted = [...events].sort((a, b) => String(a.savedAt || '').localeCompare(String(b.savedAt || '')));
-  return `<section class="cash-history-section">
-    <div class="section-title-row"><div><span class="eyebrow">READ BACK</span><h2>Today history</h2><p>Opening, every handover and closing saved in the yearly FeedMe report.</p></div><span class="history-count">${sorted.length} record${sorted.length === 1 ? '' : 's'}</span></div>
-    ${sorted.length ? `<div class="cash-history-list">${sorted.map(historyRow).join('')}</div>` : '<div class="empty-state compact-empty"><strong>No cash records for this date.</strong><span>The first submission will appear here.</span></div>'}
-  </section>`;
+  return `<section class="cash-history-section"><div class="section-title-row"><div><span class="eyebrow">HISTORY</span><h2>Today</h2></div><span class="history-count">${sorted.length}</span></div>${sorted.length ? `<div class="cash-history-list">${sorted.map(historyRow).join('')}</div>` : '<div class="empty-state compact-empty"><strong>No records yet.</strong></div>'}</section>`;
 }
 
 function historyRow(event) {
   const phase = event.phase || '';
   const amount = phase === 'handover' ? `RM ${money(event.outgoingTotal)} → RM ${money(event.incomingTotal)}` : `RM ${money(event.countedTotal)}`;
   const staff = phase === 'handover' ? `${event.fromStaff || '—'} → ${event.toStaff || '—'}` : event.countedBy || '—';
-  return `<article class="cash-history-row">
-    <div class="history-phase ${phase}">${escapeHtml(phase)}</div>
-    <div><strong>${amount}</strong><span>${escapeHtml(staff)}</span></div>
-    <div><strong>${formatDateTime(event.savedAt)}</strong><span>${escapeHtml(event.remark || '')}</span></div>
-    ${phase === 'handover' ? `<div class="${Math.abs(Number(event.variance || 0)) > 0.009 ? 'negative' : ''}"><strong>${Number(event.variance || 0) >= 0 ? '+' : '−'} RM ${Math.abs(Number(event.variance || 0)).toFixed(2)}</strong><span>Difference</span></div>` : '<div></div>'}
-  </article>`;
+  return `<article class="cash-history-row"><div class="history-phase ${phase}">${escapeHtml(phase)}</div><div><strong>${amount}</strong><span>${escapeHtml(staff)}</span></div><div><strong>${formatDateTime(event.savedAt)}</strong><span>${escapeHtml(event.remark || '')}</span></div><div></div></article>`;
 }
 
 function resultMarkup(result) {
-  return `<article class="submit-success">
-    <div class="success-icon">${icon('check')}</div>
-    <div><span>Saved successfully</span><strong>${escapeHtml(result.phase || 'Cash count')} · RM ${Number(result.displayTotal || 0).toFixed(2)}</strong><small>${escapeHtml(result.spreadsheetName || '')}</small></div>
-    <div class="success-actions">
-      ${result.spreadsheetUrl ? `<a class="button secondary" href="${result.spreadsheetUrl}" target="_blank" rel="noopener">Open FeedMe Report ${icon('external', 16)}</a>` : ''}
-      ${result.whatsappShareUrl ? `<a class="button whatsapp" href="${result.whatsappShareUrl}" target="_blank" rel="noopener">${icon('whatsapp', 18)} Send to WhatsApp</a>` : ''}
-    </div>
-  </article>`;
+  return `<article class="submit-success"><div class="success-icon">${icon('check')}</div><div><span>Saved</span><strong>${escapeHtml(result.phase || 'Cash count')} · RM ${Number(result.displayTotal || 0).toFixed(2)}</strong><small>${escapeHtml(result.spreadsheetName || '')}</small></div><div class="success-actions">${result.spreadsheetUrl ? `<a class="button secondary" href="${result.spreadsheetUrl}" target="_blank" rel="noopener">Open report ${icon('external', 16)}</a>` : ''}</div></article>`;
 }
 
 export function buildCashPayload(state, outlet) {
@@ -250,41 +221,27 @@ export function buildCashPayload(state, outlet) {
   if (state.phase === 'handover') {
     const outgoingTotal = cashTotal(state.outgoing, state.outgoingOther);
     const incomingTotal = cashTotal(state.incoming, state.incomingOther);
-    return {
-      ...common,
-      fromStaff: state.handover.fromStaff,
-      toStaff: state.handover.toStaff,
-      countedBy: state.handover.toStaff,
-      outgoingTotal,
-      incomingTotal,
-      outgoingDenominations: numericDenominations(state.outgoing),
-      incomingDenominations: numericDenominations(state.incoming),
-      outgoingOtherCash: Number(state.outgoingOther || 0),
-      incomingOtherCash: Number(state.incomingOther || 0),
-      denominations: numericDenominations(state.incoming),
-      otherCash: Number(state.incomingOther || 0)
-    };
+    return { ...common, fromStaff: state.handover.fromStaff, toStaff: state.handover.toStaff, countedBy: state.handover.toStaff, outgoingTotal, incomingTotal, outgoingDenominations: numericDenominations(state.outgoing), incomingDenominations: numericDenominations(state.incoming), outgoingOtherCash: Number(state.outgoingOther || 0), incomingOtherCash: Number(state.incomingOther || 0), denominations: numericDenominations(state.incoming), otherCash: Number(state.incomingOther || 0), payments: buildPaymentPayload(state, incomingTotal) };
   }
 
   const counts = state[state.phase];
   const otherCash = state[`${state.phase}Other`];
-  const payload = { ...common, countedBy: state.staff[state.phase], countedTotal: cashTotal(counts, otherCash), denominations: numericDenominations(counts), otherCash: Number(otherCash || 0) };
-  if (state.phase === 'closing') {
-    payload.payments = (state.data?.payments || []).map((payment) => ({ id: payment.id, name: payment.name, actual: state.payments[payment.id]?.actual ?? '', remark: state.payments[payment.id]?.remark || '' }));
-  }
+  const countedTotal = cashTotal(counts, otherCash);
+  const payload = { ...common, countedBy: state.staff[state.phase], countedTotal, denominations: numericDenominations(counts), otherCash: Number(otherCash || 0) };
+  if (state.phase === 'closing') payload.payments = buildPaymentPayload(state, countedTotal);
   return payload;
 }
 
 export function validateCash(state) {
   if (state.phase === 'handover') {
-    if (!state.handover.fromStaff.trim() || !state.handover.toStaff.trim()) return 'Enter both handover staff names.';
-    return '';
+    if (!state.handover.fromStaff.trim() || !state.handover.toStaff.trim()) return 'Enter both staff names.';
+  } else if (!state.staff[state.phase].trim()) {
+    return 'Enter staff name.';
   }
-  if (!state.staff[state.phase].trim()) return 'Enter the staff name before submitting.';
-  if (state.phase === 'closing') {
-    for (const payment of state.data?.payments || []) {
-      const value = state.payments[payment.id] || {};
-      if (value.actual === '' || value.actual === null || value.actual === undefined) return `Enter the actual amount for ${payment.name}. Use 0 when there was no payment.`;
+  if (state.phase === 'handover' || state.phase === 'closing') {
+    for (const payment of PAYMENT_METHODS) {
+      const actual = state.payments[payment.id]?.actual;
+      if (actual === '' || actual === null || actual === undefined) return `Enter ${payment.name}. Use 0 when none.`;
     }
   }
   return '';
@@ -292,6 +249,26 @@ export function validateCash(state) {
 
 export function cashTotal(counts, other = 0) {
   return DENOMINATIONS.reduce((sum, value) => sum + Number(counts[String(value)] || 0) * value, Number(other || 0));
+}
+
+function buildPaymentPayload(state, cashAmount) {
+  return [{ id: 'cash', name: 'Cash', actual: Number(cashAmount || 0), remark: 'Auto from cash count', auto: true }, ...PAYMENT_METHODS.map((payment) => ({ id: payment.id, name: payment.name, actual: state.payments[payment.id]?.actual ?? '', remark: state.payments[payment.id]?.remark || '' }))];
+}
+
+function paymentMatches(canonical, backend) {
+  const values = [backend?.id, backend?.name].map(normalizePaymentName).filter(Boolean);
+  return values.includes(normalizePaymentName(canonical.id)) || values.includes(normalizePaymentName(canonical.name)) || canonical.aliases.some((alias) => values.includes(normalizePaymentName(alias)));
+}
+
+function normalizePaymentName(value) {
+  return String(value || '').toLowerCase().replace(/&/g, 'and').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function sumCurrentPaymentActuals(state, cashAmount = 0) {
+  return Number(cashAmount || 0) + PAYMENT_METHODS.reduce((sum, payment) => {
+    const value = state.payments[payment.id]?.actual;
+    return sum + (value === '' || value === null || value === undefined ? 0 : Number(value || 0));
+  }, 0);
 }
 
 function numericDenominations(values) {
@@ -305,13 +282,6 @@ function normalizeDenominations(values) {
     result[String(value)] = raw === null || raw === undefined || Number(raw) === 0 ? '' : String(raw);
   }
   return result;
-}
-
-function sumCurrentPaymentActuals(state) {
-  return (state.data?.payments || []).reduce((sum, payment) => {
-    const value = state.payments[payment.id]?.actual;
-    return sum + (value === '' || value === null || value === undefined ? 0 : Number(value || 0));
-  }, 0);
 }
 
 function numberOrBlank(value) {
@@ -331,7 +301,7 @@ function formatDateTime(value) {
 }
 
 function loadingMarkup() {
-  return `<div class="loading-state"><span class="spinner"></span><strong>Reading cash actual history…</strong><small>Loading saved opening, handovers, closing and payment method names.</small></div>`;
+  return `<div class="loading-state"><span class="spinner"></span><strong>Loading saved cash count…</strong></div>`;
 }
 
 function errorMarkup(error) {
@@ -339,7 +309,7 @@ function errorMarkup(error) {
 }
 
 function emptyMarkup() {
-  return `<div class="empty-state"><strong>Cash Count is ready to connect.</strong><span>Cloudflare must contain CASH_GAS_URL and CASH_GAS_SECRET.</span></div>`;
+  return `<div class="empty-state"><strong>Cash Count is ready to connect.</strong></div>`;
 }
 
 function escapeHtml(value) {
