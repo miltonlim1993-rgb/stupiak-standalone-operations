@@ -7,14 +7,14 @@ export function onRequestGet(context) {
     stockGasConfigured,
     cashGasConfigured,
     stockD1Configured,
-    stockConnectionMode: stockD1Configured ? 'cloudflare_d1_with_sheet_mirror' : stockGasConfigured ? 'cloudflare_server' : 'missing',
+    stockConnectionMode: stockD1Configured ? 'cloudflare_d1_primary' : stockGasConfigured ? 'cloudflare_server' : 'missing',
     cashConnectionMode: cashGasConfigured ? 'cloudflare_server' : 'missing',
     outletName: context.env.OUTLET_NAME || '',
     outletRouting: 'url_or_device_registry',
     statvara: context.env.STATVARA_WEBHOOK_URL ? 'enabled' : 'reserved',
     storageProvider: context.env.FILE_STORAGE_PROVIDER || 'google_drive',
     cloudflareStorageReady: Boolean(context.env.FILE_STORAGE_PROVIDER === 'cloudflare_r2'),
-    version: '1.14.0'
+    version: '1.16.0'
   }), {
     headers: {
       'Content-Type': 'application/json;charset=utf-8',
