@@ -20,42 +20,99 @@ function importWeeklySection(workbook, state, section) {
   const sheet = findWorksheet(workbook, section.sheetName);
   if (!sheet) throw missingSheetError(workbook, section.sheetName);
 
-  const weekIndex = Number(state.lastEditedWeek || state.mobileWeek || state.data?.selectedWeek || 1);
-  const group = WEEK_GROUPS[Math.max(0, Math.min(4, weekIndex - 1))];
-  const primaryCol = group[0];
-  const secondaryCol = primaryCol + 2;
+  const detectedWeeks = detectImportWeeks(sheet, state).filter(({ weekIndex }) => weekIndex >= 1 && weekIndex <= 5);
+  const targetWeeks = detectedWeeks.length
+    ? uniqueWeeks(detectedWeeks)
+    : [{ weekIndex: Number(state.lastEditedWeek || state.mobileWeek || state.data?.selectedWeek || 1), col: WEEK_GROUPS[Math.max(0, Math.min(4, Number(state.lastEditedWeek || state.mobileWeek || state.data?.selectedWeek || 1) - 1))][0], date: '' }];
+
   let imported = 0;
-
+  const importedWeeks = [];
   state.values[section.sheetName] = state.values[section.sheetName] || {};
-  for (const row of section.rows || []) {
-    const target = state.values[section.sheetName][row.row] || {};
-    target[weekIndex] = target[weekIndex] || {};
-    if (section.type === 'weekly-inventory') {
-      const primary = cellNumberOrBlank(sheet, row.row, primaryCol);
-      const secondary = row.hasSecondaryQuantity ? cellNumberOrBlank(sheet, row.row, secondaryCol) : undefined;
-      if (primary !== '') { target[weekIndex].primary = primary; imported += 1; }
-      else target[weekIndex].primary = target[weekIndex].primary ?? '';
-      if (row.hasSecondaryQuantity) target[weekIndex].secondary = secondary === undefined ? '' : secondary;
-    } else {
-      const qty = cellNumberOrBlank(sheet, row.row, primaryCol);
-      if (qty !== '') { target[weekIndex].quantity = qty; imported += 1; }
-      else target[weekIndex].quantity = target[weekIndex].quantity ?? '';
-    }
-    state.values[section.sheetName][row.row] = target;
-  }
-
   state.dirtyColumns = state.dirtyColumns || {};
-  state.dirtyColumns[section.sheetName] = { ...(state.dirtyColumns[section.sheetName] || {}), [weekIndex]: true };
-  state.lastEditedWeek = weekIndex;
-  state.mobileWeek = weekIndex;
+  state.dirtyColumns[section.sheetName] = { ...(state.dirtyColumns[section.sheetName] || {}) };
+  state.sheetWeekDates = state.sheetWeekDates || {};
+  state.sheetWeekDates[section.sheetName] = { ...(state.sheetWeekDates[section.sheetName] || {}) };
 
-  const headerDate = detectWeekDate(sheet, primaryCol);
-  if (headerDate) {
-    state.sheetWeekDates = state.sheetWeekDates || {};
-    state.sheetWeekDates[section.sheetName] = { ...(state.sheetWeekDates[section.sheetName] || {}), [weekIndex]: headerDate };
+  for (const targetWeek of targetWeeks) {
+    const weekIndex = Number(targetWeek.weekIndex);
+    const primaryCol = Number(targetWeek.col || WEEK_GROUPS[Math.max(0, Math.min(4, weekIndex - 1))][0]);
+    const secondaryCol = primaryCol + 2;
+    let importedThisWeek = 0;
+
+    for (const row of section.rows || []) {
+      const target = state.values[section.sheetName][row.row] || {};
+      target[weekIndex] = target[weekIndex] || {};
+      if (section.type === 'weekly-inventory') {
+        const primary = cellNumberOrBlank(sheet, row.row, primaryCol);
+        const secondary = row.hasSecondaryQuantity ? cellNumberOrBlank(sheet, row.row, secondaryCol) : undefined;
+        if (primary !== '') { target[weekIndex].primary = primary; imported += 1; importedThisWeek += 1; }
+        else target[weekIndex].primary = target[weekIndex].primary ?? '';
+        if (row.hasSecondaryQuantity) target[weekIndex].secondary = secondary === undefined ? '' : secondary;
+      } else {
+        const qty = cellNumberOrBlank(sheet, row.row, primaryCol);
+        if (qty !== '') { target[weekIndex].quantity = qty; imported += 1; importedThisWeek += 1; }
+        else target[weekIndex].quantity = target[weekIndex].quantity ?? '';
+      }
+      state.values[section.sheetName][row.row] = target;
+    }
+
+    if (targetWeek.date) state.sheetWeekDates[section.sheetName][weekIndex] = targetWeek.date;
+    else {
+      const headerDate = detectWeekDate(sheet, primaryCol, state);
+      if (headerDate) state.sheetWeekDates[section.sheetName][weekIndex] = headerDate;
+    }
+
+    if (importedThisWeek > 0 || targetWeek.date) {
+      state.dirtyColumns[section.sheetName][weekIndex] = true;
+      importedWeeks.push(weekIndex);
+    }
   }
 
-  return { sectionName: section.sheetName, weekIndex, imported, matchedTab: sheet.name };
+  const focusWeek = importedWeeks[0] || targetWeeks[0]?.weekIndex || 1;
+  state.lastEditedWeek = focusWeek;
+  state.mobileWeek = focusWeek;
+
+  return { sectionName: section.sheetName, weekIndex: focusWeek, imported, importedWeeks, matchedTab: sheet.name };
+}
+
+function uniqueWeeks(entries) {
+  const seen = new Map();
+  for (const entry of entries) {
+    if (!seen.has(entry.weekIndex)) seen.set(entry.weekIndex, entry);
+  }
+  return Array.from(seen.values());
+}
+
+function detectImportWeeks(sheet, state) {
+  const result = [];
+  const monthKey = String(state.monthKey || state.businessDate || '').slice(0, 7);
+  for (let i = 0; i < WEEK_GROUPS.length; i += 1) {
+    const col = WEEK_GROUPS[i][0];
+    const date = detectWeekDate(sheet, col, state);
+    if (!date) continue;
+    const weekIndex = weekIndexFromDate(date, monthKey) || i + 1;
+    result.push({ weekIndex, col, date });
+  }
+  return result;
+}
+
+function weekIndexFromDate(isoDate, monthKey) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(isoDate || ''))) return 0;
+  const [year, month, day] = isoDate.split('-').map(Number);
+  const currentMonth = `${year}-${String(month).padStart(2, '0')}`;
+  const targetMonth = /^\d{4}-\d{2}$/.test(String(monthKey || '')) ? monthKey : currentMonth;
+  const [targetYear, targetMonthNo] = targetMonth.split('-').map(Number);
+  const gridStart = mondayOfWeek(new Date(targetYear, targetMonthNo - 1, 1));
+  const target = new Date(year, month - 1, day);
+  const diffDays = Math.floor((target - gridStart) / 86400000);
+  const weekIndex = Math.floor(diffDays / 7) + 1;
+  return weekIndex >= 1 && weekIndex <= 5 ? weekIndex : 0;
+}
+
+function mondayOfWeek(date) {
+  const day = date.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate() + diff);
 }
 
 function importStationary(workbook, state, section) {
@@ -129,16 +186,16 @@ function parseNumber(value) {
   return Number.isFinite(number) ? number : '';
 }
 
-function detectWeekDate(sheet, col) {
-  for (const row of [2, 3]) {
+function detectWeekDate(sheet, col, state = null) {
+  for (const row of [2, 1, 3]) {
     const raw = sheet.getRow(row).getCell(col)?.value;
-    const iso = toIsoDate(raw);
+    const iso = toIsoDate(raw, state);
     if (iso) return iso;
   }
   return '';
 }
 
-function toIsoDate(value) {
+function toIsoDate(value, state = null) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) return value.toISOString().slice(0, 10);
   const text = String(value || '').trim();
   const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
@@ -148,5 +205,18 @@ function toIsoDate(value) {
     const year = dmy[3].length === 2 ? `20${dmy[3]}` : dmy[3];
     return `${year}-${dmy[2].padStart(2, '0')}-${dmy[1].padStart(2, '0')}`;
   }
+  const monthName = /^(\d{1,2})\s*-\s*([A-Za-z]{3,})$/.exec(text) || /^([A-Za-z]{3,})\s*(\d{1,2})$/.exec(text);
+  if (monthName) {
+    const day = Number(/^\d/.test(monthName[1]) ? monthName[1] : monthName[2]);
+    const mon = /^\d/.test(monthName[1]) ? monthName[2] : monthName[1];
+    const month = monthFromName(mon);
+    const year = Number(String(state?.monthKey || state?.businessDate || new Date().getFullYear()).slice(0, 4));
+    if (month && day) return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
   return '';
+}
+
+function monthFromName(name) {
+  const key = String(name || '').slice(0, 3).toLowerCase();
+  return { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 }[key] || 0;
 }
