@@ -17,8 +17,8 @@ export async function importStockCountWorkbook(file, state) {
 }
 
 function importWeeklySection(workbook, state, section) {
-  const sheet = workbook.getWorksheet(section.sheetName);
-  if (!sheet) throw new Error(`Excel tab not found: ${section.sheetName}`);
+  const sheet = findWorksheet(workbook, section.sheetName);
+  if (!sheet) throw missingSheetError(workbook, section.sheetName);
 
   const weekIndex = Number(state.lastEditedWeek || state.mobileWeek || state.data?.selectedWeek || 1);
   const group = WEEK_GROUPS[Math.max(0, Math.min(4, weekIndex - 1))];
@@ -55,12 +55,12 @@ function importWeeklySection(workbook, state, section) {
     state.sheetWeekDates[section.sheetName] = { ...(state.sheetWeekDates[section.sheetName] || {}), [weekIndex]: headerDate };
   }
 
-  return { sectionName: section.sheetName, weekIndex, imported };
+  return { sectionName: section.sheetName, weekIndex, imported, matchedTab: sheet.name };
 }
 
 function importStationary(workbook, state, section) {
-  const sheet = workbook.getWorksheet('Stationary');
-  if (!sheet) throw new Error('Excel tab not found: Stationary');
+  const sheet = findWorksheet(workbook, 'Stationary');
+  if (!sheet) throw missingSheetError(workbook, 'Stationary');
   let imported = 0;
   state.values.Stationary = state.values.Stationary || {};
   for (const row of section.rows || []) {
@@ -69,7 +69,48 @@ function importStationary(workbook, state, section) {
     if (quantity !== '') imported += 1;
   }
   state.stationaryDirty = true;
-  return { sectionName: 'Stationary', weekIndex: 0, imported };
+  return { sectionName: 'Stationary', weekIndex: 0, imported, matchedTab: sheet.name };
+}
+
+function findWorksheet(workbook, expectedName) {
+  const expected = normalizeSheetName(expectedName);
+  const direct = workbook.getWorksheet(expectedName);
+  if (direct) return direct;
+
+  const sheets = workbook.worksheets || [];
+  return sheets.find((sheet) => normalizeSheetName(sheet.name) === expected)
+    || sheets.find((sheet) => normalizeSheetName(sheet.name).includes(expected) || expected.includes(normalizeSheetName(sheet.name)))
+    || aliasWorksheet(sheets, expected);
+}
+
+function aliasWorksheet(sheets, expected) {
+  if (expected === 'untensil pg1' || expected === 'utensil pg1') {
+    return sheets.find((sheet) => /u?n?tensil\s*pg\s*1/i.test(normalizeSheetName(sheet.name)));
+  }
+  if (expected === 'utensil pg2') {
+    return sheets.find((sheet) => /u?n?tensil\s*pg\s*2/i.test(normalizeSheetName(sheet.name)));
+  }
+  if (expected === 'inventory') {
+    return sheets.find((sheet) => /inventory/i.test(normalizeSheetName(sheet.name)));
+  }
+  if (expected === 'stationary') {
+    return sheets.find((sheet) => /stationary|stationery/i.test(normalizeSheetName(sheet.name)));
+  }
+  return null;
+}
+
+function normalizeSheetName(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function missingSheetError(workbook, expectedName) {
+  const tabs = (workbook.worksheets || []).map((sheet) => sheet.name).filter(Boolean).join(', ') || 'none';
+  return new Error(`This Excel cannot find ${expectedName}. Tabs found: ${tabs}`);
 }
 
 function cellNumberOrBlank(sheet, row, col) {
