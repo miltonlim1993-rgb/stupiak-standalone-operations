@@ -12,7 +12,6 @@ import { applyV193StockFooterFilter } from './apply-v193-stock-footer-filter.mjs
 import { applyV194DirectRelationExport } from './apply-v194-direct-relation-export.mjs';
 import { applyV1100SeparateStockActions } from './apply-v1100-separate-stock-actions.mjs';
 import { applyV1101StockSharePermission } from './apply-v1101-stock-share-permission.mjs';
-import { applyV1102StockMessage } from './apply-v1102-stock-message.mjs';
 import { applyV1103TemplateStockExport } from './apply-v1103-template-stock-export.mjs';
 
 const root = resolve(import.meta.dirname, '..');
@@ -36,6 +35,5 @@ await applyV193StockFooterFilter(dist);
 await applyV194DirectRelationExport(dist);
 await applyV1100SeparateStockActions(dist);
 await applyV1101StockSharePermission(dist);
-await applyV1102StockMessage(dist);
 await applyV1103TemplateStockExport(dist, root);
 console.log('Built static app into dist/');
