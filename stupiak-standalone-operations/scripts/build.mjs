@@ -27,6 +27,8 @@ import { applyV1141StockReadiness } from './apply-v1141-stock-readiness.mjs';
 import { applyV1150StockSetup } from './apply-v1150-stock-setup.mjs';
 import { applyV1151StockD1Operator } from './apply-v1151-stock-d1-operator.mjs';
 import { applyV1155StockReliability } from './apply-v1155-stock-reliability.mjs';
+import { applyV1161StockLegacyWorkbook } from './apply-v1161-stock-legacy-workbook.mjs';
+import { applyV1161StockOrderOutlet } from './apply-v1161-stock-order-outlet.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -63,6 +65,8 @@ await applyV1141StockReadiness(dist);
 await applyV1150StockSetup(dist);
 await applyV1151StockD1Operator(dist);
 await applyV1155StockReliability(dist);
+await applyV1161StockLegacyWorkbook(dist);
+await applyV1161StockOrderOutlet(dist);
 
 for (const relativePath of [
   'src/main.js',
@@ -71,6 +75,7 @@ for (const relativePath of [
   'src/core/stock-local-export.js',
   'src/core/offline-workflow.js',
   'src/core/stock-setup-excel.js',
+  'src/core/stock-setup-legacy.js',
   'src/core/stock-count-excel.js'
 ]) {
   execFileSync(process.execPath, ['--check', resolve(dist, relativePath)], { stdio: 'inherit' });
