@@ -13,12 +13,7 @@ async function patchStockPage(dist) {
   const file = resolve(dist, 'src/pages/stock.js');
   let source = await readFile(file, 'utf8');
 
-  const callPattern = /state\.activeTab\s*===\s*['"]Order Page['"]\s*\?\s*(?:orderPage|liveOrderPageV1162)\([^)]*\)\s*:\s*sectionPage\(state,\s*weekly,\s*monthly\)/;
-  if (callPattern.test(source)) {
-    source = source.replace(callPattern, `state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, weekly, monthly)`);
-  } else if (!source.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state)`)) {
-    throw new Error('v1.16.5 final audit failed: Order Page call anchor');
-  }
+  source = forceLiveOrderPageCall(source);
 
   const oldRenderer = /function orderPage\([^)]*\)\s*\{[\s\S]*?\n\}(?=\n\nfunction (?:liveOrderPageV1162|submitSuccess))/;
   if (oldRenderer.test(source)) {
@@ -110,7 +105,36 @@ function liveOrderItemsTextV1162(group) {
 
   source = source.replace(/<div class="order-note">[\s\S]*?<\/div><\/div>/g, '');
   source = source.replace(/It follows the monthly spreadsheet calculation and layout\./g, 'Live order list from saved Stock Count data.');
+
+  if (!source.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, weekly, monthly)`)) {
+    throw new Error('v1.16.5 final audit failed: live Order Page was not installed');
+  }
+
   await writeFile(file, source);
+}
+
+function forceLiveOrderPageCall(source) {
+  const exact = `state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, weekly, monthly)`;
+  if (source.includes(exact)) return source;
+
+  const lines = source.split('\n');
+  const lineIndex = lines.findIndex((line) => line.includes('state.activeTab') && line.includes('Order Page') && line.includes('sectionPage('));
+  if (lineIndex >= 0) {
+    const line = lines[lineIndex];
+    const statePosition = line.indexOf('state.activeTab');
+    const start = line.lastIndexOf('${', statePosition);
+    const sectionPosition = line.indexOf('sectionPage(', statePosition);
+    const end = line.indexOf('}', sectionPosition);
+    if (start >= 0 && sectionPosition >= 0 && end > sectionPosition) {
+      lines[lineIndex] = line.slice(0, start) + '${' + exact + '}' + line.slice(end + 1);
+      return lines.join('\n');
+    }
+  }
+
+  const broad = /\$\{\s*state\.activeTab\s*===\s*['"]Order Page['"]\s*\?[\s\S]{0,700}?\:\s*sectionPage\(state\s*,\s*weekly\s*,\s*monthly\s*\)\s*\}/;
+  if (broad.test(source)) return source.replace(broad, '${' + exact + '}');
+
+  throw new Error('v1.16.5 final audit failed: unable to locate the Order Page branch in stockContent');
 }
 
 async function patchMainActions(dist) {
@@ -166,15 +190,15 @@ async function auditFinalStockBuild(dist) {
   const stock = await readFile(resolve(dist, 'src/pages/stock.js'), 'utf8');
   const main = await readFile(resolve(dist, 'src/main.js'), 'utf8');
   const checks = [
-    [stock.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state)`), 'live Order Page call'],
+    [stock.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, weekly, monthly)`), 'live Order Page call'],
     [stock.includes('function liveOrderPageV1162(state)'), 'live Order Page renderer'],
     [!stock.includes('It follows the monthly spreadsheet calculation and layout.'), 'old Order Page renderer removed'],
     [stock.includes('id="export-stock-pdf"'), 'Export PDF button'],
     [stock.includes('id="export-stock-excel"'), 'Export Excel button'],
     [stock.includes('id="submit-stock"'), 'Save button'],
-    [main.includes("querySelector('#export-stock-pdf')"), 'Export PDF binding'],
-    [main.includes("querySelector('#export-stock-excel')"), 'Export Excel binding'],
-    [main.includes("querySelector('#submit-stock')"), 'Save binding'],
+    [main.includes("exportCurrentStock('pdf')"), 'Export PDF action'],
+    [main.includes("exportCurrentStock('excel')"), 'Export Excel action'],
+    [main.includes('submitStock()'), 'Save action'],
     [main.includes(markerText()), 'final action fallback']
   ];
   const failed = checks.filter(([ok]) => !ok).map(([, label]) => label);
