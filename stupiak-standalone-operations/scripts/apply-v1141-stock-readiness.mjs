@@ -10,6 +10,12 @@ function replaceRequired(source, pattern, replacement, label) {
   return source.replace(pattern, replacement);
 }
 
+function replaceOptional(source, pattern, replacement) {
+  if (typeof pattern === 'string') return source.includes(pattern) ? source.replace(pattern, replacement) : source;
+  pattern.lastIndex = 0;
+  return pattern.test(source) ? source.replace(pattern, replacement) : source;
+}
+
 export async function applyV1141StockReadiness(dist) {
   await patchStockPage(dist);
   await patchMain(dist);
@@ -41,17 +47,14 @@ async function patchStockPage(dist) {
     const parts = [\`\${completed}/\${rows.length} entered\`];
     if (!state.stationaryDate) parts.push('select count date');
     if (!String(state.countedBy || '').trim()) parts.push('enter staff name');
-    if (!state.stationaryDirty) parts.push('edit this tab');
-    const ready = Boolean(state.stationaryDirty && state.stationaryDate && String(state.countedBy || '').trim() && completed === rows.length);
-    const error = !state.stationaryDirty
-      ? 'Edit the Stationary count before saving.'
-      : !state.stationaryDate
-        ? 'Enter the Stationary count date.'
-        : completed !== rows.length
-          ? \`Complete Stationary: \${firstMissing}\`
-          : !String(state.countedBy || '').trim()
-            ? 'Enter the staff name before saving.'
-            : '';
+    const ready = Boolean(state.stationaryDate && String(state.countedBy || '').trim() && completed === rows.length);
+    const error = !state.stationaryDate
+      ? 'Enter the Stationary count date.'
+      : completed !== rows.length
+        ? \`Complete Stationary: \${firstMissing}\`
+        : !String(state.countedBy || '').trim()
+          ? 'Enter the staff name before saving.'
+          : '';
     return { ready, summary: \`Stationary · \${parts.join(' · ')}\`, error };
   }
 
@@ -145,10 +148,7 @@ async function patchMain(dist) {
     'Stock readiness import'
   );
 
-  source = replaceRequired(
-    source,
-    /function markWeekDirtyInDom\(stockSheet, weekIndex\) \{/,
-    `function refreshStockSaveReadiness() {
+  const helper = `function refreshStockSaveReadiness() {
   const readiness = stockSaveReadiness(state.stock);
   const status = document.querySelector('#stock-readiness');
   if (status) {
@@ -159,20 +159,30 @@ async function patchMain(dist) {
   if (button && !state.stock.submitting && !state.stock.submitBlocked && !state.stock.pendingSubmission) {
     button.disabled = !readiness.ready;
   }
-}
+}`;
 
-function markWeekDirtyInDom(stockSheet, weekIndex) {`,
-    'live readiness helper'
-  );
+  if (!source.includes('function refreshStockSaveReadiness')) {
+    const marker = /function markWeekDirtyInDom\s*\(/;
+    if (marker.test(source)) source = source.replace(marker, `${helper}\n\nfunction markWeekDirtyInDom(`);
+    else source += `\n\n${helper}\n`;
+  }
 
-  source = source.replace(
+  source = replaceOptional(
+    source,
     `    updateLiveStockStatus(event.target); persistStockDraft();`,
     `    updateLiveStockStatus(event.target); persistStockDraft(); refreshStockSaveReadiness();`
   );
 
-  source = source.replace(
+  source = replaceOptional(
+    source,
     `  document.querySelector('#stock-counted-by')?.addEventListener('input', (event) => { state.stock.countedBy = event.target.value; persistStockDraft(); });`,
     `  document.querySelector('#stock-counted-by')?.addEventListener('input', (event) => { state.stock.countedBy = event.target.value; persistStockDraft(); refreshStockSaveReadiness(); });`
+  );
+
+  source = replaceOptional(
+    source,
+    `  document.querySelector('#stationary-count-date')?.addEventListener('change', (event) => { state.stock.stationaryDate = event.target.value; persistStockDraft(); });`,
+    `  document.querySelector('#stationary-count-date')?.addEventListener('change', (event) => { state.stock.stationaryDate = event.target.value; persistStockDraft(); refreshStockSaveReadiness(); });`
   );
 
   await writeFile(file, source);
