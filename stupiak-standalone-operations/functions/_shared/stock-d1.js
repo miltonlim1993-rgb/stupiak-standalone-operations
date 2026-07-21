@@ -10,8 +10,36 @@ export async function handleStockD1({ context, payload, targetUrl, secret }) {
   const outlet = stockOutlet(payload, context.env);
   const monthKey = normalizeMonth(payload.monthKey || payload.businessDate);
 
+  if (action === 'importStockSetup') {
+    const setup = normalizeSetup(payload.setup, outlet);
+    await writeSetup(db, outlet, setup);
+    const bootstrap = await buildBootstrapFromSetup(db, outlet, monthKey, setup, payload.businessDate);
+    await writeSnapshot(db, outlet, monthKey, bootstrap, 'stock-setup-import');
+    return handled({
+      ok: true,
+      saved: true,
+      outlet,
+      monthKey,
+      setupUpdatedAt: setup.updatedAt,
+      sheetCount: setup.sheets.length,
+      itemCount: setup.sheets.reduce((sum, sheet) => sum + (sheet.rows?.length || 0), 0),
+      dataSource: 'cloudflare-d1-stock-setup'
+    }, 200, 0);
+  }
+
+  if (action === 'getStockSetup') {
+    const setup = await readSetup(db, outlet);
+    return handled({ ok: true, outlet, setup, dataSource: 'cloudflare-d1-stock-setup' }, 200, 0);
+  }
+
   if (action === 'getBootstrap') {
-    context.waitUntil(retryPendingGasSyncs(db, targetUrl, secret, 2));
+    const setup = await readSetup(db, outlet);
+    if (setup) {
+      const bootstrap = await buildBootstrapFromSetup(db, outlet, monthKey, setup, payload.businessDate);
+      await writeSnapshot(db, outlet, monthKey, bootstrap, 'stock-setup');
+      return handled({ ...bootstrap, dataSource: 'cloudflare-d1-stock-setup', d1UpdatedAt: Date.now() }, 200, 10);
+    }
+
     if (!payload.refresh) {
       const snapshot = await readSnapshot(db, outlet, monthKey);
       if (snapshot) {
@@ -33,7 +61,6 @@ export async function handleStockD1({ context, payload, targetUrl, secret }) {
 
   if (action === 'submitStockCount') {
     const result = await saveSubmissionToD1(db, outlet, monthKey, payload);
-    context.waitUntil(syncSubmissionToGas(db, targetUrl, secret, { ...payload, outlet }));
     return handled(result, 200, 0);
   }
 
@@ -56,14 +83,7 @@ export async function handleStockD1({ context, payload, targetUrl, secret }) {
   }
 
   if (action === 'getStockSyncStatus') {
-    const rows = await db.prepare(`
-      SELECT submission_id, outlet_id, month_key, section_name, status, attempts, last_error, updated_at
-      FROM stock_sync_queue
-      WHERE status <> 'synced'
-      ORDER BY updated_at ASC
-      LIMIT 50
-    `).all();
-    return handled({ ok: true, pending: rows.results || [] }, 200, 0);
+    return handled({ ok: true, pending: [], mode: 'd1-only' }, 200, 0);
   }
 
   return null;
@@ -87,6 +107,12 @@ function normalizeMonth(value) {
 async function ensureSchema(db) {
   if (schemaReady) return;
   await db.batch([
+    db.prepare(`CREATE TABLE IF NOT EXISTS stock_setups (
+      outlet_id TEXT PRIMARY KEY,
+      setup_json TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'excel',
+      updated_at INTEGER NOT NULL
+    )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS stock_snapshots (
       outlet_id TEXT NOT NULL,
       month_key TEXT NOT NULL,
@@ -103,7 +129,7 @@ async function ensureSchema(db) {
       counted_by TEXT,
       session_note TEXT,
       saved_at INTEGER NOT NULL,
-      gas_sync_status TEXT NOT NULL DEFAULT 'pending'
+      gas_sync_status TEXT NOT NULL DEFAULT 'd1-only'
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS stock_values (
       outlet_id TEXT NOT NULL,
@@ -126,15 +152,75 @@ async function ensureSchema(db) {
       month_key TEXT NOT NULL,
       section_name TEXT NOT NULL,
       payload_json TEXT NOT NULL,
-      status TEXT NOT NULL DEFAULT 'pending',
+      status TEXT NOT NULL DEFAULT 'disabled',
       attempts INTEGER NOT NULL DEFAULT 0,
       last_error TEXT,
       updated_at INTEGER NOT NULL
     )`),
-    db.prepare('CREATE INDEX IF NOT EXISTS idx_stock_values_lookup ON stock_values(outlet_id, month_key, sheet_name, week_index)'),
-    db.prepare('CREATE INDEX IF NOT EXISTS idx_stock_sync_pending ON stock_sync_queue(status, updated_at)')
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_stock_values_lookup ON stock_values(outlet_id, month_key, sheet_name, week_index)')
   ]);
   schemaReady = true;
+}
+
+async function readSetup(db, outlet) {
+  const row = await db.prepare('SELECT setup_json, updated_at FROM stock_setups WHERE outlet_id = ?').bind(outlet).first();
+  if (!row?.setup_json) return null;
+  try {
+    const setup = JSON.parse(row.setup_json);
+    setup.updatedAt = setup.updatedAt || row.updated_at;
+    return setup;
+  } catch {
+    return null;
+  }
+}
+
+async function writeSetup(db, outlet, setup) {
+  const now = Date.now();
+  setup.outlet = outlet;
+  setup.updatedAt = now;
+  await db.prepare(`
+    INSERT INTO stock_setups (outlet_id, setup_json, source, updated_at)
+    VALUES (?, ?, 'excel', ?)
+    ON CONFLICT(outlet_id) DO UPDATE SET
+      setup_json = excluded.setup_json,
+      source = excluded.source,
+      updated_at = excluded.updated_at
+  `).bind(outlet, JSON.stringify(setup), now).run();
+}
+
+function normalizeSetup(setup, outlet) {
+  if (!setup || !Array.isArray(setup.sheets)) throw new Error('Stock setup Excel could not be parsed.');
+  const allowed = new Set(['Inventory', 'Untensil PG1', 'Utensil PG2', 'Stationary']);
+  const sheets = setup.sheets
+    .filter((sheet) => allowed.has(String(sheet.sheetName || '')))
+    .map((sheet) => ({
+      sheetName: String(sheet.sheetName),
+      type: sheet.type || (sheet.sheetName === 'Stationary' ? 'monthly-stationary' : sheet.sheetName === 'Inventory' ? 'weekly-inventory' : 'weekly-utensil'),
+      rows: (sheet.rows || [])
+        .filter((row) => String(row.item || '').trim())
+        .map((row, index) => ({
+          row: Number(row.row || index + 4),
+          item: String(row.item || '').trim(),
+          minimum: numberOrZero(row.minimum),
+          unit: String(row.unit || row.primaryUnit || '').trim(),
+          primaryUnit: String(row.primaryUnit || row.unit || '').trim(),
+          secondaryUnit: String(row.secondaryUnit || '').trim(),
+          conversion: numberOrOne(row.conversion),
+          hasSecondaryQuantity: Boolean(row.hasSecondaryQuantity || row.secondaryUnit),
+          active: row.active !== false
+        }))
+    }))
+    .filter((sheet) => sheet.rows.length);
+
+  if (!sheets.length) throw new Error('No stock setup rows were found in the Excel file.');
+  return {
+    version: 1,
+    outlet: String(setup.outlet || outlet),
+    workbookName: String(setup.workbookName || 'Stock Setup'),
+    importedAt: setup.importedAt || new Date().toISOString(),
+    sheets,
+    orderPage: Array.isArray(setup.orderPage?.values) ? setup.orderPage : { values: [] }
+  };
 }
 
 async function readSnapshot(db, outlet, monthKey) {
@@ -159,6 +245,107 @@ async function writeSnapshot(db, outlet, monthKey, data, source = 'd1') {
       source = excluded.source,
       updated_at = excluded.updated_at
   `).bind(outlet, monthKey, JSON.stringify(data), source, now).run();
+}
+
+async function buildBootstrapFromSetup(db, outlet, monthKey, setup, businessDate = '') {
+  const sections = setup.sheets.map((sheet) => ({
+    sheetName: sheet.sheetName,
+    type: sheet.type,
+    rows: sheet.rows.filter((row) => row.active !== false).map((row) => buildSectionRow(sheet, row))
+  }));
+
+  const values = await db.prepare(`
+    SELECT sheet_name, week_index, source_row, business_date, primary_qty, secondary_qty, quantity
+    FROM stock_values
+    WHERE outlet_id = ? AND month_key = ?
+  `).bind(outlet, monthKey).all();
+  overlaySavedValues(sections, values.results || []);
+
+  return {
+    ok: true,
+    outlet,
+    monthKey,
+    businessDate: businessDate || `${monthKey}-01`,
+    spreadsheetName: `${outlet} Stock Count ${monthKey}`,
+    spreadsheetUrl: '',
+    setupUpdatedAt: setup.updatedAt || Date.now(),
+    sections,
+    orderPage: setup.orderPage || { values: [] },
+    selectedWeek: weekIndexForDate(businessDate || `${monthKey}-01`),
+    mode: 'd1-only-stock-setup'
+  };
+}
+
+function buildSectionRow(sheet, row) {
+  if (sheet.type === 'monthly-stationary') {
+    return {
+      row: row.row,
+      item: row.item,
+      unit: row.unit || row.primaryUnit || '',
+      minimum: row.minimum,
+      quantityValue: '',
+      status: 'Order',
+      date: ''
+    };
+  }
+
+  const weeks = [1, 2, 3, 4, 5].map((index) => {
+    if (sheet.type === 'weekly-inventory') {
+      return {
+        index,
+        primaryValue: '',
+        secondaryValue: row.hasSecondaryQuantity ? '' : undefined,
+        primaryUnit: row.primaryUnit || row.unit || '',
+        secondaryUnit: row.hasSecondaryQuantity ? row.secondaryUnit || '' : undefined,
+        status: 'Order',
+        date: ''
+      };
+    }
+    return {
+      index,
+      quantityValue: '',
+      unit: row.unit || row.primaryUnit || '',
+      status: 'Order',
+      date: ''
+    };
+  });
+
+  return {
+    row: row.row,
+    item: row.item,
+    minimum: row.minimum,
+    conversion: row.conversion || 1,
+    hasSecondaryQuantity: Boolean(row.hasSecondaryQuantity),
+    weeks
+  };
+}
+
+function overlaySavedValues(sections, rows) {
+  const sectionMap = new Map(sections.map((section) => [section.sheetName, section]));
+  for (const saved of rows) {
+    const section = sectionMap.get(String(saved.sheet_name));
+    if (!section) continue;
+    const row = (section.rows || []).find((entry) => Number(entry.row) === Number(saved.source_row));
+    if (!row) continue;
+    if (section.type === 'monthly-stationary' || Number(saved.week_index) === 0) {
+      row.quantityValue = emptyOrNumber(saved.quantity);
+      row.date = saved.business_date || '';
+      row.status = stockStatus(row.quantityValue, row.minimum);
+      continue;
+    }
+    const week = (row.weeks || []).find((entry) => Number(entry.index) === Number(saved.week_index));
+    if (!week) continue;
+    if (section.type === 'weekly-inventory') {
+      week.primaryValue = emptyOrNumber(saved.primary_qty);
+      if (row.hasSecondaryQuantity) week.secondaryValue = emptyOrNumber(saved.secondary_qty);
+      const total = Number(week.primaryValue || 0) * Number(row.conversion || 1) + Number(week.secondaryValue || 0);
+      week.status = total <= Number(row.minimum || 0) ? 'Order' : '';
+    } else {
+      week.quantityValue = emptyOrNumber(saved.quantity);
+      week.status = stockStatus(week.quantityValue, row.minimum);
+    }
+    week.date = saved.business_date || '';
+  }
 }
 
 async function saveSubmissionToD1(db, outlet, monthKey, payload) {
@@ -187,7 +374,7 @@ async function saveSubmissionToD1(db, outlet, monthKey, payload) {
   statements.push(db.prepare(`
     INSERT INTO stock_submissions
       (submission_id, outlet_id, month_key, section_name, counted_by, session_note, saved_at, gas_sync_status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'd1-only')
   `).bind(
     submissionId,
     outlet,
@@ -230,18 +417,8 @@ async function saveSubmissionToD1(db, outlet, monthKey, payload) {
     }
   }
 
-  statements.push(db.prepare(`
-    INSERT INTO stock_sync_queue
-      (submission_id, outlet_id, month_key, section_name, payload_json, status, attempts, updated_at)
-    VALUES (?, ?, ?, ?, ?, 'pending', 0, ?)
-    ON CONFLICT(submission_id) DO UPDATE SET
-      payload_json = excluded.payload_json,
-      status = 'pending',
-      updated_at = excluded.updated_at
-  `).bind(submissionId, outlet, monthKey, sectionName, JSON.stringify({ ...payload, outlet }), now));
-
   await runBatches(db, statements, 45);
-  await updateSnapshotFromSubmission(db, outlet, monthKey, columns);
+  await refreshSnapshotFromSetup(db, outlet, monthKey, payload.businessDate);
 
   const savedWeeks = columns
     .filter((column) => column.weekIndex > 0)
@@ -256,10 +433,20 @@ async function saveSubmissionToD1(db, outlet, monthKey, payload) {
     sectionName,
     weekIndex: savedWeeks[0]?.weekIndex || '',
     savedWeeks,
-    gasSyncStatus: 'pending',
+    gasSyncStatus: 'd1-only',
+    orderCount: 0,
+    spreadsheetName: `${outlet} Stock Count ${monthKey}`,
+    spreadsheetUrl: '',
     dataSource: 'cloudflare-d1',
     savedAt: now
   };
+}
+
+async function refreshSnapshotFromSetup(db, outlet, monthKey, businessDate = '') {
+  const setup = await readSetup(db, outlet);
+  if (!setup) return;
+  const data = await buildBootstrapFromSetup(db, outlet, monthKey, setup, businessDate);
+  await writeSnapshot(db, outlet, monthKey, data, 'd1-write-through');
 }
 
 function normalizeColumns(payload) {
@@ -283,88 +470,8 @@ function normalizeColumns(payload) {
   }));
 }
 
-async function updateSnapshotFromSubmission(db, outlet, monthKey, columns) {
-  const snapshot = await readSnapshot(db, outlet, monthKey);
-  if (!snapshot?.data) return;
-  const data = snapshot.data;
-  const sectionMap = new Map((data.sections || []).map((section) => [String(section.sheetName), section]));
-
-  for (const column of columns) {
-    const section = sectionMap.get(column.sheetName);
-    if (!section) continue;
-    const rowMap = new Map((section.rows || []).map((row) => [Number(row.row), row]));
-    for (const input of column.rows) {
-      const row = rowMap.get(Number(input.row));
-      if (!row) continue;
-      if (column.sheetName === 'Stationary' || column.weekIndex === 0) {
-        row.quantityValue = emptyOrNumber(input.quantity);
-        row.date = column.businessDate;
-        continue;
-      }
-      const week = (row.weeks || []).find((entry) => Number(entry.index) === Number(column.weekIndex));
-      if (!week) continue;
-      if (input.primary !== undefined) week.primaryValue = emptyOrNumber(input.primary);
-      if (input.secondary !== undefined) week.secondaryValue = emptyOrNumber(input.secondary);
-      if (input.quantity !== undefined) week.quantityValue = emptyOrNumber(input.quantity);
-      week.date = column.businessDate;
-    }
-  }
-
-  data.monthKey = monthKey;
-  data.d1UpdatedAt = Date.now();
-  await writeSnapshot(db, outlet, monthKey, data, 'd1-write-through');
-}
-
-async function syncSubmissionToGas(db, targetUrl, secret, payload) {
-  const submissionId = String(payload.submissionId || '');
-  if (!submissionId) return;
-  if (!targetUrl || !secret) {
-    await markSyncError(db, submissionId, 'Stock GAS mirror is not configured.');
-    return;
-  }
-
-  try {
-    const data = await callGas(targetUrl, secret, payload);
-    if (!data?.ok || !data?.saved) throw new Error(data?.error || 'Google Sheet did not confirm save.');
-    await db.batch([
-      db.prepare("UPDATE stock_sync_queue SET status = 'synced', attempts = attempts + 1, last_error = NULL, updated_at = ? WHERE submission_id = ?")
-        .bind(Date.now(), submissionId),
-      db.prepare("UPDATE stock_submissions SET gas_sync_status = 'synced' WHERE submission_id = ?")
-        .bind(submissionId)
-    ]);
-  } catch (error) {
-    await markSyncError(db, submissionId, String(error?.message || error));
-  }
-}
-
-async function retryPendingGasSyncs(db, targetUrl, secret, limit = 2) {
-  if (!targetUrl || !secret) return;
-  const pending = await db.prepare(`
-    SELECT payload_json
-    FROM stock_sync_queue
-    WHERE status IN ('pending', 'failed') AND attempts < 10
-    ORDER BY updated_at ASC
-    LIMIT ?
-  `).bind(limit).all();
-
-  for (const row of pending.results || []) {
-    try {
-      await syncSubmissionToGas(db, targetUrl, secret, JSON.parse(row.payload_json));
-    } catch {}
-  }
-}
-
-async function markSyncError(db, submissionId, message) {
-  await db.batch([
-    db.prepare("UPDATE stock_sync_queue SET status = 'failed', attempts = attempts + 1, last_error = ?, updated_at = ? WHERE submission_id = ?")
-      .bind(message.slice(0, 1000), Date.now(), submissionId),
-    db.prepare("UPDATE stock_submissions SET gas_sync_status = 'failed' WHERE submission_id = ?")
-      .bind(submissionId)
-  ]);
-}
-
 async function callGas(targetUrl, secret, payload) {
-  if (!targetUrl || !secret) throw new Error('Stock GAS mirror is not configured.');
+  if (!targetUrl || !secret) throw new Error('Stock GAS mirror is not configured. Import a Stock Setup Excel file to D1, or configure Stock GAS.');
   const response = await fetch(targetUrl, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
@@ -395,4 +502,29 @@ function emptyOrNumber(value) {
   if (value === '' || value === null || value === undefined) return '';
   const number = Number(value);
   return Number.isFinite(number) ? number : '';
+}
+
+function numberOrZero(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
+}
+
+function numberOrOne(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? number : 1;
+}
+
+function stockStatus(value, minimum) {
+  return Number(value || 0) <= Number(minimum || 0) ? 'Order' : '';
+}
+
+function weekIndexForDate(value) {
+  const text = String(value || '');
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(text);
+  if (!match) return 1;
+  const date = new Date(`${match[1]}-${match[2]}-${match[3]}T00:00:00`);
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const offset = (monthStart.getDay() + 6) % 7;
+  const gridStart = new Date(monthStart.getFullYear(), monthStart.getMonth(), monthStart.getDate() - offset);
+  return Math.max(1, Math.min(5, Math.floor((date.getTime() - gridStart.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1));
 }
