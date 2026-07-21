@@ -1,4 +1,4 @@
-export const APP_VERSION = '1.13.2';
+export const APP_VERSION = '1.14.0';
 export const DEFAULT_STOCK_GAS_URL = 'https://script.google.com/macros/s/AKfycbx1DcYarZfHMElNIbKCo59Jj0zsFQ9QsNul1kp4aM1gKPUPYIqLKE8OPTVYz87K5C65/exec';
 export const SETTINGS_KEY = 'stupiak.operations.settings.v1';
 export const DRAFT_KEY = 'stupiak.operations.drafts.v1';
