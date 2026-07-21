@@ -24,6 +24,7 @@ import { applyV1125SidebarUnlock } from './apply-v1125-sidebar-unlock.mjs';
 import { applyV1130StockClosedLoop } from './apply-v1130-stock-closed-loop.mjs';
 import { applyV1131FastStockRefresh } from './apply-v1131-fast-stock-refresh.mjs';
 import { applyV1140D1Stock } from './apply-v1140-d1-stock.mjs';
+import { applyV1141StockReadiness } from './apply-v1141-stock-readiness.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -57,6 +58,7 @@ await applyV1125SidebarUnlock(dist);
 await applyV1130StockClosedLoop(dist);
 await applyV1131FastStockRefresh(dist);
 await applyV1140D1Stock(dist);
+await applyV1141StockReadiness(dist);
 
 for (const relativePath of [
   'src/main.js',
