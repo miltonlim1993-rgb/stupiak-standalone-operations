@@ -37,7 +37,8 @@ export async function onRequestPost(context) {
     if (service === 'stock' && context.env.STOCK_DB) {
       const d1Result = await handleStockD1({ context, payload, targetUrl, secret });
       if (d1Result?.handled) {
-        const data = withIntegration(d1Result.data, context.env, 'cloudflare-d1');
+        const identified = await decorateStockOutletIdentity(context.env.STOCK_DB, payload, d1Result.data);
+        const data = withIntegration(identified, context.env, 'cloudflare-d1');
         return json(data, d1Result.status || 200, d1Result.ttl || 0);
       }
     }
@@ -92,7 +93,7 @@ export async function onRequestPost(context) {
 
 async function importStockSetupDirect(db, payload) {
   const setup = resolveStockSetupPayload(payload);
-  const outlet = String(payload.outlet || payload.outletId || setup.outlet || 'RR-KCH').trim() || 'RR-KCH';
+  const outletId = String(payload.outlet || payload.outletId || setup.outletId || setup.outlet || 'RR-KCH').trim() || 'RR-KCH';
   const sheets = setup.sheets
     .filter((sheet) => sheet && REQUIRED_STOCK_SETUP_SECTIONS.includes(String(sheet.sheetName || '').trim()))
     .map((sheet) => ({
@@ -106,19 +107,7 @@ async function importStockSetupDirect(db, payload) {
 
   const found = new Set(sheets.map((sheet) => sheet.sheetName));
   const missing = REQUIRED_STOCK_SETUP_SECTIONS.filter((name) => !found.has(name));
-  if (missing.length) {
-    throw new Error(`Stock Setup is incomplete: ${missing.join(', ')}`);
-  }
-
-  const now = Date.now();
-  const normalized = {
-    ...setup,
-    version: Number(setup.version || 2),
-    outlet,
-    updatedAt: now,
-    importedAt: setup.importedAt || new Date(now).toISOString(),
-    sheets
-  };
+  if (missing.length) throw new Error(`Stock Setup is incomplete: ${missing.join(', ')}`);
 
   await db.prepare(`CREATE TABLE IF NOT EXISTS stock_setups (
     outlet_id TEXT PRIMARY KEY,
@@ -135,6 +124,33 @@ async function importStockSetupDirect(db, payload) {
     PRIMARY KEY (outlet_id, month_key)
   )`).run();
 
+  let previous = null;
+  try {
+    const row = await db.prepare('SELECT setup_json FROM stock_setups WHERE outlet_id = ?').bind(outletId).first();
+    previous = row?.setup_json ? JSON.parse(row.setup_json) : null;
+  } catch {}
+
+  const candidate = String(setup.outletCode || setup.outletName || setup.outlet || '').trim();
+  const displayOutlet = candidate && candidate !== outletId ? candidate : String(previous?.outletCode || previous?.outletName || previous?.outlet || outletId);
+  const orderPage = hasOrderPage(setup.orderPage)
+    ? setup.orderPage
+    : hasOrderPage(previous?.orderPage)
+      ? previous.orderPage
+      : { values: [] };
+  const now = Date.now();
+  const normalized = {
+    ...setup,
+    version: Number(setup.version || 4),
+    outletId,
+    outletCode: String(setup.outletCode || previous?.outletCode || displayOutlet),
+    outletName: String(setup.outletName || previous?.outletName || ''),
+    outlet: displayOutlet,
+    updatedAt: now,
+    importedAt: setup.importedAt || new Date(now).toISOString(),
+    sheets,
+    orderPage
+  };
+
   await db.prepare(`
     INSERT INTO stock_setups (outlet_id, setup_json, source, updated_at)
     VALUES (?, ?, 'excel', ?)
@@ -142,17 +158,21 @@ async function importStockSetupDirect(db, payload) {
       setup_json = excluded.setup_json,
       source = excluded.source,
       updated_at = excluded.updated_at
-  `).bind(outlet, JSON.stringify(normalized), now).run();
+  `).bind(outletId, JSON.stringify(normalized), now).run();
 
-  await db.prepare('DELETE FROM stock_snapshots WHERE outlet_id = ?').bind(outlet).run();
+  await db.prepare('DELETE FROM stock_snapshots WHERE outlet_id = ?').bind(outletId).run();
 
   return {
     ok: true,
     saved: true,
-    outlet,
+    outletId,
+    outletCode: normalized.outletCode,
+    outletName: normalized.outletName,
+    outlet: normalized.outlet,
     setupUpdatedAt: now,
     sheetCount: sheets.length,
     itemCount: sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0),
+    orderPageRows: orderPage.values.length,
     dataSource: 'cloudflare-d1-stock-setup-direct'
   };
 }
@@ -169,6 +189,33 @@ function resolveStockSetupPayload(payload) {
     if (parsed && Array.isArray(parsed.sheets)) return parsed;
   }
   throw new Error('Stock Setup data is missing. Re-select the Excel file and import again.');
+}
+
+async function decorateStockOutletIdentity(db, payload, data) {
+  const result = { ...(data || {}) };
+  const outletId = String(payload.outlet || payload.outletId || result.outletId || result.outlet || 'RR-KCH').trim() || 'RR-KCH';
+  let setup = result.setup && Array.isArray(result.setup.sheets) ? result.setup : null;
+  if (!setup) {
+    try {
+      const row = await db.prepare('SELECT setup_json FROM stock_setups WHERE outlet_id = ?').bind(outletId).first();
+      setup = row?.setup_json ? JSON.parse(row.setup_json) : null;
+    } catch {}
+  }
+  const outletCode = String(setup?.outletCode || result.outletCode || '').trim();
+  const outletName = String(setup?.outletName || result.outletName || '').trim();
+  const storedOutlet = String(setup?.outlet || '').trim();
+  const existing = String(result.outlet || '').trim();
+  const display = outletCode || outletName || (storedOutlet && storedOutlet !== outletId ? storedOutlet : '') || (existing && existing !== outletId ? existing : '') || outletId;
+  result.outletId = outletId;
+  result.outletCode = outletCode;
+  result.outletName = outletName;
+  result.outlet = display;
+  if (setup) result.setup = setup;
+  return result;
+}
+
+function hasOrderPage(orderPage) {
+  return Array.isArray(orderPage?.values) && orderPage.values.length > 0;
 }
 
 async function clearStockCounts(db, payload) {
