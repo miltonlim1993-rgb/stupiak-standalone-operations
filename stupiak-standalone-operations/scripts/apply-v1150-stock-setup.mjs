@@ -20,7 +20,7 @@ async function patchMain(dist) {
   if (!source.includes('function activeStockOutlet()')) {
     source = source.replace(
       `function missingOutletMessage() {\n  return 'Missing FeedMe Outlet ID. Open the outlet-specific Cash Count link from FeedMe Insights.';\n}`,
-      `function missingOutletMessage() {\n  return 'Missing FeedMe Outlet ID. Open the outlet-specific Cash Count link from FeedMe Insights.';\n}\n\nfunction activeStockOutlet() {\n  return state.outlet || state.outletRef || 'RR-KCH';\n}`
+      `function missingOutletMessage() {\n  return 'Missing FeedMe Outlet ID. Open the outlet-specific Cash Count link from FeedMe Insights.';\n}\n\nfunction activeStockOutlet() {\n  return state.outlet || 'RR-KCH';\n}`
     );
   }
 
@@ -30,7 +30,52 @@ async function patchMain(dist) {
   );
 
   if (!source.includes('async function importStockSetupExcel')) {
-    const helpers = `\nasync function importStockSetupExcel(file) {\n  if (!file) return;\n  const result = document.querySelector('#stock-setup-result');\n  if (result) { result.textContent = 'Reading Excel…'; result.className = 'connection-result loading'; }\n  try {\n    const outlet = activeStockOutlet();\n    const setup = await parseStockSetupWorkbook(file, outlet);\n    if (result) result.textContent = 'Saving setup to D1…';\n    const response = await callOperations('stock', {\n      action: 'importStockSetup',\n      outlet,\n      monthKey: state.stock.monthKey || state.stock.businessDate.slice(0, 7),\n      businessDate: state.stock.businessDate,\n      setup\n    }, state.settings, { timeoutMs: 20000 });\n    state.stock.data = null;\n    state.stock.error = '';\n    if (result) {\n      result.textContent = \`Imported · \${response.sheetCount || setup.sheets.length} tabs · \${response.itemCount || 0} items · D1 is now the live Stock source\`;\n      result.className = 'connection-result success';\n    }\n    showToast('Stock setup imported to D1');\n    if (state.route === 'stock') loadStock({ forceFresh: true });\n  } catch (error) {\n    if (result) { result.textContent = error.message; result.className = 'connection-result error'; }\n    showToast(error.message, 'error');\n  }\n}\n\nasync function exportCurrentStockSetupExcel() {\n  const result = document.querySelector('#stock-setup-result');\n  if (result) { result.textContent = 'Preparing Excel…'; result.className = 'connection-result loading'; }\n  try {\n    const outlet = activeStockOutlet();\n    const response = await callOperations('stock', { action: 'getStockSetup', outlet }, state.settings, { timeoutMs: 12000 });\n    if (!response.setup) throw new Error('No Stock Setup found in D1. Import your Excel setup first.');\n    await exportStockSetupWorkbook(response.setup, \`\${outlet}_Stock_Setup.xlsx\`);\n    if (result) { result.textContent = 'Exported current D1 setup as Excel.'; result.className = 'connection-result success'; }\n    showToast('Stock setup Excel exported');\n  } catch (error) {\n    if (result) { result.textContent = error.message; result.className = 'connection-result error'; }\n    showToast(error.message, 'error');\n  }\n}\n`;
+    const helpers = `
+async function importStockSetupExcel(file) {
+  if (!file) return;
+  const result = document.querySelector('#stock-setup-result');
+  if (result) { result.textContent = 'Reading Excel…'; result.className = 'connection-result loading'; }
+  try {
+    const outlet = activeStockOutlet();
+    const setup = await parseStockSetupWorkbook(file, outlet);
+    if (result) result.textContent = 'Saving setup to D1…';
+    const response = await callOperations('stock', {
+      action: 'importStockSetup',
+      outlet,
+      monthKey: state.stock.monthKey || state.stock.businessDate.slice(0, 7),
+      businessDate: state.stock.businessDate,
+      setup
+    }, state.settings, { timeoutMs: 20000 });
+    state.stock.data = null;
+    state.stock.error = '';
+    if (result) {
+      result.textContent = \`Imported · \${response.sheetCount || setup.sheets.length} tabs · \${response.itemCount || 0} items · D1 is now the live Stock source\`;
+      result.className = 'connection-result success';
+    }
+    showToast('Stock setup imported to D1');
+    if (state.route === 'stock') loadStock({ forceFresh: true });
+  } catch (error) {
+    if (result) { result.textContent = error.message; result.className = 'connection-result error'; }
+    showToast(error.message, 'error');
+  }
+}
+
+async function exportCurrentStockSetupExcel() {
+  const result = document.querySelector('#stock-setup-result');
+  if (result) { result.textContent = 'Preparing Excel…'; result.className = 'connection-result loading'; }
+  try {
+    const outlet = activeStockOutlet();
+    const response = await callOperations('stock', { action: 'getStockSetup', outlet }, state.settings, { timeoutMs: 12000 });
+    if (!response.setup) throw new Error('No Stock Setup found in D1. Import your Excel setup first.');
+    await exportStockSetupWorkbook(response.setup, \`\${outlet}_Stock_Setup.xlsx\`);
+    if (result) { result.textContent = 'Exported current D1 setup as Excel.'; result.className = 'connection-result success'; }
+    showToast('Stock setup Excel exported');
+  } catch (error) {
+    if (result) { result.textContent = error.message; result.className = 'connection-result error'; }
+    showToast(error.message, 'error');
+  }
+}
+`;
     source = source.replace('\nfunction renderPreservingFocus', `${helpers}\nfunction renderPreservingFocus`);
   }
 
