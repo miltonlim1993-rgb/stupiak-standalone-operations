@@ -30,6 +30,7 @@ import { applyV1155StockReliability } from './apply-v1155-stock-reliability.mjs'
 import { applyV1161StockLegacyWorkbook } from './apply-v1161-stock-legacy-workbook.mjs';
 import { applyV1161StockOrderOutlet } from './apply-v1161-stock-order-outlet.mjs';
 import { applyV1162OrderPageSafe } from './apply-v1162-order-page-safe.mjs';
+import { applyV1165StockRuntime } from './apply-v1165-stock-runtime.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -69,6 +70,7 @@ await applyV1155StockReliability(dist);
 await applyV1161StockLegacyWorkbook(dist);
 await applyV1161StockOrderOutlet(dist);
 await applyV1162OrderPageSafe(dist);
+await applyV1165StockRuntime(dist);
 
 for (const relativePath of [
   'src/main.js',
