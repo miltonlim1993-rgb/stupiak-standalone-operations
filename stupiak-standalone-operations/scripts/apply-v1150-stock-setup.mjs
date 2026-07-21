@@ -38,21 +38,32 @@ async function importStockSetupExcel(file) {
   try {
     const outlet = activeStockOutlet();
     const setup = await parseStockSetupWorkbook(file, outlet);
+    if (!setup || !Array.isArray(setup.sheets)) {
+      throw new Error('The Stock Setup Excel was read, but no setup data was produced. Export a fresh Stock Setup DB file and import it again.');
+    }
+    const validSheets = setup.sheets.filter((sheet) => sheet && Array.isArray(sheet.rows) && sheet.rows.length);
+    const required = ['Inventory', 'Untensil PG1', 'Utensil PG2', 'Stationary'];
+    const found = new Set(validSheets.map((sheet) => String(sheet.sheetName || '')));
+    const missing = required.filter((name) => !found.has(name));
+    if (missing.length) throw new Error('Stock Setup is incomplete: ' + missing.join(', '));
+    const setupJson = JSON.stringify({ ...setup, sheets: validSheets });
+    if (!setupJson || setupJson === '{}') throw new Error('Stock Setup could not be prepared for D1.');
     if (result) result.textContent = 'Saving setup to D1…';
     const response = await callOperations('stock', {
       action: 'importStockSetup',
       outlet,
       monthKey: state.stock.monthKey || state.stock.businessDate.slice(0, 7),
       businessDate: state.stock.businessDate,
-      setup
+      setup: JSON.parse(setupJson),
+      setupJson
     }, state.settings, { timeoutMs: 20000 });
     state.stock.data = null;
     state.stock.error = '';
     if (result) {
-      result.textContent = \`Imported · \${response.sheetCount || setup.sheets.length} tabs · \${response.itemCount || 0} items · D1 is now the live Stock source\`;
+      result.textContent = \`Imported · \${response.sheetCount || validSheets.length} tabs · \${response.itemCount || validSheets.reduce((sum, sheet) => sum + sheet.rows.length, 0)} items · Ready\`;
       result.className = 'connection-result success';
     }
-    showToast('Stock setup imported to D1');
+    showToast('Stock setup imported');
     if (state.route === 'stock') loadStock({ forceFresh: true });
   } catch (error) {
     if (result) { result.textContent = error.message; result.className = 'connection-result error'; }
