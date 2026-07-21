@@ -1,6 +1,6 @@
 {
   "name": "stupiak-standalone-operations",
-  "version": "1.12.3",
+  "version": "1.12.4",
   "private": true,
   "type": "module",
   "scripts": {
