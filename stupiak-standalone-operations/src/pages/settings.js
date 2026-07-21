@@ -7,14 +7,14 @@ export function settingsPage(context) {
   const d1Mode = context.systemStatus?.stockD1Configured;
   return `
     <section class="page settings-page">
-      <div class="page-heading"><div><span class="eyebrow">SYSTEM STATUS</span><h1>Connections</h1><p>D1 stores live Stock data. Excel is only for setup import and export.</p></div></div>
+      <div class="page-heading"><div><span class="eyebrow">SYSTEM STATUS</span><h1>Connections</h1><p>D1 stores live Stock data. Excel controls the Stock setup and Order Page layout.</p></div></div>
       <form id="settings-form" class="settings-form">
         <article class="settings-block stock-setup-block">
-          <div class="settings-title"><div class="module-icon amber">${icon('stock')}</div><div><h2>Stock Setup</h2><p>Edit one simple Excel table, then import it to D1.</p></div></div>
+          <div class="settings-title"><div class="module-icon amber">${icon('stock')}</div><div><h2>Stock Setup</h2><p>Import the original outlet workbook or an exported Stock Setup file.</p></div></div>
           <div class="reserved-row"><span>Live source</span><strong>${d1Mode ? 'Cloudflare D1' : 'Not connected'}</strong></div>
-          <div class="reserved-row"><span>Excel sheet</span><strong>Stock Setup DB</strong></div>
-          <div class="reserved-row"><span>Required sections</span><strong>Inventory · Untensil PG1 · Utensil PG2 · Stationary</strong></div>
-          <p class="microcopy">Export first, edit the Stock Setup DB sheet, then import the same file back. Item order, units and minimum levels update the Stock Count frontend.</p>
+          <div class="reserved-row"><span>Accepted Excel</span><strong>Original workbook or Stock Setup DB</strong></div>
+          <div class="reserved-row"><span>Imported tabs</span><strong>Order Page · Inventory · Untensil PG1 · Utensil PG2 · Stationary</strong></div>
+          <p class="microcopy">The original Order Page is kept. Item order, units, minimum levels and the outlet code are remembered for Stock Count.</p>
           <div class="stock-setup-actions">
             <input id="stock-setup-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
             <button class="button primary" type="button" id="import-stock-setup" ${d1Mode ? '' : 'disabled'}>Import Setup</button>
