@@ -31,6 +31,7 @@ import { applyV1161StockLegacyWorkbook } from './apply-v1161-stock-legacy-workbo
 import { applyV1161StockOrderOutlet } from './apply-v1161-stock-order-outlet.mjs';
 import { applyV1162OrderPageSafe } from './apply-v1162-order-page-safe.mjs';
 import { applyV1165StockRuntime } from './apply-v1165-stock-runtime.mjs';
+import { applyV1166NativeNav } from './apply-v1166-native-nav.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -71,25 +72,12 @@ await applyV1161StockLegacyWorkbook(dist);
 await applyV1161StockOrderOutlet(dist);
 await applyV1162OrderPageSafe(dist);
 await applyV1165StockRuntime(dist);
+await applyV1166NativeNav(dist);
 
-for (const relativePath of [
-  'src/main.js',
-  'src/pages/stock.js',
-  'src/pages/cash.js',
-  'src/core/stock-local-export.js',
-  'src/core/offline-workflow.js',
-  'src/core/stock-setup-excel.js',
-  'src/core/stock-setup-legacy.js',
-  'src/core/stock-count-excel.js'
-]) {
+for (const relativePath of ['src/main.js','src/pages/stock.js','src/pages/cash.js','src/core/stock-local-export.js','src/core/offline-workflow.js','src/core/stock-setup-excel.js','src/core/stock-setup-legacy.js','src/core/stock-count-excel.js']) {
   execFileSync(process.execPath, ['--check', resolve(dist, relativePath)], { stdio: 'inherit' });
 }
-
-for (const relativePath of [
-  'functions/api/operations.js',
-  'functions/_shared/stock-d1.js'
-]) {
+for (const relativePath of ['functions/api/operations.js','functions/_shared/stock-d1.js']) {
   execFileSync(process.execPath, ['--check', resolve(root, relativePath)], { stdio: 'inherit' });
 }
-
 console.log('Built static app into dist/');
