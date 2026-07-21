@@ -39,4 +39,11 @@ export async function applyV1156StockSetupParser(dist) {
   );
 
   await writeFile(setupPath, source, 'utf8');
+
+  const stockPagePath = resolve(dist, 'src/pages/stock.js');
+  let pageSource = await readFile(stockPagePath, 'utf8');
+  if (pageSource.includes('state.submitResult = null;') && !pageSource.includes('data?.countedBy')) {
+    pageSource = pageSource.replace('state.submitResult = null;', `if (data?.countedBy) state.countedBy = data.countedBy;\n  state.submitResult = null;`);
+    await writeFile(stockPagePath, pageSource, 'utf8');
+  }
 }
