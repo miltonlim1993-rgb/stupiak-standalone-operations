@@ -2,8 +2,11 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 function replaceRequired(source, pattern, replacement, label) {
-  if (!pattern.test(source)) throw new Error(`v1.14.1 patch failed: ${label}`);
-  pattern.lastIndex = 0;
+  const matched = typeof pattern === 'string'
+    ? source.includes(pattern)
+    : pattern instanceof RegExp && pattern.test(source);
+  if (!matched) throw new Error(`v1.14.1 patch failed: ${label}`);
+  if (pattern instanceof RegExp) pattern.lastIndex = 0;
   return source.replace(pattern, replacement);
 }
 
