@@ -1,4 +1,5 @@
 import { cp, mkdir, rm } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { applyV163CashFixes } from './apply-v163-cash-fixes.mjs';
 import { applyV163Cleanup } from './apply-v163-cleanup.mjs';
@@ -17,6 +18,7 @@ import { applyV1110ExportLock } from './apply-v1110-export-lock.mjs';
 import { applyV1111PdfHeaderContrast } from './apply-v1111-pdf-header-contrast.mjs';
 import { applyV1112StockSaveRetry } from './apply-v1112-stock-save-retry.mjs';
 import { applyV1120IndependentTabDrafts } from './apply-v1120-independent-tab-drafts.mjs';
+import { applyV1121RuntimeFix } from './apply-v1121-runtime-fix.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -44,4 +46,10 @@ await applyV1110ExportLock(dist, root);
 await applyV1111PdfHeaderContrast(dist);
 await applyV1112StockSaveRetry(dist);
 await applyV1120IndependentTabDrafts(dist);
+await applyV1121RuntimeFix(dist);
+
+for (const relativePath of ['src/main.js', 'src/pages/stock.js', 'src/core/stock-local-export.js', 'src/core/offline-workflow.js']) {
+  execFileSync(process.execPath, ['--check', resolve(dist, relativePath)], { stdio: 'inherit' });
+}
+
 console.log('Built static app into dist/');
