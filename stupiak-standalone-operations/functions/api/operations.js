@@ -21,6 +21,10 @@ export async function onRequestPost(context) {
       }
     }
 
+    if (service === 'stock' && context.env.STOCK_DB && payload.action === 'clearStockCounts') {
+      return json(await clearStockCounts(context.env.STOCK_DB, payload), 200, 0);
+    }
+
     if (service === 'stock' && context.env.STOCK_DB) {
       const d1Result = await handleStockD1({ context, payload, targetUrl, secret });
       if (d1Result?.handled) {
@@ -75,6 +79,36 @@ export async function onRequestPost(context) {
   } catch (error) {
     return json({ ok: false, error: String(error?.message || error) }, 500);
   }
+}
+
+async function clearStockCounts(db, payload) {
+  const outlet = String(payload.outlet || payload.outletId || 'RR-KCH').trim() || 'RR-KCH';
+  const monthKey = normalizeMonth(payload.monthKey || payload.businessDate);
+  const sectionName = String(payload.sectionName || '').trim();
+  const weekIndex = Number(payload.weekIndex || 0);
+  const now = Date.now();
+
+  const statements = [];
+  if (sectionName && weekIndex > 0) {
+    statements.push(db.prepare('DELETE FROM stock_values WHERE outlet_id = ? AND month_key = ? AND sheet_name = ? AND week_index = ?').bind(outlet, monthKey, sectionName, weekIndex));
+  } else if (sectionName) {
+    statements.push(db.prepare('DELETE FROM stock_values WHERE outlet_id = ? AND month_key = ? AND sheet_name = ?').bind(outlet, monthKey, sectionName));
+  } else {
+    statements.push(db.prepare('DELETE FROM stock_values WHERE outlet_id = ? AND month_key = ?').bind(outlet, monthKey));
+  }
+  statements.push(db.prepare('DELETE FROM stock_submissions WHERE outlet_id = ? AND month_key = ?').bind(outlet, monthKey));
+  statements.push(db.prepare('DELETE FROM stock_sync_queue WHERE outlet_id = ? AND month_key = ?').bind(outlet, monthKey));
+  statements.push(db.prepare('DELETE FROM stock_snapshots WHERE outlet_id = ? AND month_key = ?').bind(outlet, monthKey));
+  await db.batch(statements);
+
+  return { ok: true, cleared: true, outlet, monthKey, sectionName, weekIndex, clearedAt: now, dataSource: 'cloudflare-d1' };
+}
+
+function normalizeMonth(value) {
+  const text = String(value || '');
+  const match = /^(\d{4})-(\d{2})/.exec(text);
+  if (match) return `${match[1]}-${match[2]}`;
+  return new Date().toISOString().slice(0, 7);
 }
 
 function withIntegration(data, env, source) {
