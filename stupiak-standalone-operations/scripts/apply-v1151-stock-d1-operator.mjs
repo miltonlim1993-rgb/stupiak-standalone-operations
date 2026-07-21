@@ -46,10 +46,31 @@ async function patchMain(dist) {
     );
   }
 
-  // Hard remove auto Google Sheet refreshing. The Stock page should not keep polling/refetching.
-  source = source.replace(/\n\s*window\.addEventListener\('focus', \(\) => \{[\s\S]*?loadStock\(\{ forceFresh: true, preserveResult: true \}\);[\s\S]*?\}\);/g, '');
-  source = source.replace(/document\.addEventListener\('visibilitychange', \(\) => \{\s*if \(document\.visibilityState === 'hidden'\) \{ persistStockDraft\(\); return; \}\s*if \(state\.route === 'stock'[\s\S]*?\}\);/g, `document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistStockDraft(); });`);
-  source = source.replace(/\n\s*document\.querySelector\('#refresh-stock-sheet'\)\?\.addEventListener\([\s\S]*?\}\);/g, '');
+  // Hard remove auto Google Sheet refreshing. Use exact blocks so object literals inside loadStock({ ... }) do not leave orphan braces.
+  const autoFocusRefresh = `  window.addEventListener('focus', () => {
+    if (state.route === 'stock' && !state.stock.syncing && Date.now() - Number(state.stock.sheetLoadedAt || 0) > 15000) {
+      loadStock({ forceFresh: true, preserveResult: true });
+    }
+  });`;
+  source = source.replace(autoFocusRefresh, '');
+
+  const autoVisibilityRefresh = `  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { persistStockDraft(); return; }
+    if (state.route === 'stock' && !state.stock.syncing && Date.now() - Number(state.stock.sheetLoadedAt || 0) > 15000) {
+      loadStock({ forceFresh: true, preserveResult: true });
+    }
+  });`;
+  source = source.replace(
+    autoVisibilityRefresh,
+    `  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistStockDraft(); });`
+  );
+
+  const refreshButtonHandler = `  document.querySelector('#refresh-stock-sheet')?.addEventListener('click', () => {
+    persistStockDraft();
+    showToast('Refreshing from Google Sheet…');
+    loadStock({ forceFresh: true, preserveResult: true });
+  });`;
+  source = source.replace(refreshButtonHandler, '');
 
   source = source.replace(
     /document\.querySelector\('#stock-month'\)\?\.addEventListener\('change', \(event\) => \{[\s\S]*?loadStock\(\); \}\);/,
@@ -82,7 +103,7 @@ function bindStockMonthControl(selector) {
 }
 
 function simplifyStockError(message) {
-  return String(message || '').replace(/^Complete Week \\d+ · /, '').replace(/^Complete /, '').replace(/^Enter the /, '').replace(/ before saving\\.$/, '').replace(/ before submitting\\.$/, '');
+  return String(message || '').replace(/^Complete Week \d+ · /, '').replace(/^Complete /, '').replace(/^Enter the /, '').replace(/ before saving\.$/, '').replace(/ before submitting\.$/, '');
 }
 
 function flashStockInput(input) {
