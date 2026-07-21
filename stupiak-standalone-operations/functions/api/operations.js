@@ -1,6 +1,7 @@
 import { handleStockD1 } from '../_shared/stock-d1.js';
 
 const ALLOWED_GAS_HOSTS = new Set(['script.google.com', 'script.googleusercontent.com']);
+const REQUIRED_STOCK_SETUP_SECTIONS = ['Inventory', 'Untensil PG1', 'Utensil PG2', 'Stationary'];
 
 export async function onRequestPost(context) {
   try {
@@ -11,18 +12,11 @@ export async function onRequestPost(context) {
     const payload = { ...(body.payload || {}) };
 
     if (service === 'stock' && payload.action === 'importStockSetup') {
-      const hasSetup = payload.setup && Array.isArray(payload.setup.sheets);
-      if (!hasSetup && payload.setupJson) {
-        try {
-          const parsedSetup = JSON.parse(String(payload.setupJson));
-          if (parsedSetup && Array.isArray(parsedSetup.sheets)) payload.setup = parsedSetup;
-        } catch {
-          return json({ ok: false, error: 'Stock Setup JSON could not be read. Export a fresh Stock Setup DB file and import it again.' }, 400);
-        }
+      if (!context.env.STOCK_DB) {
+        return json({ ok: false, error: 'Cloudflare D1 binding STOCK_DB is missing.' }, 400);
       }
-      if (!payload.setup || !Array.isArray(payload.setup.sheets)) {
-        return json({ ok: false, error: 'Stock Setup data was missing before D1 import.' }, 400);
-      }
+      const imported = await importStockSetupDirect(context.env.STOCK_DB, payload);
+      return json(withIntegration(imported, context.env, 'cloudflare-d1-stock-setup'), 200, 0);
     }
 
     if (service === 'cash' && !String(payload.outlet || '').trim()) {
@@ -94,6 +88,87 @@ export async function onRequestPost(context) {
   } catch (error) {
     return json({ ok: false, error: String(error?.message || error) }, 500);
   }
+}
+
+async function importStockSetupDirect(db, payload) {
+  const setup = resolveStockSetupPayload(payload);
+  const outlet = String(payload.outlet || payload.outletId || setup.outlet || 'RR-KCH').trim() || 'RR-KCH';
+  const sheets = setup.sheets
+    .filter((sheet) => sheet && REQUIRED_STOCK_SETUP_SECTIONS.includes(String(sheet.sheetName || '').trim()))
+    .map((sheet) => ({
+      ...sheet,
+      sheetName: String(sheet.sheetName || '').trim(),
+      rows: Array.isArray(sheet.rows)
+        ? sheet.rows.filter((row) => row && String(row.item || '').trim())
+        : []
+    }))
+    .filter((sheet) => sheet.rows.length);
+
+  const found = new Set(sheets.map((sheet) => sheet.sheetName));
+  const missing = REQUIRED_STOCK_SETUP_SECTIONS.filter((name) => !found.has(name));
+  if (missing.length) {
+    throw new Error(`Stock Setup is incomplete: ${missing.join(', ')}`);
+  }
+
+  const now = Date.now();
+  const normalized = {
+    ...setup,
+    version: Number(setup.version || 2),
+    outlet,
+    updatedAt: now,
+    importedAt: setup.importedAt || new Date(now).toISOString(),
+    sheets
+  };
+
+  await db.prepare(`CREATE TABLE IF NOT EXISTS stock_setups (
+    outlet_id TEXT PRIMARY KEY,
+    setup_json TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'excel',
+    updated_at INTEGER NOT NULL
+  )`).run();
+  await db.prepare(`CREATE TABLE IF NOT EXISTS stock_snapshots (
+    outlet_id TEXT NOT NULL,
+    month_key TEXT NOT NULL,
+    snapshot_json TEXT NOT NULL,
+    source TEXT NOT NULL DEFAULT 'd1',
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (outlet_id, month_key)
+  )`).run();
+
+  await db.prepare(`
+    INSERT INTO stock_setups (outlet_id, setup_json, source, updated_at)
+    VALUES (?, ?, 'excel', ?)
+    ON CONFLICT(outlet_id) DO UPDATE SET
+      setup_json = excluded.setup_json,
+      source = excluded.source,
+      updated_at = excluded.updated_at
+  `).bind(outlet, JSON.stringify(normalized), now).run();
+
+  await db.prepare('DELETE FROM stock_snapshots WHERE outlet_id = ?').bind(outlet).run();
+
+  return {
+    ok: true,
+    saved: true,
+    outlet,
+    setupUpdatedAt: now,
+    sheetCount: sheets.length,
+    itemCount: sheets.reduce((sum, sheet) => sum + sheet.rows.length, 0),
+    dataSource: 'cloudflare-d1-stock-setup-direct'
+  };
+}
+
+function resolveStockSetupPayload(payload) {
+  if (payload.setup && Array.isArray(payload.setup.sheets)) return payload.setup;
+  if (payload.setupJson) {
+    let parsed;
+    try {
+      parsed = JSON.parse(String(payload.setupJson));
+    } catch {
+      throw new Error('Stock Setup JSON could not be read. Export a fresh Stock Setup DB file and import it again.');
+    }
+    if (parsed && Array.isArray(parsed.sheets)) return parsed;
+  }
+  throw new Error('Stock Setup data is missing. Re-select the Excel file and import again.');
 }
 
 async function clearStockCounts(db, payload) {
