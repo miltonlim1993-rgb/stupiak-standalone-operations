@@ -48,7 +48,7 @@ function stockContent(state, weekly, monthly) {
       <div class="sheet-tabs">${STOCK_TABS.map((tab) => `<button class="${state.activeTab === tab ? 'active' : ''}" data-stock-tab="${tab}">${tab}</button>`).join('')}</div>
       ${state.activeTab !== 'Order Page' ? `<label class="search-box">${icon('search',17)}<input id="stock-search" value="${escapeHtml(state.search)}" placeholder="Search item"></label>` : ''}
     </div>
-    ${state.activeTab === 'Order Page' ? orderPage(state.data.orderPage) : sectionPage(state, weekly, monthly)}
+    ${state.activeTab === 'Order Page' ? orderPage(state) : sectionPage(state, weekly, monthly)}
     ${state.submitResult ? submitSuccess(state.submitResult) : ''}`;
 }
 
@@ -106,9 +106,105 @@ function weekPeriodForIndex(monthKeyOrDate,index){
 function startOfCalendarWeek(date){const result=new Date(date.getFullYear(),date.getMonth(),date.getDate()); const offset=(result.getDay()+6)%7; result.setDate(result.getDate()-offset); return result;}
 function addDays(date,days){const result=new Date(date.getFullYear(),date.getMonth(),date.getDate()); result.setTime(result.getTime()+Number(days||0)*MS_PER_DAY); return result;}
 
-function orderPage(orderPage) {
-  const rows = orderPage?.values || [];
-  return `<div class="order-note">${icon('alert')} <div><strong>Order Page is read-only</strong><span>It follows the monthly spreadsheet calculation and layout.</span></div></div><div class="sheet-table-wrap order-wrap"><table class="sheet-table order-table"><tbody>${rows.map((row,rowIndex)=>`<tr>${row.map((cell,colIndex)=>`<${rowIndex<3||colIndex===0?'th':'td'}>${escapeHtml(cell)}</${rowIndex<3||colIndex===0?'th':'td'}>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+function orderPage(state) {
+  return liveOrderPageV1162(state);
+}
+
+function liveOrderPageV1162(state) {
+  const weeks = [1,2,3,4,5].map((weekIndex) => ({
+    weekIndex,
+    inventory: orderGroupForWeek(state, ['Inventory'], weekIndex),
+    utensils: orderGroupForWeek(state, ['Untensil PG1', 'Utensil PG2'], weekIndex)
+  }));
+  const stationary = stationaryOrderGroup(state);
+  return `<div class="sheet-table-wrap order-wrap live-order-wrap"><table class="sheet-table order-table live-order-table"><tbody>
+    ${weeks.map((week) => `<tr class="order-week-row"><th colspan="3">Week ${week.weekIndex}</th></tr>
+      <tr><th>Inventory Order List</th><td class="order-date-cell">${orderGroupDateText(week.inventory)}</td><td>${orderGroupItemsText(week.inventory)}</td></tr>
+      <tr><th>Utensil Order List</th><td class="order-date-cell">${orderGroupDateText(week.utensils)}</td><td>${orderGroupItemsText(week.utensils)}</td></tr>`).join('')}
+    <tr class="order-week-row stationary-order-row"><th colspan="3">Stationary Stock (MONTHLY)</th></tr>
+    <tr><th>Stationary Order List</th><td class="order-date-cell">${stationary.dateText}</td><td>${orderGroupItemsText(stationary)}</td></tr>
+  </tbody></table></div>`;
+}
+
+function orderGroupForWeek(state, sheetNames, weekIndex) {
+  const items = [];
+  const dates = [];
+  let counted = false;
+  for (const sheetName of sheetNames) {
+    const section = (state.data?.sections || []).find((entry) => entry.sheetName === sheetName);
+    if (!section) continue;
+    const date = sheetWeekDate(state, section, weekIndex);
+    const dirty = Boolean(state.dirtyColumns?.[sheetName]?.[weekIndex]);
+    const sectionCounted = Boolean(date || dirty);
+    if (!sectionCounted) continue;
+    counted = true;
+    if (date) dates.push({ sheetName, date });
+    for (const row of section.rows || []) {
+      const week = (row.weeks || []).find((entry) => Number(entry.index) === Number(weekIndex));
+      const liveValue = rowWeekValue(state, section, row, weekIndex);
+      const status = liveValue
+        ? section.type === 'weekly-inventory'
+          ? inventoryStatus(row, liveValue)
+          : utensilStatus(sheetName, row, Number(liveValue.quantity || 0))
+        : String(week?.status || '');
+      if (status === 'Order') items.push(row.item);
+    }
+  }
+  return { items: [...new Set(items)], dates, counted };
+}
+
+function stationaryOrderGroup(state) {
+  const section = (state.data?.sections || []).find((entry) => entry.sheetName === 'Stationary');
+  if (!section) return { items: [], counted: false, dateText: 'Not counted' };
+  const date = String(state.stationaryDate || section.countDate || section.date || '').trim();
+  const hasSavedValues = (section.rows || []).some((row) => row.quantityValue !== '' && row.quantityValue !== null && row.quantityValue !== undefined);
+  const hasLiveValues = (section.rows || []).some((row) => {
+    const value = state.values?.Stationary?.[row.row]?.quantity;
+    return value !== '' && value !== null && value !== undefined;
+  });
+  const counted = Boolean(date || hasSavedValues || hasLiveValues);
+  const items = counted ? (section.rows || []).filter((row) => {
+    const live = state.values?.Stationary?.[row.row]?.quantity;
+    const quantity = live !== '' && live !== null && live !== undefined ? Number(live) : Number(row.quantityValue || 0);
+    return quantity <= Number(row.minimum || 0);
+  }).map((row) => row.item) : [];
+  return { items, counted, dateText: date ? `Counted ${escapeHtml(formatDate(date))}` : counted ? 'Counted' : 'Not counted' };
+}
+
+function rowWeekValue(state, section, row, weekIndex) {
+  const rowValues = state.values?.[section.sheetName]?.[row.row];
+  if (!rowValues || typeof rowValues !== 'object') return null;
+  const nested = rowValues[weekIndex];
+  if (nested && typeof nested === 'object') return nested;
+  if (Number(weekIndex) === Number(state.data?.selectedWeek)) return rowValues;
+  return null;
+}
+
+function sheetWeekDate(state, section, weekIndex) {
+  const stateDate = state.sheetWeekDates?.[section.sheetName]?.[weekIndex];
+  if (stateDate) return stateDate;
+  const firstRow = section.rows?.[0];
+  const week = (firstRow?.weeks || []).find((entry) => Number(entry.index) === Number(weekIndex));
+  return String(week?.date || '').trim();
+}
+
+function orderGroupDateText(group) {
+  if (!group.counted) return '<span class="order-none">Not counted</span>';
+  if (!group.dates.length) return 'Counted';
+  const uniqueDates = [...new Set(group.dates.map((entry) => entry.date))];
+  if (uniqueDates.length === 1) return `Counted ${escapeHtml(formatDate(uniqueDates[0]))}`;
+  return group.dates.map((entry) => `${escapeHtml(shortSectionName(entry.sheetName))} ${escapeHtml(formatDate(entry.date))}`).join('<br>');
+}
+
+function orderGroupItemsText(group) {
+  if (!group.counted) return '<span class="order-none">Not counted</span>';
+  return group.items.length ? group.items.map(escapeHtml).join(', ') : '<span class="order-none">No order</span>';
+}
+
+function shortSectionName(name) {
+  if (name === 'Untensil PG1') return 'PG1';
+  if (name === 'Utensil PG2') return 'PG2';
+  return name;
 }
 
 function submitSuccess(result) {
