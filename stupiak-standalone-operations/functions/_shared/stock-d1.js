@@ -1,4 +1,5 @@
 const WEEKLY_SECTIONS = ['Inventory', 'Untensil PG1', 'Utensil PG2'];
+const REQUIRED_SETUP_SHEETS = ['Inventory', 'Untensil PG1', 'Utensil PG2', 'Stationary'];
 let schemaReady = false;
 
 export async function handleStockD1({ context, payload, targetUrl, secret }) {
@@ -67,7 +68,7 @@ export async function handleStockD1({ context, payload, targetUrl, secret }) {
   if (action === 'getStockSubmissionStatus') {
     const submissionId = String(payload.submissionId || '');
     const row = submissionId
-      ? await db.prepare('SELECT submission_id, gas_sync_status, saved_at, month_key, section_name FROM stock_submissions WHERE submission_id = ?').bind(submissionId).first()
+      ? await db.prepare('SELECT submission_id, gas_sync_status, saved_at, month_key, section_name, counted_by FROM stock_submissions WHERE submission_id = ?').bind(submissionId).first()
       : null;
     if (!row) return handled({ ok: true, saved: false, submissionId }, 200, 0);
     return handled({
@@ -76,6 +77,7 @@ export async function handleStockD1({ context, payload, targetUrl, secret }) {
       submissionId: row.submission_id,
       monthKey: row.month_key,
       sectionName: row.section_name,
+      countedBy: row.counted_by || '',
       gasSyncStatus: row.gas_sync_status,
       savedAt: row.saved_at,
       dataSource: 'cloudflare-d1'
@@ -190,7 +192,7 @@ async function writeSetup(db, outlet, setup) {
 
 function normalizeSetup(setup, outlet) {
   if (!setup || !Array.isArray(setup.sheets)) throw new Error('Stock setup Excel could not be parsed.');
-  const allowed = new Set(['Inventory', 'Untensil PG1', 'Utensil PG2', 'Stationary']);
+  const allowed = new Set(REQUIRED_SETUP_SHEETS);
   const sheets = setup.sheets
     .filter((sheet) => allowed.has(String(sheet.sheetName || '')))
     .map((sheet) => ({
@@ -212,7 +214,11 @@ function normalizeSetup(setup, outlet) {
     }))
     .filter((sheet) => sheet.rows.length);
 
-  if (!sheets.length) throw new Error('No stock setup rows were found in the Excel file.');
+  const found = new Set(sheets.map((sheet) => sheet.sheetName));
+  const missing = REQUIRED_SETUP_SHEETS.filter((name) => !found.has(name));
+  if (missing.length) {
+    throw new Error(`Stock setup incomplete. Missing tabs: ${missing.join(', ')}. Upload the original RR-KCH Inventory Listing workbook.`);
+  }
   return {
     version: 1,
     outlet: String(setup.outlet || outlet),
@@ -255,17 +261,26 @@ async function buildBootstrapFromSetup(db, outlet, monthKey, setup, businessDate
   }));
 
   const values = await db.prepare(`
-    SELECT sheet_name, week_index, source_row, business_date, primary_qty, secondary_qty, quantity
+    SELECT sheet_name, week_index, source_row, business_date, primary_qty, secondary_qty, quantity, counted_by
     FROM stock_values
     WHERE outlet_id = ? AND month_key = ?
   `).bind(outlet, monthKey).all();
   overlaySavedValues(sections, values.results || []);
+
+  const latest = await db.prepare(`
+    SELECT counted_by
+    FROM stock_submissions
+    WHERE outlet_id = ? AND month_key = ? AND counted_by IS NOT NULL AND counted_by != ''
+    ORDER BY saved_at DESC
+    LIMIT 1
+  `).bind(outlet, monthKey).first();
 
   return {
     ok: true,
     outlet,
     monthKey,
     businessDate: businessDate || `${monthKey}-01`,
+    countedBy: latest?.counted_by || '',
     spreadsheetName: `${outlet} Stock Count ${monthKey}`,
     spreadsheetUrl: '',
     setupUpdatedAt: setup.updatedAt || Date.now(),
@@ -285,7 +300,8 @@ function buildSectionRow(sheet, row) {
       minimum: row.minimum,
       quantityValue: '',
       status: 'Order',
-      date: ''
+      date: '',
+      countedBy: ''
     };
   }
 
@@ -298,7 +314,8 @@ function buildSectionRow(sheet, row) {
         primaryUnit: row.primaryUnit || row.unit || '',
         secondaryUnit: row.hasSecondaryQuantity ? row.secondaryUnit || '' : undefined,
         status: 'Order',
-        date: ''
+        date: '',
+        countedBy: ''
       };
     }
     return {
@@ -306,7 +323,8 @@ function buildSectionRow(sheet, row) {
       quantityValue: '',
       unit: row.unit || row.primaryUnit || '',
       status: 'Order',
-      date: ''
+      date: '',
+      countedBy: ''
     };
   });
 
@@ -330,6 +348,7 @@ function overlaySavedValues(sections, rows) {
     if (section.type === 'monthly-stationary' || Number(saved.week_index) === 0) {
       row.quantityValue = emptyOrNumber(saved.quantity);
       row.date = saved.business_date || '';
+      row.countedBy = saved.counted_by || '';
       row.status = stockStatus(row.quantityValue, row.minimum);
       continue;
     }
@@ -345,6 +364,7 @@ function overlaySavedValues(sections, rows) {
       week.status = stockStatus(week.quantityValue, row.minimum);
     }
     week.date = saved.business_date || '';
+    week.countedBy = saved.counted_by || '';
   }
 }
 
@@ -431,6 +451,7 @@ async function saveSubmissionToD1(db, outlet, monthKey, payload) {
     outlet,
     monthKey,
     sectionName,
+    countedBy: String(payload.countedBy || ''),
     weekIndex: savedWeeks[0]?.weekIndex || '',
     savedWeeks,
     gasSyncStatus: 'd1-only',
