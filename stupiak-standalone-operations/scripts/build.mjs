@@ -21,6 +21,7 @@ import { applyV1120IndependentTabDrafts } from './apply-v1120-independent-tab-dr
 import { applyV1121RuntimeFix } from './apply-v1121-runtime-fix.mjs';
 import { applyV1123NavFooter } from './apply-v1123-nav-footer.mjs';
 import { applyV1125SidebarUnlock } from './apply-v1125-sidebar-unlock.mjs';
+import { applyV1130StockClosedLoop } from './apply-v1130-stock-closed-loop.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -51,6 +52,7 @@ await applyV1120IndependentTabDrafts(dist);
 await applyV1121RuntimeFix(dist);
 await applyV1123NavFooter(dist);
 await applyV1125SidebarUnlock(dist);
+await applyV1130StockClosedLoop(dist);
 
 for (const relativePath of ['src/main.js', 'src/pages/stock.js', 'src/core/stock-local-export.js', 'src/core/offline-workflow.js']) {
   execFileSync(process.execPath, ['--check', resolve(dist, relativePath)], { stdio: 'inherit' });
