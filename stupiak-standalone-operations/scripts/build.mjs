@@ -23,6 +23,7 @@ import { applyV1123NavFooter } from './apply-v1123-nav-footer.mjs';
 import { applyV1125SidebarUnlock } from './apply-v1125-sidebar-unlock.mjs';
 import { applyV1130StockClosedLoop } from './apply-v1130-stock-closed-loop.mjs';
 import { applyV1131FastStockRefresh } from './apply-v1131-fast-stock-refresh.mjs';
+import { applyV1140D1Stock } from './apply-v1140-d1-stock.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -55,9 +56,22 @@ await applyV1123NavFooter(dist);
 await applyV1125SidebarUnlock(dist);
 await applyV1130StockClosedLoop(dist);
 await applyV1131FastStockRefresh(dist);
+await applyV1140D1Stock(dist);
 
-for (const relativePath of ['src/main.js', 'src/pages/stock.js', 'src/core/stock-local-export.js', 'src/core/offline-workflow.js']) {
+for (const relativePath of [
+  'src/main.js',
+  'src/pages/stock.js',
+  'src/core/stock-local-export.js',
+  'src/core/offline-workflow.js'
+]) {
   execFileSync(process.execPath, ['--check', resolve(dist, relativePath)], { stdio: 'inherit' });
+}
+
+for (const relativePath of [
+  'functions/api/operations.js',
+  'functions/_shared/stock-d1.js'
+]) {
+  execFileSync(process.execPath, ['--check', resolve(root, relativePath)], { stdio: 'inherit' });
 }
 
 console.log('Built static app into dist/');
