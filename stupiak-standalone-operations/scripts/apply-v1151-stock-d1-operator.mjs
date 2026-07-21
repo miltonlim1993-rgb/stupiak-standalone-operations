@@ -20,6 +20,7 @@ async function patchStockPage(dist) {
   source = source.replace(/Saved to _StockRelation/g, 'Saved to D1');
   source = source.replace(/Save to Sheet/g, 'Save');
   source = source.replace(/Saving to Sheet…/g, 'Saving…');
+  source = source.replace(/Week (\d+) · (\d+)\/(\d+) entered/g, 'W$1 · $2/$3');
 
   if (!source.includes('id="import-stock-count"')) {
     source = source.replace(
@@ -149,7 +150,8 @@ async function importCurrentStockCountExcel(file) {
     const result = await importStockCountWorkbook(file, state.stock);
     persistStockDraft();
     render();
-    showToast('Imported ' + result.imported + ' rows to ' + result.sectionName + (result.weekIndex ? ' W' + result.weekIndex : ''));
+    const weeks = Array.isArray(result.importedWeeks) && result.importedWeeks.length ? ' W' + result.importedWeeks.join(', W') : (result.weekIndex ? ' W' + result.weekIndex : '');
+    showToast(result.imported ? ('Imported ' + result.imported + ' rows to ' + result.sectionName + weeks) : ('No quantity found in ' + result.sectionName + '. Check the week columns.'));
   } catch (error) {
     showToast(error?.message || 'Unable to import count Excel.', 'error');
   }
@@ -166,21 +168,41 @@ function clearStockStateValues() {
     }
   }
   state.stock.sheetWeekDates = { Inventory: { 1: '', 2: '', 3: '', 4: '', 5: '' }, 'Untensil PG1': { 1: '', 2: '', 3: '', 4: '', 5: '' }, 'Utensil PG2': { 1: '', 2: '', 3: '', 4: '', 5: '' } };
+  state.stock.weekDates = { 1: '', 2: '', 3: '', 4: '', 5: '' };
   state.stock.stationaryDate = '';
   state.stock.dirtyColumns = { Inventory: {}, 'Untensil PG1': {}, 'Utensil PG2': {} };
+  state.stock.dirtyWeeks = {};
   state.stock.submitResult = null;
+  state.stock.pendingSubmission = '';
+  state.stock.syncError = '';
+}
+
+function clearStockLocalMonth(outlet, businessDate, monthKey) {
+  clearStockDraft(outlet, businessDate);
+  try {
+    const safe = String(outlet || 'default').trim() || 'default';
+    const prefix = 'stupiak.operations.offline.v7';
+    const keys = [
+      prefix + ':stockBootstrap:' + safe + ':' + monthKey,
+      prefix + ':stockBootstrapLatest:' + safe,
+      prefix + ':stockDraft:' + safe + ':' + businessDate
+    ];
+    for (const key of keys) localStorage.removeItem(key);
+  } catch {}
 }
 
 async function clearCurrentStockData() {
   if (!confirm('Clear this month Stock Count data from this device and D1?')) return;
   const outlet = activeStockOutlet();
   const monthKey = state.stock.monthKey || state.stock.businessDate.slice(0, 7);
+  const businessDate = state.stock.businessDate || (monthKey + '-01');
+  clearStockLocalMonth(outlet, businessDate, monthKey);
   clearStockStateValues();
-  persistStockDraft();
   render();
   try {
-    await callOperations('stock', { action: 'clearStockCounts', outlet, monthKey, businessDate: state.stock.businessDate }, state.settings, { timeoutMs: 12000 });
-    showToast('Current month stock data cleared');
+    await callOperations('stock', { action: 'clearStockCounts', outlet, monthKey, businessDate }, state.settings, { timeoutMs: 12000 });
+    clearStockLocalMonth(outlet, businessDate, monthKey);
+    showToast('Stock data cleared');
   } catch (error) {
     showToast(error?.message || 'D1 clear failed. Local screen was cleared.', 'error');
   }
