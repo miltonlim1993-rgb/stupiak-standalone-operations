@@ -9,6 +9,8 @@ export async function handleStockD1({ context, payload, targetUrl, secret }) {
 
   const action = String(payload.action || '');
   const outlet = stockOutlet(payload, context.env);
+  const legacyOutlet = String(payload.outletRef || '').trim();
+  if (legacyOutlet && legacyOutlet !== outlet) await migrateLegacyOutlet(db, legacyOutlet, outlet);
   const monthKey = normalizeMonth(payload.monthKey || payload.businessDate);
 
   if (action === 'importStockSetup') {
@@ -195,6 +197,34 @@ function handled(data, status = 200, ttl = 0) {
 
 function stockOutlet(payload, env) {
   return String(payload.outlet || payload.outletId || env.STOCK_DEFAULT_OUTLET || env.OUTLET_NAME || 'RR-KCH').trim() || 'RR-KCH';
+}
+
+async function migrateLegacyOutlet(db, legacyOutlet, canonicalOutlet) {
+  const legacy = String(legacyOutlet || '').trim();
+  const canonical = String(canonicalOutlet || '').trim();
+  if (!legacy || !canonical || legacy === canonical) return;
+
+  const existing = await db.prepare(`
+    SELECT 1 AS found FROM stock_values WHERE outlet_id = ? LIMIT 1
+  `).bind(legacy).first();
+  const submissions = existing ? null : await db.prepare(`
+    SELECT 1 AS found FROM stock_submissions WHERE outlet_id = ? LIMIT 1
+  `).bind(legacy).first();
+  if (!existing && !submissions) return;
+
+  await db.batch([
+    db.prepare(`
+      INSERT OR REPLACE INTO stock_values
+        (outlet_id, month_key, sheet_name, week_index, source_row, business_date,
+         primary_qty, secondary_qty, quantity, counted_by, submission_id, updated_at)
+      SELECT ?, month_key, sheet_name, week_index, source_row, business_date,
+             primary_qty, secondary_qty, quantity, counted_by, submission_id, updated_at
+      FROM stock_values WHERE outlet_id = ?
+    `).bind(canonical, legacy),
+    db.prepare('UPDATE stock_submissions SET outlet_id = ? WHERE outlet_id = ?').bind(canonical, legacy),
+    db.prepare('DELETE FROM stock_values WHERE outlet_id = ?').bind(legacy),
+    db.prepare('DELETE FROM stock_snapshots WHERE outlet_id IN (?, ?)').bind(legacy, canonical)
+  ]);
 }
 
 function normalizeMonth(value) {
