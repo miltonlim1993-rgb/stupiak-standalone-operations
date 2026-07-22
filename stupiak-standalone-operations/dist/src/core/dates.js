@@ -1,4 +1,5 @@
 const pad = (value) => String(value).padStart(2, '0');
+const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export function todayIso() {
   const now = new Date();
@@ -20,17 +21,32 @@ export function formatDate(value, options = {}) {
   return new Intl.DateTimeFormat('en-MY', { day: 'numeric', month: 'short', year: options.year === false ? undefined : 'numeric' }).format(date);
 }
 
+function startOfCalendarWeek(date) {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const offset = (result.getDay() + 6) % 7; // Monday = 0, Sunday = 6
+  result.setDate(result.getDate() - offset);
+  return result;
+}
+
+function addDays(date, days) {
+  const result = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  result.setDate(result.getDate() + days);
+  return result;
+}
+
 export function weekPeriod(businessDate) {
   const date = parseIsoDate(businessDate);
-  const day = date.getDate();
-  const index = Math.min(5, Math.max(1, Math.ceil(day / 7)));
-  const startDay = (index - 1) * 7 + 1;
-  const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  const endDay = Math.min(index * 7, lastDay);
-  const start = new Date(date.getFullYear(), date.getMonth(), startDay);
-  const end = new Date(date.getFullYear(), date.getMonth(), endDay);
-  const nextStart = endDay < lastDay ? new Date(date.getFullYear(), date.getMonth(), endDay + 1) : new Date(date.getFullYear(), date.getMonth() + 1, 1);
-  const nextIndex = endDay < lastDay ? index + 1 : 1;
+  const monthStart = new Date(date.getFullYear(), date.getMonth(), 1);
+  const gridStart = startOfCalendarWeek(monthStart);
+  const weekStart = startOfCalendarWeek(date);
+  const rawIndex = Math.floor((weekStart.getTime() - gridStart.getTime()) / (7 * MS_PER_DAY)) + 1;
+  const index = Math.max(1, Math.min(5, rawIndex));
+  const start = addDays(gridStart, (index - 1) * 7);
+  const end = addDays(start, 6);
+  const nextStart = addDays(start, 7);
+  const nextEnd = addDays(nextStart, 6);
+  const nextRawIndex = Math.floor((nextStart.getTime() - gridStart.getTime()) / (7 * MS_PER_DAY)) + 1;
+  const nextIndex = nextStart.getMonth() === date.getMonth() ? Math.min(5, nextRawIndex) : 1;
   return {
     index,
     label: `Week ${index}`,
@@ -39,7 +55,7 @@ export function weekPeriod(businessDate) {
     rangeLabel: `${formatDate(start, { year: false })} – ${formatDate(end)}`,
     nextLabel: `Week ${nextIndex}`,
     nextStart: isoDate(nextStart),
-    nextEnd: isoDate(new Date(nextStart.getFullYear(), nextStart.getMonth(), Math.min(nextStart.getDate() + 6, new Date(nextStart.getFullYear(), nextStart.getMonth() + 1, 0).getDate())))
+    nextEnd: isoDate(nextEnd)
   };
 }
 

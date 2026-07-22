@@ -17,10 +17,11 @@ export function settingsPage(context) {
           <p class="microcopy">The original Order Page is kept. Item order, units, minimum levels and the outlet code are remembered for Stock Count.</p>
           <div class="stock-setup-actions">
             <input id="stock-setup-file" type="file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden>
-            <button class="button primary" type="button" id="import-stock-setup" ${d1Mode ? '' : 'disabled'}>Import Setup</button>
+            <button class="button primary" type="button" id="import-stock-setup" disabled>Import Setup (admin)</button>
             <button class="button secondary" type="button" id="export-stock-setup" ${d1Mode ? '' : 'disabled'}>Export Setup</button>
             <button class="button secondary" type="button" id="test-stock" ${stockManaged ? '' : 'disabled'}>Test D1</button>
           </div>
+          <p class="microcopy">Setup changes are locked in the outlet app. Use the administrator channel for imports and count deletion.</p>
           <div class="connection-result" id="stock-setup-result"></div>
           <div class="connection-result" id="stock-test-result"></div>
         </article>

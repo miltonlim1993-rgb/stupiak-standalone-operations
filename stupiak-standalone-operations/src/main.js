@@ -114,7 +114,7 @@ async function loadStock() {
   state.stock.submitResult = null;
   render();
   try {
-    const data = await callOperations('stock', { action: 'getBootstrap', businessDate: state.stock.businessDate }, state.settings);
+    const data = await callOperations('stock', { action: 'getBootstrap', businessDate: state.stock.businessDate, outlet: state.outletRef }, state.settings);
     state.stock.data = data;
     state.outlet = data.outlet || state.outlet;
     initializeStockValues(state.stock, data);
@@ -487,7 +487,7 @@ function bindSettings() {
     result.textContent = 'Testing…';
     result.className = 'connection-result loading';
     try {
-      const response = await callOperations('stock', { action: 'getBootstrap', businessDate: todayIso() }, state.settings);
+      const response = await callOperations('stock', { action: 'getBootstrap', businessDate: todayIso(), outlet: state.outletRef }, state.settings);
       result.textContent = `Connected · ${response.outlet} · Week ${response.selectedWeek}`;
       result.className = 'connection-result success';
       state.outlet = response.outlet;

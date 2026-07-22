@@ -1,7 +1,10 @@
 import { handleStockD1 } from '../_shared/stock-d1.js';
+import { authorizeOutletRequest } from '../_shared/outlet-auth.js';
 
 const ALLOWED_GAS_HOSTS = new Set(['script.google.com', 'script.googleusercontent.com']);
 const REQUIRED_STOCK_SETUP_SECTIONS = ['Inventory', 'Untensil PG1', 'Utensil PG2', 'Stationary'];
+const ADMIN_ACTIONS = new Set(['importStockSetup', 'clearStockCounts']);
+const LEGACY_OUTLET_ALIASES = { '6960e4e32553bd001c723f3b': 'RR-KCH' };
 
 export async function onRequestPost(context) {
   try {
@@ -10,6 +13,20 @@ export async function onRequestPost(context) {
     const targetUrl = String(service === 'stock' ? context.env.STOCK_GAS_URL || '' : context.env.CASH_GAS_URL || '').trim();
     const secret = String(service === 'stock' ? context.env.STOCK_GAS_SECRET || '' : context.env.CASH_GAS_SECRET || '');
     const payload = { ...(body.payload || {}) };
+    const requestedOutlet = String(payload.outlet || payload.outletId || '').trim();
+    const authorization = await authorizeOutletRequest(context, { requestedOutlet, action: payload.action });
+    if (!authorization.ok) return json({ ok: false, error: authorization.error, code: authorization.code }, authorization.status);
+    if (service === 'stock') {
+      const outlet = resolveStockOutlet(requestedOutlet, context.env);
+      if (!outlet) return json({ ok: false, error: 'The outlet is not registered.', code: 'OUTLET_NOT_MAPPED' }, 404);
+      if (outlet) payload.outlet = outlet;
+      if (requestedOutlet) payload.outletRef = requestedOutlet;
+    }
+
+    if (service === 'stock' && ADMIN_ACTIONS.has(String(payload.action || ''))) {
+      const denied = requireAdmin(context);
+      if (denied) return denied;
+    }
 
     if (service === 'stock' && payload.action === 'importStockSetup') {
       if (!context.env.STOCK_DB) {
@@ -89,6 +106,39 @@ export async function onRequestPost(context) {
   } catch (error) {
     return json({ ok: false, error: String(error?.message || error) }, 500);
   }
+}
+
+function resolveStockOutlet(requestedOutlet, env) {
+  const registry = readOutletRegistry(env.OUTLET_REGISTRY_JSON);
+  if (requestedOutlet && registry[requestedOutlet]) return registry[requestedOutlet];
+  if (requestedOutlet && Object.values(registry).includes(requestedOutlet)) return requestedOutlet;
+  if (requestedOutlet && LEGACY_OUTLET_ALIASES[requestedOutlet]) return LEGACY_OUTLET_ALIASES[requestedOutlet];
+  if (requestedOutlet && Object.keys(registry).length) return '';
+  return requestedOutlet || String(env.STOCK_DEFAULT_OUTLET || env.OUTLET_NAME || 'RR-KCH').trim() || 'RR-KCH';
+}
+
+function readOutletRegistry(value) {
+  try {
+    const parsed = JSON.parse(String(value || '{}'));
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function requireAdmin(context) {
+  const expected = String(context.env.OPERATIONS_ADMIN_TOKEN || '');
+  if (!expected) return json({ ok: false, error: 'Admin operations are disabled until OPERATIONS_ADMIN_TOKEN is configured.' }, 503);
+  const supplied = String(context.request.headers.get('X-Operations-Admin') || '');
+  if (!constantTimeEqual(supplied, expected)) return json({ ok: false, error: 'Admin authorization is required.' }, 403);
+  return null;
+}
+
+function constantTimeEqual(left, right) {
+  if (!left || left.length !== right.length) return false;
+  let difference = 0;
+  for (let index = 0; index < left.length; index += 1) difference |= left.charCodeAt(index) ^ right.charCodeAt(index);
+  return difference === 0;
 }
 
 async function importStockSetupDirect(db, payload) {

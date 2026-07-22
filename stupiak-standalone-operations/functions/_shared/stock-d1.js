@@ -60,6 +60,10 @@ export async function handleStockD1({ context, payload, targetUrl, secret }) {
     return handled({ ...gasData, dataSource: 'google-sheet', monthKey }, 200, 0);
   }
 
+  if (action === 'getStockDashboard') {
+    return handled(await buildStockDashboard(db, outlet, payload), 200, 15);
+  }
+
   if (action === 'submitStockCount') {
     const result = await saveSubmissionToD1(db, outlet, monthKey, payload);
     return handled(result, 200, 0);
@@ -89,6 +93,100 @@ export async function handleStockD1({ context, payload, targetUrl, secret }) {
   }
 
   return null;
+}
+
+async function buildStockDashboard(db, outlet, payload) {
+  const dateFrom = String(payload.dateFrom || `${normalizeMonth(payload.businessDate)}-01`);
+  const dateTo = String(payload.dateTo || payload.businessDate || new Date().toISOString().slice(0, 10));
+  const valuesResult = await db.prepare(`
+    SELECT month_key, sheet_name, week_index, source_row, business_date,
+           primary_qty, secondary_qty, quantity, counted_by, updated_at
+    FROM stock_values
+    WHERE outlet_id = ? AND business_date >= ? AND business_date <= ?
+    ORDER BY business_date DESC, updated_at DESC
+  `).bind(outlet, dateFrom, dateTo).all();
+  const sessionsResult = await db.prepare(`
+    SELECT submission_id, month_key, section_name, counted_by, session_note, saved_at
+    FROM stock_submissions
+    WHERE outlet_id = ? AND saved_at >= ? AND saved_at < ?
+    ORDER BY saved_at DESC
+  `).bind(outlet, Date.parse(`${dateFrom}T00:00:00Z`) || 0, (Date.parse(`${dateTo}T00:00:00Z`) || Date.now()) + 86400000).all();
+  const setup = await readSetup(db, outlet);
+  const rowMap = new Map();
+  for (const sheet of setup?.sheets || []) {
+    for (const row of sheet.rows || []) rowMap.set(`${sheet.sheetName}:${row.row}`, { ...row, category: sheet.sheetName });
+  }
+  const items = (valuesResult.results || []).map((value) => {
+    const definition = rowMap.get(`${value.sheet_name}:${value.source_row}`) || {};
+    const baseQty = value.quantity ?? (Number(value.primary_qty || 0) * Number(definition.conversion || 1) + Number(value.secondary_qty || 0));
+    const minimum = Number(definition.minimum || 0);
+    return {
+      businessDate: value.business_date || `${value.month_key}-01`,
+      monthKey: value.month_key,
+      category: value.sheet_name,
+      item: definition.item || `Row ${value.source_row}`,
+      primaryUnit: definition.primaryUnit || definition.unit || '',
+      weekIndex: value.week_index,
+      baseQty,
+      minimum,
+      status: Number(baseQty || 0) <= minimum ? 'Order' : 'OK',
+      countedBy: value.counted_by || ''
+    };
+  });
+  const latestByItem = new Map();
+  for (const item of items) {
+    const key = `${item.category}:${item.item}`;
+    if (!latestByItem.has(key)) latestByItem.set(key, item);
+  }
+  const latestItems = [...latestByItem.values()];
+  const monthKeys = monthsBetween(dateFrom, dateTo);
+  const sessions = (sessionsResult.results || []).map((row) => ({
+    submissionId: row.submission_id,
+    monthKey: row.month_key,
+    sectionName: row.section_name,
+    countedBy: row.counted_by || '',
+    sessionNote: row.session_note || '',
+    businessDate: new Date(Number(row.saved_at || 0)).toISOString().slice(0, 10),
+    savedAt: row.saved_at
+  }));
+  const months = monthKeys.map((key) => ({
+    monthKey: key,
+    exists: items.some((item) => item.monthKey === key) || sessions.some((session) => session.monthKey === key),
+    sessionCount: sessions.filter((session) => session.monthKey === key).length,
+    itemRecordCount: items.filter((item) => item.monthKey === key).length,
+    attentionCount: items.filter((item) => item.monthKey === key && item.status !== 'OK').length
+  }));
+  return {
+    ok: true,
+    outlet,
+    dateFrom,
+    dateTo,
+    summary: {
+      monthlyFiles: months.filter((month) => month.exists).length,
+      monthsInRange: months.length,
+      sessionCount: sessions.length,
+      submittedDays: new Set(sessions.map((session) => session.businessDate)).size,
+      uniqueItems: latestItems.length,
+      itemRecordCount: items.length,
+      attentionItemCount: latestItems.filter((item) => item.status !== 'OK').length
+    },
+    categories: [...new Set(items.map((item) => item.category))],
+    months,
+    sessions,
+    items,
+    latestItems,
+    dataSource: 'cloudflare-d1'
+  };
+}
+
+function monthsBetween(dateFrom, dateTo) {
+  const start = new Date(`${String(dateFrom).slice(0, 7)}-01T00:00:00Z`);
+  const end = new Date(`${String(dateTo).slice(0, 7)}-01T00:00:00Z`);
+  const values = [];
+  for (const current = new Date(start); current <= end && values.length < 60; current.setUTCMonth(current.getUTCMonth() + 1)) {
+    values.push(current.toISOString().slice(0, 7));
+  }
+  return values;
 }
 
 function handled(data, status = 200, ttl = 0) {

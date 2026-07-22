@@ -7,15 +7,20 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="Stupiak Ops" />
-    <meta name="description" content="Standalone cash and stock counting for Stupiak outlets." />
+    <meta name="description" content="Standalone cash, stock counting and monthly operations dashboard for Stupiak outlets." />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/icons/app-icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/icons/app-icon-192.png" />
-    <link rel="stylesheet" href="/src/app.css" />
+    <link rel="stylesheet" href="/src/app.css?v=1.16.7" />
+    <link rel="stylesheet" href="/src/dashboard.css?v=1.16.7" />
+    <link rel="stylesheet" href="/src/cash-full.css?v=1.16.7" />
+    <link rel="stylesheet" href="/src/offline-workflow.css?v=1.16.7" />
     <title>Stupiak Operations</title>
   </head>
   <body>
     <div id="app"></div>
-    <script type="module" src="/src/main.js"></script>
+    <script src="/vendor/exceljs.min.js?v=1.16.7"></script>
+    <script src="/vendor/pdf-lib.min.js?v=1.16.7"></script>
+    <script type="module" src="/src/main.js?v=1.16.7"></script>
   </body>
 </html>
