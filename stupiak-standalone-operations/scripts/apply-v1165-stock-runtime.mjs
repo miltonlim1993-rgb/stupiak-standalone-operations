@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const VERSION = '1.16.5';
+const VERSION = '1.16.13';
 
 export async function applyV1165StockRuntime(dist) {
   await patchIndex(dist);
@@ -128,6 +128,7 @@ async function audit(dist) {
     [main.includes('function installStockActionBridgeV1165()'), 'Stock action bridge'],
     [main.includes("exportCurrentStock('pdf')"), 'PDF export action'],
     [main.includes("exportCurrentStock('excel')"), 'Excel export action'],
+    [main.includes('async function exportCurrentStock(format)'), 'Stock export implementation'],
     [main.includes('submitStock()'), 'Save action'],
     [stock.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state)`), 'live Order Page'],
     [!stock.includes('It follows the monthly spreadsheet calculation and layout.'), 'old Order Page removed'],

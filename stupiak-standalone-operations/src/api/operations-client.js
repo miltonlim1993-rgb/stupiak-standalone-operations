@@ -36,7 +36,7 @@ export async function callOperations(service, payload, settings, options = {}) {
   try {
     const response = await fetchWithTimeout('/api/operations', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...outletAuthorizationHeader() },
       body: JSON.stringify({ service, payload, clientSettings: settings })
     }, options.timeoutMs || 25000);
     if (response.status !== 404 && response.headers.get('content-type')?.includes('application/json')) {
@@ -46,6 +46,22 @@ export async function callOperations(service, payload, settings, options = {}) {
     if (!location.hostname.includes('localhost') && !location.hostname.includes('127.0.0.1')) throw error;
   }
   return directGas(service, payload, settings, options);
+}
+
+function outletAuthorizationHeader() {
+  const params = new URLSearchParams(location.search);
+  const supplied = params.get('access_token') || '';
+  if (supplied) {
+    try { sessionStorage.setItem('stupiak.operations.outletSession.v1', supplied); } catch {}
+    params.delete('access_token');
+    const query = params.toString();
+    history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
+  }
+  let token = supplied;
+  if (!token) {
+    try { token = sessionStorage.getItem('stupiak.operations.outletSession.v1') || ''; } catch {}
+  }
+  return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
 export async function getSystemStatus() {

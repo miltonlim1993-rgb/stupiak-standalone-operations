@@ -14,7 +14,10 @@ export function onRequestGet(context) {
     statvara: context.env.STATVARA_WEBHOOK_URL ? 'enabled' : 'reserved',
     storageProvider: context.env.FILE_STORAGE_PROVIDER || 'google_drive',
     cloudflareStorageReady: Boolean(context.env.FILE_STORAGE_PROVIDER === 'cloudflare_r2'),
-    version: '1.16.0'
+    adminOperationsEnabled: Boolean(context.env.OPERATIONS_ADMIN_TOKEN),
+    outletRegistryConfigured: Boolean(context.env.OUTLET_REGISTRY_JSON),
+    signedOutletSessionsRequired: Boolean(context.env.OUTLET_LINK_SECRET),
+    version: '1.16.13'
   }), {
     headers: {
       'Content-Type': 'application/json;charset=utf-8',

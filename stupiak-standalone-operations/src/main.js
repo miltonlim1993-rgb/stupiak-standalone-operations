@@ -23,6 +23,43 @@ const state = {
   deferredPrompt: null
 };
 
+function currentOutletRole() {
+  let token = new URLSearchParams(location.search).get('access_token') || '';
+  if (!token) {
+    try { token = sessionStorage.getItem('stupiak.operations.outletSession.v1') || ''; } catch {}
+  }
+  try {
+    const payload = token.split('.')[0].replace(/-/g, '+').replace(/_/g, '/');
+    return JSON.parse(atob(payload + '='.repeat((4 - payload.length % 4) % 4))).role || '';
+  } catch { return ''; }
+}
+
+function canOpenDevSettings() {
+  if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') return true;
+  return ['operations_admin', 'system_admin'].includes(currentOutletRole());
+}
+
+function applyOutletUiCapabilities() {
+  if (!canOpenDevSettings()) {
+    document.querySelector('#import-stock-count')?.remove();
+    document.querySelector('#clear-stock-data')?.remove();
+    document.querySelector('#stock-count-import-file')?.remove();
+  }
+  const hasExportDate = Boolean(state.stock.stationaryDate || Object.values(state.stock.weekDates || {}).some(Boolean));
+  document.querySelectorAll('#export-stock-pdf, #export-stock-excel').forEach((button) => {
+    if (hasExportDate) return;
+    button.disabled = true;
+    button.title = 'Select at least one Week count date or the Stationary count date before exporting.';
+    button.setAttribute('aria-label', `${button.textContent.trim()}. Select a count date first.`);
+  });
+  const saveButton = document.querySelector('#submit-stock');
+  if (saveButton?.disabled && !state.stock.submitting && !state.stock.pendingSubmission) {
+    saveButton.textContent = 'No changes to save';
+    saveButton.title = 'Enter a count and select its count date to enable Save.';
+    saveButton.setAttribute('aria-label', 'No changes to save. Enter a count and select its count date first.');
+  }
+}
+
 function readOutletRef() {
   const params = new URLSearchParams(location.search);
   return String(params.get('outlet') || params.get('outletId') || params.get('site') || '').trim();
@@ -57,7 +94,8 @@ function missingOutletMessage() {
 }
 
 function shell(content) {
-  const nav = [['home', 'home', 'Home'], ['dashboard', 'dashboard', 'Dashboard'], ['cash', 'cash', 'Cash Count'], ['stock', 'stock', 'Stock Count'], ['settings', 'settings', 'Dev Settings']];
+  const nav = [['home', 'home', 'Home'], ['dashboard', 'dashboard', 'Dashboard'], ['cash', 'cash', 'Cash Count'], ['stock', 'stock', 'Stock Count']];
+  if (canOpenDevSettings()) nav.push(['settings', 'settings', 'Dev Settings']);
   return `<div class="app-shell no-top-panel">
     <aside class="sidebar">
       <div class="brand"><div class="brand-mark">S</div><div><strong>Stupiak</strong><span>Operations</span></div></div>
@@ -70,6 +108,10 @@ function shell(content) {
 }
 
 function render() {
+  if (state.route === 'settings' && !canOpenDevSettings()) {
+    state.route = 'home';
+    if (location.hash !== '#/home') history.replaceState(null, '', `${location.pathname}${location.search}#/home`);
+  }
   const context = { settings: state.settings, outlet: state.outlet, systemStatus: state.systemStatus };
   const page = state.route === 'dashboard'
     ? dashboardPage(context, state.dashboard)
@@ -81,6 +123,7 @@ function render() {
           ? settingsPage(context)
           : homePage(context);
   app.innerHTML = shell(page);
+  applyOutletUiCapabilities();
   bindCommon();
   if (state.route === 'dashboard') bindDashboard();
   if (state.route === 'stock') bindStock();
@@ -89,6 +132,7 @@ function render() {
 }
 
 function navigate(route) {
+  if (route === 'settings' && !canOpenDevSettings()) route = 'home';
   state.route = route;
   location.hash = `#/${route}`;
   render();
@@ -114,7 +158,7 @@ async function loadStock() {
   state.stock.submitResult = null;
   render();
   try {
-    const data = await callOperations('stock', { action: 'getBootstrap', businessDate: state.stock.businessDate }, state.settings);
+    const data = await callOperations('stock', { action: 'getBootstrap', businessDate: state.stock.businessDate, outlet: state.outletRef }, state.settings);
     state.stock.data = data;
     state.outlet = data.outlet || state.outlet;
     initializeStockValues(state.stock, data);
@@ -487,7 +531,7 @@ function bindSettings() {
     result.textContent = 'Testing…';
     result.className = 'connection-result loading';
     try {
-      const response = await callOperations('stock', { action: 'getBootstrap', businessDate: todayIso() }, state.settings);
+      const response = await callOperations('stock', { action: 'getBootstrap', businessDate: todayIso(), outlet: state.outletRef }, state.settings);
       result.textContent = `Connected · ${response.outlet} · Week ${response.selectedWeek}`;
       result.className = 'connection-result success';
       state.outlet = response.outlet;
