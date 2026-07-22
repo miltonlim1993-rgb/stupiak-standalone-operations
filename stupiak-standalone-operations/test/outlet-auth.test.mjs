@@ -50,3 +50,13 @@ test('prevents an outlet operator from opening dashboards', async () => {
   assert.equal(result.ok, false);
   assert.equal(result.code, 'ACTION_ACCESS_DENIED');
 });
+
+test('allows an outlet operator to save a cash count', async () => {
+  const signed = token({ outletRef: 'feedme-a', role: 'outlet_operator', exp: Math.floor(Date.now() / 1000) + 3600 });
+  const context = {
+    env: { OUTLET_LINK_SECRET: secret },
+    request: new Request('https://example.test', { headers: { Authorization: `Bearer ${signed}` } })
+  };
+  const result = await authorizeOutletRequest(context, { requestedOutlet: 'feedme-a', action: 'saveStandaloneCashCount' });
+  assert.equal(result.ok, true);
+});

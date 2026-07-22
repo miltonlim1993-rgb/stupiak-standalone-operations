@@ -1,10 +1,10 @@
 const ROLE_ACTIONS = {
   outlet_operator: new Set([
-    'getStandaloneCashBootstrap', 'submitStandaloneCashCount',
+    'getStandaloneCashBootstrap', 'saveStandaloneCashCount', 'submitStandaloneCashCount',
     'getBootstrap', 'submitStockCount', 'getStockSubmissionStatus', 'getStockSyncStatus', 'markWhatsAppOpened'
   ]),
   outlet_manager: new Set([
-    'getStandaloneCashBootstrap', 'submitStandaloneCashCount', 'getStandaloneCashDashboard',
+    'getStandaloneCashBootstrap', 'saveStandaloneCashCount', 'submitStandaloneCashCount', 'getStandaloneCashDashboard',
     'getBootstrap', 'submitStockCount', 'getStockSubmissionStatus', 'getStockSyncStatus', 'markWhatsAppOpened', 'getStockDashboard', 'getStockSetup'
   ]),
   operations_admin: new Set(['*']),
