@@ -17,7 +17,7 @@ export async function applyV1167MultiOutlet(dist) {
 
   for (const relativePath of ['index.html', 'sw.js']) {
     const file = resolve(dist, relativePath);
-    const content = (await readFile(file, 'utf8')).replace(/1\.16\.(5|6)/g, '1.16.7');
+    const content = (await readFile(file, 'utf8')).replace(/1\.16\.(5|6|7)/g, '1.16.8');
     await writeFile(file, content);
   }
 }

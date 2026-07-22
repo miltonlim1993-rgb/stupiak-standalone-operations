@@ -1,7 +1,7 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
-const VERSION = '1.16.5';
+const VERSION = '1.16.8';
 
 export async function applyV1165StockRuntime(dist) {
   await patchIndex(dist);

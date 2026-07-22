@@ -106,7 +106,7 @@ function liveOrderItemsTextV1162(group) {
   source = source.replace(/<div class="order-note">[\s\S]*?<\/div><\/div>/g, '');
   source = source.replace(/It follows the monthly spreadsheet calculation and layout\./g, 'Live order list from saved Stock Count data.');
 
-  if (!source.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, weekly, monthly)`)) {
+  if (!source.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, monthly)`)) {
     throw new Error('v1.16.5 final audit failed: live Order Page was not installed');
   }
 
@@ -114,7 +114,7 @@ function liveOrderItemsTextV1162(group) {
 }
 
 function forceLiveOrderPageCall(source) {
-  const exact = `state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, weekly, monthly)`;
+  const exact = `state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, monthly)`;
   if (source.includes(exact)) return source;
 
   const lines = source.split('\n');
@@ -190,7 +190,8 @@ async function auditFinalStockBuild(dist) {
   const stock = await readFile(resolve(dist, 'src/pages/stock.js'), 'utf8');
   const main = await readFile(resolve(dist, 'src/main.js'), 'utf8');
   const checks = [
-    [stock.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, weekly, monthly)`), 'live Order Page call'],
+    [stock.includes(`state.activeTab === 'Order Page' ? liveOrderPageV1162(state) : sectionPage(state, monthly)`), 'live Order Page call'],
+    [!stock.includes('sectionPage(state, weekly, monthly)'), 'no undefined weekly runtime argument'],
     [stock.includes('function liveOrderPageV1162(state)'), 'live Order Page renderer'],
     [!stock.includes('It follows the monthly spreadsheet calculation and layout.'), 'old Order Page renderer removed'],
     [stock.includes('id="export-stock-pdf"'), 'Export PDF button'],
