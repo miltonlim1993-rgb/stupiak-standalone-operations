@@ -17,7 +17,7 @@ export function onRequestGet(context) {
     adminOperationsEnabled: Boolean(context.env.OPERATIONS_ADMIN_TOKEN),
     outletRegistryConfigured: Boolean(context.env.OUTLET_REGISTRY_JSON),
     signedOutletSessionsRequired: Boolean(context.env.OUTLET_LINK_SECRET),
-    version: '1.16.13'
+    version: '1.16.14'
   }), {
     headers: {
       'Content-Type': 'application/json;charset=utf-8',

@@ -53,6 +53,7 @@ function outletAuthorizationHeader() {
   const supplied = params.get('access_token') || '';
   if (supplied) {
     try { sessionStorage.setItem('stupiak.operations.outletSession.v1', supplied); } catch {}
+    try { localStorage.setItem('stupiak.operations.outletSession.v1', supplied); } catch {}
     params.delete('access_token');
     const query = params.toString();
     history.replaceState(null, '', `${location.pathname}${query ? `?${query}` : ''}${location.hash}`);
@@ -60,6 +61,9 @@ function outletAuthorizationHeader() {
   let token = supplied;
   if (!token) {
     try { token = sessionStorage.getItem('stupiak.operations.outletSession.v1') || ''; } catch {}
+  }
+  if (!token) {
+    try { token = localStorage.getItem('stupiak.operations.outletSession.v1') || ''; } catch {}
   }
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
