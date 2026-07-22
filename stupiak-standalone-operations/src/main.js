@@ -39,6 +39,27 @@ function canOpenDevSettings() {
   return ['operations_admin', 'system_admin'].includes(currentOutletRole());
 }
 
+function applyOutletUiCapabilities() {
+  if (!canOpenDevSettings()) {
+    document.querySelector('#import-stock-count')?.remove();
+    document.querySelector('#clear-stock-data')?.remove();
+    document.querySelector('#stock-count-import-file')?.remove();
+  }
+  const hasExportDate = Boolean(state.stock.stationaryDate || Object.values(state.stock.weekDates || {}).some(Boolean));
+  document.querySelectorAll('#export-stock-pdf, #export-stock-excel').forEach((button) => {
+    if (hasExportDate) return;
+    button.disabled = true;
+    button.title = 'Select at least one Week count date or the Stationary count date before exporting.';
+    button.setAttribute('aria-label', `${button.textContent.trim()}. Select a count date first.`);
+  });
+  const saveButton = document.querySelector('#submit-stock');
+  if (saveButton?.disabled && !state.stock.submitting && !state.stock.pendingSubmission) {
+    saveButton.textContent = 'No changes to save';
+    saveButton.title = 'Enter a count and select its count date to enable Save.';
+    saveButton.setAttribute('aria-label', 'No changes to save. Enter a count and select its count date first.');
+  }
+}
+
 function readOutletRef() {
   const params = new URLSearchParams(location.search);
   return String(params.get('outlet') || params.get('outletId') || params.get('site') || '').trim();
@@ -102,6 +123,7 @@ function render() {
           ? settingsPage(context)
           : homePage(context);
   app.innerHTML = shell(page);
+  applyOutletUiCapabilities();
   bindCommon();
   if (state.route === 'dashboard') bindDashboard();
   if (state.route === 'stock') bindStock();

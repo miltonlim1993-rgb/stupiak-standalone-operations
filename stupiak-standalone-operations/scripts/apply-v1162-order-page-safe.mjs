@@ -199,6 +199,7 @@ async function auditFinalStockBuild(dist) {
     [stock.includes('id="submit-stock"'), 'Save button'],
     [main.includes("exportCurrentStock('pdf')"), 'Export PDF action'],
     [main.includes("exportCurrentStock('excel')"), 'Export Excel action'],
+    [main.includes('async function exportCurrentStock(format)'), 'Stock export implementation'],
     [main.includes('submitStock()'), 'Save action'],
     [main.includes(markerText()), 'final action fallback']
   ];
