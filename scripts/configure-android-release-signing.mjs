@@ -39,9 +39,9 @@ if (!gradle.includes('stupiaksReleaseSigning')) {
   if (!gradle.includes(androidOpen)) throw new Error('Unable to find android block in app/build.gradle')
   gradle = gradle.replace(androidOpen, signingBlock)
 
-  const releaseOpen = /release\s*\{/m
-  if (!releaseOpen.test(gradle)) throw new Error('Unable to find release build type in app/build.gradle')
-  gradle = gradle.replace(releaseOpen, `release {\n            signingConfig signingConfigs.release`)
+  const buildTypePattern = /buildTypes\s*\{\s*release\s*\{/m
+  if (!buildTypePattern.test(gradle)) throw new Error('Unable to find release build type in app/build.gradle')
+  gradle = gradle.replace(buildTypePattern, `buildTypes {\n        release {\n            signingConfig signingConfigs.release`)
 }
 
 await fs.writeFile(appGradlePath, gradle)
