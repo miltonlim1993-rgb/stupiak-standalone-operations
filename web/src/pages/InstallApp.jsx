@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/AuthContext'
 
 const MODE_KEY = 'chefops.display.mode'
 const RELEASE_FALLBACK = '4.3.0-ops-insights-data-gate'
+const DEBUG_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-debug-latest/stupiaks-ops-debug.apk'
 
 function bytes(value) {
   const number = Number(value || 0)
@@ -34,7 +35,13 @@ function qr(value) {
 export default function InstallApp() {
   const { user } = useAuth()
   const outletId = String(user?.outlet_id || '')
-  const [release, setRelease] = useState({ app_version: RELEASE_FALLBACK, apk_url: '', production_web_url: '' })
+  const [release, setRelease] = useState({
+    app_version: RELEASE_FALLBACK,
+    apk_url: DEBUG_APK_URL,
+    apk_version: 'Debug latest',
+    apk_debug: true,
+    production_web_url: '',
+  })
   const [installReady, setInstallReady] = useState(canPromptInstall())
   const [installed, setInstalled] = useState(isStandalone())
   const [mode, setMode] = useState(() => localStorage.getItem(MODE_KEY) || 'auto')
@@ -43,7 +50,15 @@ export default function InstallApp() {
   const [updatingPack, setUpdatingPack] = useState(false)
 
   useEffect(() => {
-    opsClient.app.version().then(setRelease).catch(() => undefined)
+    opsClient.app.version().then((value) => {
+      const publishedApkUrl = String(value?.apk_url || '').trim()
+      setRelease({
+        ...value,
+        apk_url: publishedApkUrl || DEBUG_APK_URL,
+        apk_version: value?.apk_version || (publishedApkUrl ? '' : 'Debug latest'),
+        apk_debug: !publishedApkUrl,
+      })
+    }).catch(() => undefined)
     const ready = () => setInstallReady(true)
     const onPack = (event) => setPack(event.detail || getAppPackStatus())
     const display = window.matchMedia?.('(display-mode: standalone)')
@@ -111,12 +126,12 @@ export default function InstallApp() {
       </section>
 
       <section className="rounded-2xl border border-border bg-card p-5">
-        {release.apk_url ? <>
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between"><div><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><Download className="h-6 w-6" /></span><h2 className="mt-4 font-semibold">Published Android APK</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">A signed release is published. Download on desktop or scan this APK-specific QR code on Android.</p></div><img src={apkQrUrl} alt="Download signed Android APK QR code" className="h-28 w-28 self-center rounded-xl border border-border bg-white p-1 sm:self-auto" /></div>
-          <a href={release.apk_url} className="mt-4 flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"><Download className="mr-2 h-4 w-4" />Download APK {release.apk_version || ''}</a>
-        </> : <>
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted text-muted-foreground"><Download className="h-6 w-6" /></span><h2 className="mt-4 font-semibold">Android APK not published</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">There is currently no signed APK URL in Master → AppSettings, so this card does not show a fake APK button or APK QR code.</p><div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">The repository contains a Capacitor build scaffold, not a verified downloadable release. A real APK requires the Android project, SDK build, signing key, signature verification and a published HTTPS file URL.</div>
-        </>}
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><Download className="h-6 w-6" /></span><h2 className="mt-4 font-semibold">{release.apk_debug ? 'Android test APK' : 'Published Android APK'}</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{release.apk_debug ? 'Installable debug-signed package for testing on an Android phone or tablet.' : 'A signed release is published. Download on desktop or scan this APK-specific QR code on Android.'}</p></div>
+          <img src={apkQrUrl} alt="Download Android APK QR code" className="h-28 w-28 self-center rounded-xl border border-border bg-white p-1 sm:self-auto" />
+        </div>
+        <a href={release.apk_url} className="mt-4 flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"><Download className="mr-2 h-4 w-4" />Download APK {release.apk_version || ''}</a>
+        {release.apk_debug ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">Internal testing build. Android may ask you to allow installation from this browser. The final staff rollout should later use a privately signed release APK or Play internal testing.</div> : null}
       </section>
     </div>
 
