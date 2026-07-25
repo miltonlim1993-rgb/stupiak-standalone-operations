@@ -1,14 +1,19 @@
-name: Build Android debug APK
+name: Build and publish Android debug APK
 
 on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   apk:
     runs-on: ubuntu-latest
+    env:
+      APK_RELEASE_TAG: android-debug-latest
+      APK_FILE_NAME: stupiaks-ops-debug.apk
+      VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
+      VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,11 +25,38 @@ jobs:
           distribution: temurin
           java-version: 21
           cache: gradle
-      - run: npm ci
-      - run: npm run mobile:init
-      - run: cd web/android && ./gradlew assembleDebug
-      - uses: actions/upload-artifact@v4
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate and sync Capacitor Android project
+        run: npm run mobile:init
+      - name: Build installable debug APK
+        run: |
+          chmod +x web/android/gradlew
+          cd web/android
+          ./gradlew assembleDebug
+      - name: Prepare APK file
+        run: |
+          mkdir -p release
+          cp web/android/app/build/outputs/apk/debug/app-debug.apk "release/${APK_FILE_NAME}"
+          shasum -a 256 "release/${APK_FILE_NAME}" | tee "release/${APK_FILE_NAME}.sha256"
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
         with:
           name: stupiaks-ops-debug-apk
-          path: web/android/app/build/outputs/apk/debug/app-debug.apk
+          path: |
+            release/stupiaks-ops-debug.apk
+            release/stupiaks-ops-debug.apk.sha256
           if-no-files-found: error
+      - name: Publish stable download release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
+          gh release create "${APK_RELEASE_TAG}" \
+            "release/${APK_FILE_NAME}#Stupiak's Ops Android debug APK" \
+            "release/${APK_FILE_NAME}.sha256#SHA-256 checksum" \
+            --prerelease \
+            --title "Stupiak's Ops Android debug APK" \
+            --notes "Installable internal testing APK built from commit ${GITHUB_SHA}. This is a debug-signed package for device testing, not the final production-signed staff release."
+      - name: Show stable APK URL
+        run: echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
