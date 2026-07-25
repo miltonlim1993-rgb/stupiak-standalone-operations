@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { opsClient } from '@/api/opsClient'
+import { clearNativeSessionToken, saveNativeSessionToken } from '@/lib/native-session'
 
 const AuthContext = createContext(null)
 
@@ -19,6 +20,7 @@ export function AuthProvider({ children }) {
       return currentUser
     } catch (error) {
       setUser(null)
+      if (error.status === 401) clearNativeSessionToken()
       if (error.status !== 401) {
         setAuthError({ type: error.code || 'auth_error', message: error.message })
       }
@@ -36,12 +38,12 @@ export function AuthProvider({ children }) {
   const loginWithGoogle = useCallback(async (credential) => {
     setAuthError(null)
     const result = await opsClient.auth.loginWithGoogle(credential)
+    if (result?.session_token) saveNativeSessionToken(result.session_token)
     setUser(result.user)
     localStorage.setItem('chefops.data-pack.outlet', String(result.user?.outlet_id || ''))
     setAuthChecked(true)
     return result.user
   }, [])
-
 
   const updateProfile = useCallback(async (profile) => {
     const updated = await opsClient.auth.updateMe(profile)
@@ -54,6 +56,7 @@ export function AuthProvider({ children }) {
     try {
       await opsClient.auth.logout()
     } finally {
+      clearNativeSessionToken()
       try {
         navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
         if ('caches' in window) {
