@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-5-1-release-cf-android-1'
+const VERSION = 'chefops-v4-5-1-release-cf-android-2-scroll-fix'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
