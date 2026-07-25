@@ -16,6 +16,32 @@ async function patchMain(dist) {
     `import { prepareStockPackage, shareStockPackage } from './core/stock-local-export.js';`,
     `import { exportStockPdf, exportStockExcel } from './core/stock-local-export.js';`
   );
+
+  if (!source.includes('async function exportCurrentStock(format)')) {
+    const exportFunction = `
+async function exportCurrentStock(format) {
+  if (stockExportInProgress) return;
+  try {
+    stockExportInProgress = true;
+    state.stock.exportingFormat = format;
+    render();
+    const outlet = state.stock.data?.outlet || state.outlet || state.outletRef || 'Outlet';
+    showToast(format === 'pdf' ? 'Preparing PDF…' : 'Preparing Excel…');
+    if (format === 'pdf') await exportStockPdf(state.stock, outlet);
+    else await exportStockExcel(state.stock, outlet);
+    showToast(format === 'pdf' ? 'PDF exported.' : 'Excel exported.');
+  } catch (error) {
+    showToast(error?.message || 'Unable to export the Stock Count file.', 'error');
+  } finally {
+    stockExportInProgress = false;
+    state.stock.exportingFormat = '';
+    render();
+  }
+}
+
+`;
+    source += exportFunction;
+  }
   source = source.replace(`let preparedStockWhatsappPackage = null;`, `let stockExportInProgress = false;`);
 
   source = source.replace(

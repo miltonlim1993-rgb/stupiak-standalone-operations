@@ -120,6 +120,15 @@ async function patchMain(dist) {
     'initial instant render and background work'
   );
 
+  source = source.replace(
+    `  } catch (error) {\n    state.cash.syncError = error.message;\n  } finally {`,
+    `  } catch (error) {\n    const message = String(error?.message || error || '');\n    state.cash.syncError = /signed outlet link|required outlet session|outlet session|authorization/i.test(message)\n      ? 'Outlet access expired. Reopen the secure outlet link.'\n      : message;\n  } finally {`
+  );
+  source = source.replace(
+    `  if (!cashOutlet) return showToast(missingOutletMessage(), 'error');\n  const validationError = validateCash(state.cash);`,
+    `  if (!cashOutlet) return showToast(missingOutletMessage(), 'error');\n  if (/Outlet access expired/i.test(state.cash.syncError || '')) return showToast('Outlet access expired. Reopen the secure outlet link before saving.', 'error');\n  const validationError = validateCash(state.cash);`
+  );
+
   await writeFile(file, source);
 }
 
@@ -139,6 +148,15 @@ async function patchCashPage(dist) {
     `function loadingMarkup() {`,
     `function cashSyncStatusMarkup(state) {\n  const error = state.syncError || state.error;\n  if (state.pendingSubmission) return '<div class="sync-strip pending"><span class="sync-dot"></span><div><strong>Saved on this device</strong><span>Upload continues in the background. Staff can keep using the form.</span></div></div>';\n  if (state.syncing) return '<div class="sync-strip syncing"><span class="sync-dot"></span><div><strong>Syncing in the background</strong><span>The form is ready now. Existing Sheet records will appear when the read finishes.</span></div></div>';\n  if (error) return '<div class="sync-strip warning"><span class="sync-dot"></span><div><strong>Google Sheet is temporarily unavailable</strong><span>Your form and drafts remain on this device.</span></div><button id="retry-cash">Retry sync</button></div>';\n  return '';\n}\n\nfunction loadingMarkup() {`,
     'cash sync status markup'
+  );
+
+  source = source.replace(
+    `  const error = state.syncError || state.error;\n  if (state.pendingSubmission)`,
+    `  const error = state.syncError || state.error;\n  const accessExpired = /Outlet access expired/i.test(error || '');\n  if (state.pendingSubmission)`
+  );
+  source = source.replace(
+    `  if (error) return '<div class="sync-strip warning"><span class="sync-dot"></span><div><strong>Google Sheet is temporarily unavailable</strong><span>Your form and drafts remain on this device.</span></div><button id="retry-cash">Retry sync</button></div>';`,
+    `  if (accessExpired) return '<div class="sync-strip warning"><span class="sync-dot"></span><div><strong>Outlet access expired</strong><span>Reopen the secure outlet link before loading or saving cash data.</span></div></div>';\n  if (error) return '<div class="sync-strip warning"><span class="sync-dot"></span><div><strong>Google Sheet is temporarily unavailable</strong><span>Your form and drafts remain on this device.</span></div><button id="retry-cash">Retry sync</button></div>';`
   );
 
   await writeFile(file, source);

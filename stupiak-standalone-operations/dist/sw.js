@@ -1,5 +1,5 @@
-const CACHE = 'stupiak-ops-v1';
-const SHELL = ['/', '/index.html', '/src/app.css', '/src/main.js', '/manifest.webmanifest', '/icons/app-icon.svg'];
+const CACHE = 'stupiak-ops-v1.16.7';
+const SHELL = ['/', '/index.html', '/src/app.css', '/src/dashboard.css', '/src/cash-full.css', '/src/offline-workflow.css', '/src/main.js', '/src/pages/stock.js', '/src/core/offline-workflow.js', '/src/core/stock-local-export.js', '/src/core/stock-setup-excel.js', '/src/core/stock-setup-legacy.js', '/src/core/stock-count-excel.js', '/vendor/exceljs.min.js', '/vendor/pdf-lib.min.js', '/manifest.webmanifest', '/icons/app-icon.svg'];
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(CACHE).then((cache) => cache.addAll(SHELL)).then(() => self.skipWaiting()));
 });
@@ -9,7 +9,7 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const request = event.request;
   if (request.method !== 'GET' || new URL(request.url).pathname.startsWith('/api/')) return;
-  event.respondWith(fetch(request).then((response) => {
+  event.respondWith(fetch(request, { cache: 'no-store' }).then((response) => {
     const clone = response.clone();
     caches.open(CACHE).then((cache) => cache.put(request, clone));
     return response;

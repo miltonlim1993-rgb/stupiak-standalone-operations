@@ -32,12 +32,12 @@ export function homePage(context) {
       </div>
       <div class="status-grid">
         <article class="status-card">
-          <span class="status-dot ${context.settings.stockCountGasUrl ? 'online' : ''}"></span>
-          <div><strong>Stock GAS</strong><small>${context.settings.stockCountGasUrl ? 'Configured' : 'Not configured'}</small></div>
+          <span class="status-dot ${context.systemStatus?.stockD1Configured || context.systemStatus?.stockGasConfigured ? 'online' : ''}"></span>
+          <div><strong>Stock data</strong><small>${context.systemStatus ? (context.systemStatus.stockD1Configured ? 'Cloudflare D1' : context.systemStatus.stockGasConfigured ? 'Google Sheet' : 'Not configured') : 'Checking…'}</small></div>
         </article>
         <article class="status-card">
-          <span class="status-dot ${context.settings.cashCountGasUrl ? 'online' : ''}"></span>
-          <div><strong>Cash GAS</strong><small>${context.settings.cashCountGasUrl ? 'Configured' : 'Waiting for setup'}</small></div>
+          <span class="status-dot ${context.systemStatus?.cashGasConfigured ? 'online' : ''}"></span>
+          <div><strong>Cash data</strong><small>${context.systemStatus ? (context.systemStatus.cashGasConfigured ? 'Google Sheet' : 'Not configured') : 'Checking…'}</small></div>
         </article>
         <article class="status-card">
           <span class="status-dot reserved"></span>

@@ -1,4 +1,8 @@
 const paths = {
+  dashboard: '<path d="M4 19V9M10 19V5M16 19v-7M22 19H2"/><path d="m4 7 6-4 6 6 6-5"/>',
+  folder: '<path d="M3 6a2 2 0 0 1 2-2h5l2 2h7a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"/>',
+  swap: '<path d="m7 7-4 4 4 4"/><path d="M3 11h14a4 4 0 0 1 4 4v1"/><path d="m17 17 4-4-4-4"/>',
+  filter: '<path d="M4 5h16M7 12h10M10 19h4"/>',
   home: '<path d="M3 11.5 12 4l9 7.5v8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 19.5v-8Z"/><path d="M9 21v-6h6v6"/>',
   cash: '<rect x="3" y="6" width="18" height="13" rx="2"/><path d="M7 10h.01M17 15h.01"/><circle cx="12" cy="12.5" r="2.5"/>',
   stock: '<path d="m4 7 8-4 8 4-8 4-8-4Z"/><path d="m4 12 8 4 8-4M4 17l8 4 8-4"/>',

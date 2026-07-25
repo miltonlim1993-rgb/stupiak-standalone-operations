@@ -49,6 +49,16 @@ Using environment variables means outlet devices do not need to store GAS secret
 - `STOCK_GAS_SECRET`
 - `CASH_GAS_URL`
 - `CASH_GAS_SECRET`
+- `OUTLET_REGISTRY_JSON` — maps external outlet IDs to canonical operations IDs, for example `{"6960e4e32553bd001c723f3b":"RR-KCH","feedme-id-2":"RR-MYY"}`
+- `STOCK_DEFAULT_OUTLET` — optional single-outlet fallback; do not use it as routing for multi-outlet deployments
+- `OPERATIONS_ADMIN_TOKEN` — required by setup import and stock-count deletion endpoints; keep it out of the outlet PWA
+- `OUTLET_LINK_SECRET` — enables signed outlet sessions. When set, unsigned Cash/Stock requests are rejected.
+
+Generate a signed outlet link without exposing the secret to the browser build:
+
+```bash
+OUTLET_LINK_SECRET='replace-with-a-long-random-secret' node scripts/sign-outlet-link.mjs 6960e4e32553bd001c723f3b outlet_operator 168
+```
 
 Reserved for later:
 

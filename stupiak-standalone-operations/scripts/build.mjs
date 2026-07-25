@@ -32,6 +32,7 @@ import { applyV1161StockOrderOutlet } from './apply-v1161-stock-order-outlet.mjs
 import { applyV1162OrderPageSafe } from './apply-v1162-order-page-safe.mjs';
 import { applyV1165StockRuntime } from './apply-v1165-stock-runtime.mjs';
 import { applyV1166NativeNav } from './apply-v1166-native-nav.mjs';
+import { applyV1167MultiOutlet } from './apply-v1167-multi-outlet.mjs';
 
 const root = resolve(import.meta.dirname, '..');
 const dist = resolve(root, 'dist');
@@ -73,6 +74,7 @@ await applyV1161StockOrderOutlet(dist);
 await applyV1162OrderPageSafe(dist);
 await applyV1165StockRuntime(dist);
 await applyV1166NativeNav(dist);
+await applyV1167MultiOutlet(dist);
 
 for (const relativePath of ['src/main.js','src/pages/stock.js','src/pages/cash.js','src/core/stock-local-export.js','src/core/offline-workflow.js','src/core/stock-setup-excel.js','src/core/stock-setup-legacy.js','src/core/stock-count-excel.js']) {
   execFileSync(process.execPath, ['--check', resolve(dist, relativePath)], { stdio: 'inherit' });
