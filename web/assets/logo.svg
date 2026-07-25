@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-label="Stupiak's Ops logo">
+  <path
+    d="M704 278C653 220 584 190 504 190c-111 0-198 62-198 150 0 89 78 126 202 153 117 25 162 49 162 98 0 52-55 89-135 89-93 0-169-34-225-102"
+    fill="none"
+    stroke="#101010"
+    stroke-width="126"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>
