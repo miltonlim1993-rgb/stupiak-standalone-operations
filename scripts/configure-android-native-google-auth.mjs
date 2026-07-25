@@ -8,6 +8,11 @@ const appGradlePath = path.join(androidRoot, 'app', 'build.gradle')
 const javaRoot = path.join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'stupiaks', 'ops')
 const mainActivityPath = path.join(javaRoot, 'MainActivity.java')
 const pluginPath = path.join(javaRoot, 'NativeGoogleAuthPlugin.java')
+const versionCode = Number(process.env.ANDROID_VERSION_CODE || 1)
+const versionName = String(process.env.ANDROID_VERSION_NAME || '4.5.1').trim()
+
+if (!Number.isInteger(versionCode) || versionCode < 1) throw new Error('ANDROID_VERSION_CODE must be a positive integer')
+if (!versionName) throw new Error('ANDROID_VERSION_NAME is required')
 
 await fs.mkdir(javaRoot, { recursive: true })
 
@@ -17,8 +22,14 @@ if (!gradle.includes(marker)) {
   const dependenciesOpen = /dependencies\s*\{/m
   if (!dependenciesOpen.test(gradle)) throw new Error('Unable to find dependencies block in app/build.gradle')
   gradle = gradle.replace(dependenciesOpen, `dependencies {\n    ${marker}\n    implementation "androidx.credentials:credentials:1.6.0"\n    implementation "androidx.credentials:credentials-play-services-auth:1.6.0"\n    implementation "com.google.android.libraries.identity.googleid:googleid:1.1.1"`)
-  await fs.writeFile(appGradlePath, gradle)
 }
+
+if (!/versionCode\s+\d+/m.test(gradle)) throw new Error('Unable to find Android versionCode')
+if (!/versionName\s+["'][^"']+["']/m.test(gradle)) throw new Error('Unable to find Android versionName')
+gradle = gradle
+  .replace(/versionCode\s+\d+/m, `versionCode ${versionCode}`)
+  .replace(/versionName\s+["'][^"']+["']/m, `versionName "${versionName.replaceAll('"', '')}"`)
+await fs.writeFile(appGradlePath, gradle)
 
 await fs.writeFile(mainActivityPath, `package com.stupiaks.ops;
 
@@ -130,4 +141,4 @@ public class NativeGoogleAuthPlugin extends Plugin {
 }
 `)
 
-console.log('Configured Android Credential Manager Google sign-in bridge.')
+console.log(`Configured Android Credential Manager Google sign-in bridge (${versionName}, versionCode ${versionCode}).`)
