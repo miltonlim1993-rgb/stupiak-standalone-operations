@@ -9,7 +9,6 @@ const USER_CACHE = new Map()
 const USER_INFLIGHT = new Map()
 const USER_CACHE_TTL_MS = 60_000
 
-
 function booleanValue(value) {
   return value === true || String(value || '').toLowerCase() === 'true'
 }
@@ -103,14 +102,21 @@ export async function createSession(user, env) {
     .sign(sessionKey(env))
 }
 
+function isNativeAppRequest(request) {
+  const origin = String(request.headers.get('Origin') || '').toLowerCase()
+  return origin === 'https://localhost' || origin === 'capacitor://localhost'
+}
+
 export function sessionCookie(token, request) {
   const secure = new URL(request.url).protocol === 'https:'
-  return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=604800${secure ? '; Secure' : ''}`
+  const sameSite = isNativeAppRequest(request) ? 'None' : 'Lax'
+  return `${COOKIE_NAME}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=604800${secure ? '; Secure' : ''}`
 }
 
 export function expiredSessionCookie(request) {
   const secure = new URL(request.url).protocol === 'https:'
-  return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure ? '; Secure' : ''}`
+  const sameSite = isNativeAppRequest(request) ? 'None' : 'Lax'
+  return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=0${secure ? '; Secure' : ''}`
 }
 
 export async function sessionPayload(request, env) {
