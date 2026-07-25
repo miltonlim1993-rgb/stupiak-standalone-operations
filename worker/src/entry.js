@@ -6,7 +6,8 @@ function isApiPath(pathname) {
 
 function isNativeAppRequest(request) {
   const origin = String(request.headers.get('Origin') || '').toLowerCase()
-  return origin === 'https://localhost' || origin === 'capacitor://localhost'
+  const marker = String(request.headers.get('X-ChefOps-Native') || '').toLowerCase()
+  return marker === 'android' || origin === 'https://localhost' || origin === 'capacitor://localhost'
 }
 
 function sessionTokenFromCookie(value) {
