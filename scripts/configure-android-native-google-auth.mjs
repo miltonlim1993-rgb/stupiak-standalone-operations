@@ -33,8 +33,11 @@ await fs.writeFile(appGradlePath, gradle)
 
 await fs.writeFile(mainActivityPath, `package com.stupiaks.ops;
 
+import android.graphics.Color;
 import android.os.Bundle;
 import android.webkit.CookieManager;
+
+import androidx.core.view.WindowCompat;
 
 import com.getcapacitor.BridgeActivity;
 
@@ -47,6 +50,11 @@ public class MainActivity extends BridgeActivity {
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
         cookieManager.setAcceptThirdPartyCookies(getBridge().getWebView(), true);
+
+        getWindow().setStatusBarColor(Color.WHITE);
+        getWindow().setNavigationBarColor(Color.WHITE);
+        WindowCompat.getInsetsController(getWindow(), getBridge().getWebView()).setAppearanceLightStatusBars(true);
+        WindowCompat.getInsetsController(getWindow(), getBridge().getWebView()).setAppearanceLightNavigationBars(true);
     }
 }
 `)
@@ -141,4 +149,4 @@ public class NativeGoogleAuthPlugin extends Plugin {
 }
 `)
 
-console.log(`Configured Android Credential Manager Google sign-in bridge (${versionName}, versionCode ${versionCode}).`)
+console.log(`Configured Android Credential Manager, light system bars and app version (${versionName}, versionCode ${versionCode}).`)
