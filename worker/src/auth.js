@@ -119,8 +119,14 @@ export function expiredSessionCookie(request) {
   return `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=${sameSite}; Max-Age=0${secure ? '; Secure' : ''}`
 }
 
+function bearerToken(request) {
+  const value = String(request.headers.get('Authorization') || '').trim()
+  const match = value.match(/^Bearer\s+(.+)$/i)
+  return match ? match[1].trim() : ''
+}
+
 export async function sessionPayload(request, env) {
-  const token = parseCookies(request)[COOKIE_NAME]
+  const token = bearerToken(request) || parseCookies(request)[COOKIE_NAME]
   if (!token) return null
   try {
     const { payload } = await jwtVerify(token, sessionKey(env), { algorithms: ['HS256'] })
