@@ -38,6 +38,8 @@ jobs:
         run: npm ci
       - name: Generate and sync Capacitor Android project
         run: npm run mobile:init
+      - name: Configure native Google Credential Manager
+        run: node scripts/configure-android-native-google-auth.mjs
       - name: Restore private release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -82,7 +84,7 @@ jobs:
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
             --title "Stupiak's Ops signed Android release" \
-            --notes "Production-signed Android release built from commit ${GITHUB_SHA}. Keep the signing keystore backed up securely; future updates must use the same signing certificate."
+            --notes "Production-signed Android release with native Google Credential Manager, built from commit ${GITHUB_SHA}. Keep the signing keystore backed up securely; future updates must use the same signing certificate."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
