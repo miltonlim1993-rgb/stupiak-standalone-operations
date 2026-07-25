@@ -14,8 +14,16 @@ if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  let refreshing = false
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing || sessionStorage.getItem('chefops-sw-refreshed') === '1') return
+    refreshing = true
+    sessionStorage.setItem('chefops-sw-refreshed', '1')
+    window.location.reload()
+  })
+
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').then((registration) => {
+    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
       registration.update().catch(() => undefined)
     }).catch((error) => console.warn('Service worker registration failed', error))
   })
