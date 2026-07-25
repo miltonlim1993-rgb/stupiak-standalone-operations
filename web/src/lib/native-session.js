@@ -19,6 +19,15 @@ export function clearNativeSessionToken() {
   try { localStorage.removeItem(NATIVE_SESSION_KEY) } catch {}
 }
 
+function isNativeAndroid() {
+  const capacitor = window.Capacitor
+  return Boolean(
+    (capacitor?.isNativePlatform?.() && capacitor?.getPlatform?.() === 'android')
+    || window.location.origin === 'https://localhost'
+    || window.location.origin === 'capacitor://localhost'
+  )
+}
+
 function requestUrl(input) {
   try {
     return new URL(input instanceof Request ? input.url : String(input), window.location.href)
@@ -42,13 +51,15 @@ export function installNativeSessionFetch() {
   window.fetch = async (input, init = {}) => {
     const url = requestUrl(input)
     const token = getNativeSessionToken()
+    const nativeAndroid = isNativeAndroid()
 
-    if (!url || !url.pathname.startsWith('/api/') || !token) {
+    if (!url || !url.pathname.startsWith('/api/') || (!token && !nativeAndroid)) {
       return originalFetch(input, init)
     }
 
     const headers = mergedHeaders(input, init)
-    headers.set('Authorization', `Bearer ${token}`)
+    if (nativeAndroid) headers.set('X-ChefOps-Native', 'android')
+    if (token) headers.set('Authorization', `Bearer ${token}`)
 
     const requestInit = { ...init, headers }
     const response = input instanceof Request
