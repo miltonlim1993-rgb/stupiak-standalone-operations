@@ -26,6 +26,18 @@ function loadGoogleIdentityScript() {
   })
 }
 
+function isNativeAndroid() {
+  const capacitor = window.Capacitor
+  return Boolean(capacitor?.isNativePlatform?.() && capacitor?.getPlatform?.() === 'android')
+}
+
+function loginErrorMessage(error) {
+  if (error?.code === 'sheets_rate_limited') {
+    return 'The operations sheet is temporarily busy. Please wait about one minute, then try again.'
+  }
+  return error?.message || 'Google sign-in failed'
+}
+
 export default function Login() {
   const buttonRef = useRef(null)
   const navigate = useNavigate()
@@ -34,14 +46,16 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const clientId = import.meta.env.VITE_GOOGLE_LOGIN_CLIENT_ID
+  const nativeAndroid = isNativeAndroid()
 
   useEffect(() => {
     let cancelled = false
     async function setup() {
       if (!clientId) {
-        setError('Google Login Client ID is not configured in web/.env.local.')
+        setError('Google Login Client ID is not configured.')
         return
       }
+      if (nativeAndroid) return
       try {
         await loadGoogleIdentityScript()
         if (cancelled || !buttonRef.current) return
@@ -54,9 +68,7 @@ export default function Login() {
               await loginWithGoogle(credential)
               navigate(location.state?.from || '/', { replace: true })
             } catch (err) {
-              setError(err.code === 'sheets_rate_limited'
-                ? 'The operations sheet is temporarily busy. Please wait about one minute, then tap your Google account again.'
-                : (err.message || 'Google sign-in failed'))
+              setError(loginErrorMessage(err))
             } finally {
               setLoading(false)
             }
@@ -77,7 +89,24 @@ export default function Login() {
     }
     setup()
     return () => { cancelled = true }
-  }, [clientId, loginWithGoogle, location.state, navigate])
+  }, [clientId, loginWithGoogle, location.state, navigate, nativeAndroid])
+
+  const nativeSignIn = async () => {
+    setLoading(true)
+    setError('')
+    try {
+      const plugin = window.Capacitor?.Plugins?.NativeGoogleAuth
+      if (!plugin?.signIn) throw new Error('Native Google Sign-In is unavailable. Install the latest Android release.')
+      const result = await plugin.signIn({ serverClientId: clientId })
+      if (!result?.idToken) throw new Error('Google did not return an ID token')
+      await loginWithGoogle(result.idToken)
+      navigate(location.state?.from || '/', { replace: true })
+    } catch (err) {
+      setError(loginErrorMessage(err))
+    } finally {
+      setLoading(false)
+    }
+  }
 
   if (isAuthenticated) return <Navigate to="/" replace />
 
@@ -89,8 +118,20 @@ export default function Login() {
     >
       {error && <div className="mb-4 p-3 rounded-lg bg-destructive/10 text-destructive text-sm">{error}</div>}
       <div className="relative min-h-12 flex items-center justify-center">
-        <div ref={buttonRef} className={loading ? 'opacity-40 pointer-events-none w-full flex justify-center' : 'w-full flex justify-center'} />
-        {loading && <Loader2 className="absolute h-5 w-5 animate-spin" />}
+        {nativeAndroid ? (
+          <button
+            type="button"
+            disabled={loading || !clientId}
+            onClick={nativeSignIn}
+            className="flex h-11 w-full max-w-[360px] items-center justify-center gap-3 rounded-md border border-[#747775] bg-white px-4 text-sm font-medium text-[#1f1f1f] shadow-sm transition hover:bg-[#f8fafd] disabled:pointer-events-none disabled:opacity-50"
+          >
+            <span className="flex h-5 w-5 items-center justify-center rounded-full text-base font-bold text-[#4285F4]">G</span>
+            Continue with Google
+          </button>
+        ) : (
+          <div ref={buttonRef} className={loading ? 'opacity-40 pointer-events-none w-full flex justify-center' : 'w-full flex justify-center'} />
+        )}
+        {loading && <Loader2 className="absolute right-3 h-5 w-5 animate-spin" />}
       </div>
     </AuthLayout>
   )
