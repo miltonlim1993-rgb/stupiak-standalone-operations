@@ -5,7 +5,9 @@ import '@/index.css'
 import '@/viewport.css'
 import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
+import { installNativeSessionFetch } from '@/lib/native-session'
 
+installNativeSessionFetch()
 applyTheme()
 
 if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash?')) {
