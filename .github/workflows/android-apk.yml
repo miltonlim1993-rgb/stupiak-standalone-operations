@@ -1,4 +1,4 @@
-name: Build and publish Android debug APK
+name: Build and publish signed Android release
 
 on:
   workflow_dispatch:
@@ -7,13 +7,17 @@ permissions:
   contents: write
 
 jobs:
-  apk:
+  release:
     runs-on: ubuntu-latest
     env:
-      APK_RELEASE_TAG: android-debug-latest
-      APK_FILE_NAME: stupiaks-ops-debug.apk
+      APK_RELEASE_TAG: android-release-latest
+      APK_FILE_NAME: stupiaks-ops-release.apk
+      AAB_FILE_NAME: stupiaks-ops-release.aab
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -24,38 +28,62 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - name: Validate signing secrets
+        run: |
+          test -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}"
+          test -n "${ANDROID_KEYSTORE_PASSWORD}"
+          test -n "${ANDROID_KEY_ALIAS}"
+          test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
       - name: Generate and sync Capacitor Android project
         run: npm run mobile:init
-      - name: Build installable debug APK
+      - name: Restore private release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > web/android/app/stupiaks-ops-release.jks
+          chmod 600 web/android/app/stupiaks-ops-release.jks
+      - name: Configure release signing
+        run: node scripts/configure-android-release-signing.mjs
+      - name: Build signed release APK and AAB
         run: |
           chmod +x web/android/gradlew
           cd web/android
-          ./gradlew assembleDebug
-      - name: Prepare APK file
+          ./gradlew clean assembleRelease bundleRelease
+      - name: Verify APK signature
+        run: |
+          APK_PATH="web/android/app/build/outputs/apk/release/app-release.apk"
+          APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "${APKSIGNER}"
+          "${APKSIGNER}" verify --verbose --print-certs "${APK_PATH}"
+      - name: Prepare release files
         run: |
           mkdir -p release
-          cp web/android/app/build/outputs/apk/debug/app-debug.apk "release/${APK_FILE_NAME}"
-          shasum -a 256 "release/${APK_FILE_NAME}" | tee "release/${APK_FILE_NAME}.sha256"
+          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_FILE_NAME}"
+          cp web/android/app/build/outputs/bundle/release/app-release.aab "release/${AAB_FILE_NAME}"
+          sha256sum "release/${APK_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: stupiaks-ops-debug-apk
+          name: stupiaks-ops-signed-release
           path: |
-            release/stupiaks-ops-debug.apk
-            release/stupiaks-ops-debug.apk.sha256
+            release/stupiaks-ops-release.apk
+            release/stupiaks-ops-release.aab
+            release/SHA256SUMS.txt
           if-no-files-found: error
-      - name: Publish stable download release
+      - name: Publish stable signed release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
-            "release/${APK_FILE_NAME}#Stupiak's Ops Android debug APK" \
-            "release/${APK_FILE_NAME}.sha256#SHA-256 checksum" \
-            --prerelease \
-            --title "Stupiak's Ops Android debug APK" \
-            --notes "Installable internal testing APK built from commit ${GITHUB_SHA}. This is a debug-signed package for device testing, not the final production-signed staff release."
-      - name: Show stable APK URL
-        run: echo "https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
+            "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
+            "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
+            "release/SHA256SUMS.txt#SHA-256 checksums" \
+            --title "Stupiak's Ops signed Android release" \
+            --notes "Production-signed Android release built from commit ${GITHUB_SHA}. Keep the signing keystore backed up securely; future updates must use the same signing certificate."
+      - name: Show stable release URLs
+        run: |
+          echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
+          echo "AAB: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${AAB_FILE_NAME}"
