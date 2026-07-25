@@ -71,10 +71,10 @@ export default function Layout() {
   }, [mode])
 
   return (
-    <div className={`chefops-app min-h-[100dvh] bg-muted/40 ${rootClass}`}>
+    <div className={`chefops-app h-[100dvh] overflow-hidden bg-muted/40 ${rootClass}`}>
       <AppFoundation />
       <AppUpdateBanner />
-      <div className="chefops-shell mx-auto min-h-[100dvh] w-full bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]">
+      <div className="chefops-shell mx-auto flex h-[100dvh] w-full overflow-hidden bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]">
         <aside className="chefops-sidebar hidden border-r border-border bg-background p-4">
           <div className="chefops-sidebar-brand flex items-center gap-3 px-2 py-2">
             <Logo />
@@ -89,8 +89,8 @@ export default function Layout() {
           </div>
         </aside>
 
-        <div className="chefops-content flex min-h-[100dvh] min-w-0 flex-1 flex-col">
-          <header className="chefops-app-header sticky top-0 border-b border-border bg-background/92 backdrop-blur">
+        <div className="chefops-content flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <header className="chefops-app-header sticky top-0 z-40 shrink-0 border-b border-border bg-background/92 backdrop-blur">
             <div className="flex h-14 items-center justify-between gap-3 px-4 lg:px-6">
               <div className="chefops-mobile-brand flex min-w-0 items-center gap-2.5"><Logo /><span className="truncate text-lg font-bold tracking-tight">Stupiak’s Ops</span></div>
               <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{user?.outlet_id || 'All assigned outlets'}</p></div>
@@ -101,7 +101,12 @@ export default function Layout() {
             </div>
           </header>
 
-          <main className="chefops-main-scroll min-w-0 flex-1 overflow-visible"><DataPackGate><Outlet /></DataPackGate></main>
+          <main
+            className="chefops-main-scroll min-h-0 min-w-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain"
+            style={{ WebkitOverflowScrolling: 'touch' }}
+          >
+            <DataPackGate><Outlet /></DataPackGate>
+          </main>
 
           <nav className="chefops-bottom-nav fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
             <div className="flex h-16 items-center justify-around">
