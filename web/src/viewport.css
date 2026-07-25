@@ -1,0 +1,72 @@
+/* App-shell viewport rules shared by browser, installed PWA and Capacitor. */
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}
+
+html {
+  background: hsl(var(--background));
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
+}
+
+#root {
+  position: fixed;
+  inset: 0;
+}
+
+.chefops-app,
+.chefops-shell,
+.chefops-content {
+  height: 100%;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+.chefops-app-header {
+  position: relative !important;
+  top: auto !important;
+  z-index: 60;
+  flex: 0 0 auto;
+}
+
+.chefops-main-scroll {
+  position: relative;
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-x: none;
+  overscroll-behavior-y: contain;
+  touch-action: pan-y;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-gutter: stable;
+}
+
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root,
+  .chefops-app,
+  .chefops-shell {
+    height: 100dvh;
+  }
+}
+
+@media (display-mode: standalone) {
+  html,
+  body,
+  #root {
+    overflow: hidden !important;
+  }
+}
