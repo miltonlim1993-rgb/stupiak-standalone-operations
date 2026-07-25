@@ -1,0 +1,30 @@
+{
+  "name": "chefops-standalone",
+  "private": true,
+  "version": "4.5.1",
+  "type": "module",
+  "workspaces": [
+    "web",
+    "worker"
+  ],
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "npm run dev -w web",
+    "dev:api": "npm run dev -w worker",
+    "build": "npm run build -w web && npm run check -w worker",
+    "setup:google": "node scripts/setup-google.mjs",
+    "deploy:secrets": "node scripts/push-worker-secrets.mjs",
+    "audit:base44": "node scripts/audit-base44.mjs",
+    "package:zip": "node scripts/package-project.mjs",
+    "deploy": "npm run build -w web && npm run deploy -w worker",
+    "sheets:upgrade": "node scripts/upgrade-sheet-layout.mjs",
+    "sheets:create-year": "node scripts/create-operations-year.mjs",
+    "mobile:init": "node scripts/setup-android.mjs",
+    "mobile:sync": "npm run build -w web && cd web && npx cap sync android",
+    "test:sales-template-direct": "node scripts/test-sales-template-direct.mjs",
+    "cf:render": "node scripts/render-wrangler-production.mjs",
+    "cf:deploy": "npm run build && npm run cf:render && npx wrangler deploy --config worker/wrangler.production.jsonc",
+    "mobile:open": "cd web && npx cap open android",
+    "mobile:apk:debug": "npm run mobile:sync && cd web/android && ./gradlew assembleDebug"
+  }
+}

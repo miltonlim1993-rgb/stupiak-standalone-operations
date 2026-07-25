@@ -1,0 +1,8 @@
+{
+  "appId": "com.stupiaks.ops",
+  "appName": "Stupiak's Ops",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
