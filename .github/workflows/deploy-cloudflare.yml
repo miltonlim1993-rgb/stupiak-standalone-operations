@@ -16,7 +16,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - name: Build web and Worker
+        env:
+          VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
+        run: npm run build
       - name: Render production Wrangler config
         env:
           CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
