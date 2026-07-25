@@ -26,7 +26,13 @@ export default function ScrollToTop() {
       return () => window.clearTimeout(timer);
     }
 
-    window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    const timer = window.setTimeout(() => {
+      const scroller = document.querySelector('.chefops-main-scroll');
+      scroller?.scrollTo({ top: 0, left: 0, behavior: "instant" });
+      window.scrollTo({ top: 0, left: 0, behavior: "instant" });
+    }, 0);
+
+    return () => window.clearTimeout(timer);
   }, [pathname, hash, navigationType]);
 
   return null;
