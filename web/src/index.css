@@ -1,0 +1,2409 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 3.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 3.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 3.9%;
+    --primary: 43 100% 48%;
+    --primary-foreground: 0 0% 6%;
+    --secondary: 0 0% 96.1%;
+    --secondary-foreground: 0 0% 9%;
+    --muted: 0 0% 96.1%;
+    --muted-foreground: 0 0% 45.1%;
+    --accent: 0 0% 96.1%;
+    --accent-foreground: 0 0% 9%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 89.8%;
+    --input: 0 0% 89.8%;
+    --ring: 43 100% 45%;
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+    --font-heading: ui-sans-serif, system-ui, sans-serif;
+    --font-body: ui-sans-serif, system-ui, sans-serif;
+    --font-display: ui-sans-serif, system-ui, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --sidebar-background: 0 0% 98%;
+    --sidebar-foreground: 240 5.3% 26.1%;
+    --sidebar-primary: 240 5.9% 10%;
+    --sidebar-primary-foreground: 0 0% 98%;
+    --sidebar-accent: 240 4.8% 95.9%;
+    --sidebar-accent-foreground: 240 5.9% 10%;
+    --sidebar-border: 220 13% 91%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 0 0% 3.9%;
+    --foreground: 0 0% 98%;
+    --card: 0 0% 3.9%;
+    --card-foreground: 0 0% 98%;
+    --popover: 0 0% 3.9%;
+    --popover-foreground: 0 0% 98%;
+    --primary: 43 100% 52%;
+    --primary-foreground: 0 0% 6%;
+    --secondary: 0 0% 14.9%;
+    --secondary-foreground: 0 0% 98%;
+    --muted: 0 0% 14.9%;
+    --muted-foreground: 0 0% 63.9%;
+    --accent: 0 0% 14.9%;
+    --accent-foreground: 0 0% 98%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 0 0% 14.9%;
+    --input: 0 0% 14.9%;
+    --ring: 43 100% 52%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground font-body;
+  }
+}
+
+@layer utilities {
+  .chefops-hide-scrollbar {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  .chefops-hide-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@layer components {
+  .chefops-shell { max-width: 430px; display: flex; }
+  .chefops-content { width: 100%; }
+  @media (min-width: 900px) {
+    .chefops-app:not(.chefops-force-mobile) .chefops-shell { max-width: 1480px; min-height: 100dvh; }
+    .chefops-app:not(.chefops-force-mobile) .chefops-sidebar { display: flex; width: 248px; flex-direction: column; position: sticky; top: 0; height: 100dvh; }
+    .chefops-app:not(.chefops-force-mobile) .chefops-bottom-nav { display: none; }
+    .chefops-app:not(.chefops-force-mobile) .chefops-mobile-brand { display: none; }
+    .chefops-app:not(.chefops-force-mobile) .chefops-desktop-heading { display: block; }
+    .chefops-app:not(.chefops-force-mobile) main > * { max-width: 1180px; }
+  }
+  .chefops-force-desktop .chefops-shell { max-width: 1480px; }
+  .chefops-force-desktop .chefops-sidebar { display: flex; width: 248px; flex-direction: column; position: sticky; top: 0; height: 100dvh; }
+  .chefops-force-desktop .chefops-bottom-nav { display: none; }
+  .chefops-force-desktop .chefops-mobile-brand { display: none; }
+  .chefops-force-desktop .chefops-desktop-heading { display: block; }
+  .chefops-force-mobile .chefops-shell { max-width: 430px; }
+  .chefops-force-mobile .chefops-sidebar { display: none; }
+  .chefops-force-mobile .chefops-bottom-nav { display: block; }
+}
+
+@media (min-width: 900px) {
+  .chefops-app:not(.chefops-force-mobile) main .max-w-lg,
+  .chefops-app:not(.chefops-force-mobile) main .max-w-xl,
+  .chefops-force-desktop main .max-w-lg,
+  .chefops-force-desktop main .max-w-xl { max-width: 1180px; }
+}
+
+/* v4.2 responsive shell: real mobile / tablet / desktop behavior, including
+   the manual preview modes used on a large desktop monitor. */
+@layer components {
+  html, body, #root {
+    width: 100%;
+    min-width: 0;
+    min-height: 100%;
+    overflow-x: hidden;
+  }
+
+  .chefops-app,
+  .chefops-shell,
+  .chefops-content,
+  .chefops-content main,
+  .chefops-content main > * {
+    min-width: 0;
+  }
+
+  .chefops-content main {
+    width: 100%;
+    overflow-x: clip;
+  }
+
+  .chefops-content main > * {
+    width: 100%;
+  }
+
+  .chefops-page {
+    width: 100%;
+    max-width: 1180px;
+    padding: 1rem;
+    padding-bottom: 2rem;
+  }
+
+  .chefops-bottom-nav {
+    min-height: calc(4rem + env(safe-area-inset-bottom));
+  }
+
+  /* Close Up uses component classes rather than viewport-only Tailwind
+     breakpoints, so forced mobile preview cannot inherit desktop columns. */
+  .closeup-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1rem;
+  }
+
+  .closeup-main,
+  .closeup-summary-panel {
+    min-width: 0;
+  }
+
+  .closeup-meta-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .75rem;
+  }
+
+  .closeup-denomination-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: .5rem;
+  }
+
+  .closeup-payment-grid,
+  .closeup-handover-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .75rem;
+  }
+
+  .chefops-mobile-action {
+    display: none;
+  }
+
+  .sop-step-assets,
+  .sop-general-assets {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: .75rem;
+  }
+
+  /* Auto mobile. */
+  @media (max-width: 767px) {
+    .chefops-shell {
+      max-width: 430px !important;
+    }
+
+    .chefops-sidebar {
+      display: none !important;
+    }
+
+    .chefops-bottom-nav {
+      display: block !important;
+    }
+
+    .chefops-mobile-brand {
+      display: flex !important;
+    }
+
+    .chefops-desktop-heading {
+      display: none !important;
+    }
+
+    .chefops-content main {
+      padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+
+    .chefops-content main > .mx-auto,
+    .chefops-page {
+      max-width: 100% !important;
+      padding-left: .75rem !important;
+      padding-right: .75rem !important;
+      padding-bottom: calc(5.75rem + env(safe-area-inset-bottom)) !important;
+    }
+
+    .chefops-mobile-action {
+      position: sticky;
+      bottom: calc(4.25rem + env(safe-area-inset-bottom));
+      z-index: 40;
+      display: block;
+      grid-column: 1 / -1;
+      margin: 0 -.25rem;
+      border-top: 1px solid hsl(var(--border));
+      background: hsl(var(--background) / .96);
+      padding: .65rem .25rem;
+      padding-bottom: max(.65rem, env(safe-area-inset-bottom));
+      backdrop-filter: blur(10px);
+    }
+
+    .closeup-desktop-submit {
+      display: none !important;
+    }
+
+    .chefops-drawer-content {
+      bottom: 0 !important;
+      left: 50% !important;
+      right: auto !important;
+      width: 100% !important;
+      max-width: 430px !important;
+      height: min(92dvh, 860px) !important;
+      max-height: 92dvh !important;
+      transform: translateX(-50%) !important;
+      border-radius: 24px 24px 0 0 !important;
+      border-bottom-width: 0 !important;
+    }
+  }
+
+  /* Auto tablet: compact icon rail and a single readable work column. */
+  @media (min-width: 768px) and (max-width: 1199px) {
+    .chefops-app.chefops-mode-auto .chefops-shell {
+      display: flex;
+      max-width: 1040px !important;
+      min-height: 100dvh;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-sidebar {
+      position: sticky;
+      top: 0;
+      display: flex !important;
+      width: 84px !important;
+      height: 100dvh;
+      flex-direction: column;
+      padding-left: .65rem;
+      padding-right: .65rem;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-sidebar-copy,
+    .chefops-app.chefops-mode-auto .chefops-sidebar-label,
+    .chefops-app.chefops-mode-auto .chefops-sidebar-user-copy {
+      display: none !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-sidebar-brand,
+    .chefops-app.chefops-mode-auto .chefops-sidebar-link {
+      justify-content: center;
+      padding-left: .6rem;
+      padding-right: .6rem;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-sidebar-user {
+      padding: .65rem;
+      text-align: center;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-sidebar-online {
+      margin-top: 0;
+      font-size: 0;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-sidebar-online::first-letter {
+      font-size: .75rem;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-bottom-nav,
+    .chefops-app.chefops-mode-auto .chefops-mobile-brand {
+      display: none !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-desktop-heading {
+      display: block !important;
+    }
+
+    .chefops-page {
+      max-width: 880px;
+      padding: 1.25rem;
+    }
+
+    .closeup-meta-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .closeup-denomination-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .closeup-payment-grid,
+    .sop-step-assets,
+    .sop-general-assets {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .chefops-drawer-content {
+      top: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      left: auto !important;
+      width: min(680px, calc(100vw - 84px)) !important;
+      max-width: 680px !important;
+      height: 100dvh !important;
+      max-height: none !important;
+      transform: none !important;
+      border-radius: 24px 0 0 24px !important;
+      border-bottom-width: 1px !important;
+    }
+
+    .chefops-drawer-handle {
+      display: none;
+    }
+  }
+
+  /* Auto desktop. */
+  @media (min-width: 1200px) {
+    .chefops-app.chefops-mode-auto .chefops-shell {
+      display: flex;
+      max-width: min(1480px, 100vw) !important;
+      min-height: 100dvh;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-sidebar {
+      position: sticky;
+      top: 0;
+      display: flex !important;
+      width: 248px !important;
+      height: 100dvh;
+      flex-direction: column;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-bottom-nav,
+    .chefops-app.chefops-mode-auto .chefops-mobile-brand {
+      display: none !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-desktop-heading {
+      display: block !important;
+    }
+
+    .chefops-app.chefops-mode-auto main > * {
+      max-width: min(1180px, calc(100vw - 296px)) !important;
+    }
+
+    .closeup-layout {
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr);
+    }
+
+    .closeup-meta-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .closeup-denomination-grid {
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+
+    .closeup-payment-grid,
+    .closeup-handover-grid,
+    .sop-step-assets,
+    .sop-general-assets {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .closeup-summary-panel {
+      position: sticky;
+      top: 5rem;
+      align-self: start;
+    }
+
+    .chefops-drawer-content {
+      top: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      left: auto !important;
+      width: min(760px, calc(100vw - 248px)) !important;
+      max-width: 760px !important;
+      height: 100dvh !important;
+      max-height: none !important;
+      transform: none !important;
+      border-radius: 24px 0 0 24px !important;
+      border-bottom-width: 1px !important;
+    }
+
+    .chefops-drawer-handle {
+      display: none;
+    }
+  }
+
+  /* Manual desktop preview. */
+  .chefops-force-desktop .chefops-shell {
+    display: flex !important;
+    max-width: min(1480px, 100vw) !important;
+  }
+
+  .chefops-force-desktop .chefops-sidebar {
+    position: sticky !important;
+    top: 0;
+    display: flex !important;
+    width: 248px !important;
+    height: 100dvh !important;
+    flex-direction: column;
+  }
+
+  .chefops-force-desktop .chefops-bottom-nav,
+  .chefops-force-desktop .chefops-mobile-brand {
+    display: none !important;
+  }
+
+  .chefops-force-desktop .chefops-desktop-heading {
+    display: block !important;
+  }
+
+  .chefops-force-desktop main > * {
+    max-width: min(1180px, calc(100vw - 296px)) !important;
+  }
+
+  .chefops-force-desktop .closeup-layout {
+    grid-template-columns: minmax(0, 1.25fr) minmax(320px, .75fr) !important;
+  }
+
+  .chefops-force-desktop .closeup-meta-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-force-desktop .closeup-denomination-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-force-desktop .closeup-payment-grid,
+  .chefops-force-desktop .closeup-handover-grid,
+  .chefops-force-desktop .sop-step-assets,
+  .chefops-force-desktop .sop-general-assets {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-force-desktop .closeup-summary-panel {
+    position: sticky !important;
+    top: 5rem !important;
+    align-self: start !important;
+  }
+
+  /* Manual tablet preview. */
+  .chefops-force-tablet .chefops-shell {
+    display: flex !important;
+    max-width: min(1040px, 100vw) !important;
+  }
+
+  .chefops-force-tablet .chefops-sidebar {
+    position: sticky !important;
+    top: 0;
+    display: flex !important;
+    width: 84px !important;
+    height: 100dvh !important;
+    flex-direction: column;
+    padding-left: .65rem !important;
+    padding-right: .65rem !important;
+  }
+
+  .chefops-force-tablet .chefops-sidebar-copy,
+  .chefops-force-tablet .chefops-sidebar-label,
+  .chefops-force-tablet .chefops-sidebar-user-copy {
+    display: none !important;
+  }
+
+  .chefops-force-tablet .chefops-sidebar-brand,
+  .chefops-force-tablet .chefops-sidebar-link {
+    justify-content: center !important;
+    padding-left: .6rem !important;
+    padding-right: .6rem !important;
+  }
+
+  .chefops-force-tablet .chefops-sidebar-user {
+    padding: .65rem !important;
+    text-align: center;
+  }
+
+  .chefops-force-tablet .chefops-sidebar-online {
+    margin-top: 0 !important;
+    font-size: 0 !important;
+  }
+
+  .chefops-force-tablet .chefops-sidebar-online::first-letter {
+    font-size: .75rem !important;
+  }
+
+  .chefops-force-tablet .chefops-bottom-nav,
+  .chefops-force-tablet .chefops-mobile-brand {
+    display: none !important;
+  }
+
+  .chefops-force-tablet .chefops-desktop-heading {
+    display: block !important;
+  }
+
+  .chefops-force-tablet main > * {
+    max-width: min(880px, calc(100vw - 112px)) !important;
+  }
+
+  .chefops-force-tablet .closeup-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .chefops-force-tablet .closeup-meta-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-force-tablet .closeup-denomination-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-force-tablet .closeup-payment-grid,
+  .chefops-force-tablet .sop-step-assets,
+  .chefops-force-tablet .sop-general-assets {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-force-tablet .closeup-summary-panel {
+    position: static !important;
+  }
+
+  /* Manual mobile preview on a wide browser. This block intentionally
+     neutralizes the few Tailwind viewport breakpoints used across pages. */
+  .chefops-force-mobile .chefops-shell {
+    display: flex !important;
+    max-width: 430px !important;
+  }
+
+  .chefops-force-mobile .chefops-sidebar {
+    display: none !important;
+  }
+
+  .chefops-force-mobile .chefops-bottom-nav {
+    display: block !important;
+  }
+
+  .chefops-force-mobile .chefops-mobile-brand {
+    display: flex !important;
+  }
+
+  .chefops-force-mobile .chefops-desktop-heading {
+    display: none !important;
+  }
+
+  .chefops-force-mobile main {
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .chefops-force-mobile main > .mx-auto,
+  .chefops-force-mobile .chefops-page {
+    max-width: 100% !important;
+    padding-left: .75rem !important;
+    padding-right: .75rem !important;
+    padding-bottom: calc(5.75rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .chefops-force-mobile main [class*="lg:grid-cols-"],
+  .chefops-force-mobile main [class*="md:grid-cols-"],
+  .chefops-force-mobile main [class*="sm:grid-cols-3"],
+  .chefops-force-mobile main [class*="sm:grid-cols-4"],
+  .chefops-force-mobile main [class*="sm:grid-cols-5"],
+  .chefops-force-mobile main [class*="xl:grid-cols-"] {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .chefops-force-mobile main [class*="sm:grid-cols-2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-force-mobile main [class*="lg:sticky"] {
+    position: static !important;
+  }
+
+  .chefops-force-mobile main [class*="sm:flex-row"] {
+    flex-direction: column !important;
+  }
+
+  .chefops-force-mobile .closeup-layout,
+  .chefops-force-mobile .closeup-meta-grid,
+  .chefops-force-mobile .closeup-payment-grid,
+  .chefops-force-mobile .closeup-handover-grid,
+  .chefops-force-mobile .sop-step-assets,
+  .chefops-force-mobile .sop-general-assets {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .chefops-force-mobile .closeup-denomination-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-force-mobile .closeup-summary-panel {
+    position: static !important;
+  }
+
+  .chefops-force-mobile .chefops-mobile-action {
+    position: sticky;
+    bottom: calc(4.25rem + env(safe-area-inset-bottom));
+    z-index: 40;
+    display: block !important;
+    grid-column: 1 / -1;
+    margin: 0 -.25rem;
+    border-top: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / .96);
+    padding: .65rem .25rem;
+    padding-bottom: max(.65rem, env(safe-area-inset-bottom));
+    backdrop-filter: blur(10px);
+  }
+
+  .chefops-force-mobile .closeup-desktop-submit {
+    display: none !important;
+  }
+
+  /* Portal drawers cannot inherit the app wrapper class, so manual mode is
+     also mirrored onto <html data-chefops-mode>. */
+  html[data-chefops-mode="desktop"] .chefops-drawer-content {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    width: min(760px, calc(100vw - 248px)) !important;
+    max-width: 760px !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    transform: none !important;
+    border-radius: 24px 0 0 24px !important;
+    border-bottom-width: 1px !important;
+  }
+
+  html[data-chefops-mode="tablet"] .chefops-drawer-content {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    width: min(680px, calc(100vw - 84px)) !important;
+    max-width: 680px !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    transform: none !important;
+    border-radius: 24px 0 0 24px !important;
+    border-bottom-width: 1px !important;
+  }
+
+  html[data-chefops-mode="desktop"] .chefops-drawer-handle,
+  html[data-chefops-mode="tablet"] .chefops-drawer-handle {
+    display: none !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-drawer-content {
+    top: auto !important;
+    right: auto !important;
+    bottom: 0 !important;
+    left: 50% !important;
+    width: 100% !important;
+    max-width: 430px !important;
+    height: min(92dvh, 860px) !important;
+    max-height: 92dvh !important;
+    transform: translateX(-50%) !important;
+    border-radius: 24px 24px 0 0 !important;
+    border-bottom-width: 0 !important;
+  }
+}
+
+/* v4.2 reusable form sheets: mobile bottom sheet, tablet/desktop side panel. */
+@layer components {
+  .chefops-mobile-sheet-panel {
+    height: auto;
+    min-height: min(280px, 70dvh);
+  }
+
+  .chefops-mobile-sheet-body > :last-child {
+    margin-bottom: max(.5rem, env(safe-area-inset-bottom));
+  }
+
+  @media (min-width: 768px) {
+    html:not([data-chefops-mode="mobile"]) .chefops-mobile-sheet-panel {
+      top: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      left: auto !important;
+      width: min(620px, calc(100vw - 84px)) !important;
+      max-width: 620px !important;
+      height: 100dvh !important;
+      max-height: none !important;
+      min-height: 100dvh !important;
+      transform: none !important;
+      border-radius: 24px 0 0 24px !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-mobile-sheet-handle {
+      display: none !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-mobile-sheet-header {
+      padding-top: 1rem;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-mobile-sheet-body {
+      padding: 1rem 1.25rem 2rem;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    html:not([data-chefops-mode="mobile"]):not([data-chefops-mode="tablet"]) .chefops-mobile-sheet-panel {
+      width: min(720px, calc(100vw - 248px)) !important;
+      max-width: 720px !important;
+    }
+  }
+
+  html[data-chefops-mode="tablet"] .chefops-mobile-sheet-panel,
+  html[data-chefops-mode="desktop"] .chefops-mobile-sheet-panel {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    min-height: 100dvh !important;
+    transform: none !important;
+    border-radius: 24px 0 0 24px !important;
+  }
+
+  html[data-chefops-mode="tablet"] .chefops-mobile-sheet-panel {
+    width: min(620px, calc(100vw - 84px)) !important;
+    max-width: 620px !important;
+  }
+
+  html[data-chefops-mode="desktop"] .chefops-mobile-sheet-panel {
+    width: min(720px, calc(100vw - 248px)) !important;
+    max-width: 720px !important;
+  }
+
+  html[data-chefops-mode="tablet"] .chefops-mobile-sheet-handle,
+  html[data-chefops-mode="desktop"] .chefops-mobile-sheet-handle {
+    display: none !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-mobile-sheet-panel {
+    right: auto !important;
+    bottom: 0 !important;
+    left: 50% !important;
+    width: 100% !important;
+    max-width: 430px !important;
+    max-height: 94dvh !important;
+    transform: translateX(-50%) !important;
+    border-radius: 24px 24px 0 0 !important;
+  }
+
+  @media (max-width: 767px) {
+    .chefops-mobile-sheet-panel {
+      max-height: 94dvh !important;
+    }
+
+    .chefops-mobile-sheet-body {
+      padding-left: .75rem !important;
+      padding-right: .75rem !important;
+      padding-bottom: calc(1.25rem + env(safe-area-inset-bottom)) !important;
+      scroll-padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+
+    .chefops-mobile-sheet-body form,
+    .chefops-drawer-content form {
+      padding-bottom: calc(1.5rem + env(safe-area-inset-bottom)) !important;
+    }
+  }
+}
+
+/* v4.2 page canvas: every route gets a stable centered viewport. */
+@layer components {
+  .chefops-content main > * {
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  @media (min-width: 768px) and (max-width: 1199px) {
+    .chefops-app.chefops-mode-auto main > * {
+      width: 100% !important;
+      max-width: min(880px, calc(100vw - 112px)) !important;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    .chefops-app.chefops-mode-auto main > * {
+      width: 100% !important;
+    }
+  }
+
+  .chefops-force-tablet main > *,
+  .chefops-force-desktop main > * {
+    width: 100% !important;
+  }
+
+  @media (max-width: 767px) {
+    .chefops-content main > * {
+      width: 100% !important;
+      min-width: 0 !important;
+    }
+
+    .chefops-content main button,
+    .chefops-content main input,
+    .chefops-content main select,
+    .chefops-content main textarea {
+      max-width: 100%;
+    }
+  }
+}
+
+
+/* v4.2.1 — full-width work canvas + step-image lightbox.
+   These rules intentionally come last so old desktop width caps cannot win. */
+@layer components {
+  .sop-asset-tile {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+  }
+
+  .sop-asset-media-frame {
+    min-height: 180px;
+  }
+
+  .sop-asset-image {
+    width: 100%;
+    height: auto;
+    max-height: min(520px, 64dvh);
+    object-fit: contain;
+  }
+
+  .sop-lightbox-control {
+    display: inline-flex;
+    height: 2.25rem;
+    width: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    border-radius: .75rem;
+    border: 1px solid rgb(255 255 255 / .2);
+    background: rgb(255 255 255 / .1);
+    color: white;
+    transition: background-color .15s ease, transform .15s ease;
+  }
+
+  .sop-lightbox-control:hover {
+    background: rgb(255 255 255 / .2);
+  }
+
+  .sop-lightbox-control:active {
+    transform: scale(.96);
+  }
+
+  .sop-lightbox-stage {
+    touch-action: pan-x pan-y;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sop-lightbox-image {
+    height: auto;
+    min-width: 0;
+    transition: width .16s ease;
+  }
+
+  /* Real desktop: use the browser canvas, not a centred 1180/1480px island. */
+  @media (min-width: 1200px) {
+    .chefops-app.chefops-mode-auto .chefops-shell,
+    .chefops-force-desktop .chefops-shell,
+    html[data-chefops-mode="desktop"] body .chefops-shell {
+      width: 100vw !important;
+      max-width: none !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+      box-shadow: none !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-content main > *,
+    .chefops-force-desktop .chefops-content main > *,
+    html[data-chefops-mode="desktop"] body .chefops-content main > * {
+      width: 100% !important;
+      max-width: none !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-page,
+    .chefops-force-desktop .chefops-page,
+    html[data-chefops-mode="desktop"] body .chefops-page {
+      width: 100% !important;
+      max-width: none !important;
+      padding-left: clamp(1.25rem, 2vw, 2.25rem) !important;
+      padding-right: clamp(1.25rem, 2vw, 2.25rem) !important;
+    }
+
+    .chefops-app.chefops-mode-auto .closeup-layout,
+    .chefops-force-desktop .closeup-layout,
+    html[data-chefops-mode="desktop"] body .closeup-layout {
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 410px) !important;
+      column-gap: clamp(1rem, 1.5vw, 1.5rem) !important;
+    }
+
+    .chefops-app.chefops-mode-auto .closeup-main,
+    .chefops-force-desktop .closeup-main,
+    html[data-chefops-mode="desktop"] body .closeup-main {
+      width: 100%;
+      max-width: none;
+    }
+
+    .chefops-app.chefops-mode-auto .closeup-handover-grid,
+    .chefops-force-desktop .closeup-handover-grid,
+    html[data-chefops-mode="desktop"] body .closeup-handover-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    .chefops-app.chefops-mode-auto .sop-step-assets,
+    .chefops-force-desktop .sop-step-assets,
+    html[data-chefops-mode="desktop"] .sop-step-assets {
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)) !important;
+    }
+  }
+
+  /* Tablet also uses the available canvas after the icon rail. */
+  @media (min-width: 768px) and (max-width: 1199px) {
+    .chefops-app.chefops-mode-auto .chefops-shell,
+    .chefops-force-tablet .chefops-shell,
+    html[data-chefops-mode="tablet"] body .chefops-shell {
+      width: 100vw !important;
+      max-width: none !important;
+      margin-left: 0 !important;
+      margin-right: 0 !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-content main > *,
+    .chefops-force-tablet .chefops-content main > *,
+    html[data-chefops-mode="tablet"] body .chefops-content main > * {
+      width: 100% !important;
+      max-width: none !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-page,
+    .chefops-force-tablet .chefops-page,
+    html[data-chefops-mode="tablet"] body .chefops-page {
+      width: 100% !important;
+      max-width: none !important;
+    }
+  }
+
+  /* Mirror mobile mode onto <html> too. This prevents wide-browser media
+     rules from forcing desktop columns inside the 430px mobile preview. */
+  html[data-chefops-mode="mobile"] body .chefops-shell {
+    width: 100% !important;
+    max-width: 430px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  html[data-chefops-mode="mobile"] .closeup-layout,
+  html[data-chefops-mode="mobile"] .closeup-meta-grid,
+  html[data-chefops-mode="mobile"] .closeup-payment-grid,
+  html[data-chefops-mode="mobile"] .closeup-handover-grid,
+  html[data-chefops-mode="mobile"] .sop-step-assets,
+  html[data-chefops-mode="mobile"] .sop-general-assets {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html[data-chefops-mode="mobile"] .closeup-summary-panel {
+    position: static !important;
+    width: 100% !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-content main > *,
+  html[data-chefops-mode="mobile"] .chefops-page {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  html[data-chefops-mode="mobile"] .sop-asset-image {
+    max-height: 420px;
+  }
+
+  @media (max-width: 767px) {
+    .sop-asset-image {
+      max-height: 420px;
+    }
+  }
+}
+
+/* v4.3.0 — independent desktop/tablet rails, full report canvas and safe mobile actions. */
+@layer components {
+  /* A desktop/tablet app owns the viewport. The sidebar and the work canvas
+     scroll independently, so a long roster never pushes the navigation away. */
+  @media (min-width: 768px) {
+    .chefops-app.chefops-mode-auto,
+    .chefops-force-desktop,
+    .chefops-force-tablet {
+      height: 100dvh !important;
+      min-height: 100dvh !important;
+      overflow: hidden !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-shell,
+    .chefops-force-desktop .chefops-shell,
+    .chefops-force-tablet .chefops-shell {
+      height: 100dvh !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-sidebar,
+    .chefops-force-desktop .chefops-sidebar,
+    .chefops-force-tablet .chefops-sidebar {
+      position: relative !important;
+      top: auto !important;
+      height: 100dvh !important;
+      min-height: 0 !important;
+      flex: 0 0 auto !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+      scrollbar-gutter: stable;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-content,
+    .chefops-force-desktop .chefops-content,
+    .chefops-force-tablet .chefops-content {
+      height: 100dvh !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-content > header,
+    .chefops-force-desktop .chefops-content > header,
+    .chefops-force-tablet .chefops-content > header {
+      position: relative !important;
+      top: auto !important;
+      flex: 0 0 auto;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-content > main,
+    .chefops-force-desktop .chefops-content > main,
+    .chefops-force-tablet .chefops-content > main {
+      min-height: 0 !important;
+      overflow-x: clip !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain;
+      scroll-behavior: smooth;
+      scrollbar-gutter: stable;
+      scroll-padding-top: 1rem;
+      scroll-padding-bottom: 2rem;
+    }
+  }
+
+  /* Manual desktop/tablet modes also remain true app shells on a narrow
+     browser, while manual mobile always returns to normal document scrolling. */
+  .chefops-force-desktop,
+  .chefops-force-tablet {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  .chefops-force-desktop .chefops-shell,
+  .chefops-force-tablet .chefops-shell {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .chefops-force-desktop .chefops-sidebar,
+  .chefops-force-tablet .chefops-sidebar {
+    position: relative !important;
+    top: auto !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+  }
+
+  .chefops-force-desktop .chefops-content,
+  .chefops-force-tablet .chefops-content {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .chefops-force-desktop .chefops-content > main,
+  .chefops-force-tablet .chefops-content > main {
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .chefops-force-mobile {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+  }
+
+  .chefops-force-mobile .chefops-shell,
+  html[data-chefops-mode="mobile"] body .chefops-shell,
+  .chefops-force-mobile .chefops-content {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+  }
+
+  .chefops-force-mobile .chefops-content > main,
+  html[data-chefops-mode="mobile"] body .chefops-content > main {
+    overflow: visible !important;
+  }
+
+  /* Manager pages are workspaces, not 430px phone forms on desktop. */
+  .dashboard-page,
+  .reports-page,
+  .ops-control-page,
+  .install-page {
+    width: 100% !important;
+  }
+
+  @media (min-width: 768px) {
+    .dashboard-page,
+    .reports-page,
+    .ops-control-page,
+    .install-page {
+      max-width: none !important;
+      padding: clamp(1rem, 1.8vw, 2rem) !important;
+      padding-bottom: 2.5rem !important;
+    }
+  }
+
+  /* Mobile pages and form drawers reserve enough space for the bottom nav and
+     the on-screen keyboard so their final action cannot disappear. */
+  @media (max-width: 767px) {
+    .chefops-content main,
+    .chefops-content main > *,
+    .chefops-page {
+      scroll-padding-bottom: calc(7rem + env(safe-area-inset-bottom));
+    }
+
+    .chefops-page,
+    .chefops-content main > .mx-auto {
+      padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important;
+    }
+
+    .chefops-page form:last-child,
+    .chefops-mobile-sheet-body form,
+    .chefops-drawer-content form {
+      padding-bottom: calc(2rem + env(safe-area-inset-bottom)) !important;
+    }
+
+    .chefops-page button:last-child,
+    .chefops-mobile-sheet-body button:last-child,
+    .chefops-drawer-content button:last-child {
+      scroll-margin-bottom: calc(7rem + env(safe-area-inset-bottom));
+    }
+  }
+}
+
+
+/* v4.3.1 — local QA hotfix: stock sticky tools, responsive label sheets,
+   mode-aware More shortcuts and safe mobile actions. */
+@layer components {
+  /* The stock page scrolls inside <main> on desktop/tablet. Its search and
+     section toolbar therefore sticks to the top of that scroller, not the
+     browser document. */
+  .chefops-stock-toolbar {
+    top: 0 !important;
+    z-index: 48 !important;
+    isolation: isolate;
+  }
+
+  @media (max-width: 767px) {
+    .chefops-stock-toolbar {
+      top: 3.5rem !important;
+      margin-left: -.75rem !important;
+      margin-right: -.75rem !important;
+      padding-left: .75rem !important;
+      padding-right: .75rem !important;
+    }
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-stock-toolbar,
+  .chefops-force-mobile .chefops-stock-toolbar {
+    top: 3.5rem !important;
+  }
+
+  /* Only show shortcuts in More when the active navigation is the compact
+     mobile bottom bar. Desktop/tablet already expose these routes directly. */
+  .chefops-more-mobile-only { display: none !important; }
+  @media (max-width: 767px) {
+    .chefops-more-mobile-only { display: block !important; }
+  }
+  html[data-chefops-mode="mobile"] .chefops-more-mobile-only,
+  .chefops-force-mobile .chefops-more-mobile-only { display: block !important; }
+  html[data-chefops-mode="desktop"] .chefops-more-mobile-only,
+  html[data-chefops-mode="tablet"] .chefops-more-mobile-only,
+  .chefops-force-desktop .chefops-more-mobile-only,
+  .chefops-force-tablet .chefops-more-mobile-only { display: none !important; }
+
+  /* Label create/view now use the shared responsive MobileSheet. Avoid a
+     second scroll container and keep the final action inside the visible body. */
+  .labels-drawer-body,
+  .labels-create-form,
+  .labels-create-fields { min-width: 0; width: 100%; }
+  .labels-create-form { padding-bottom: 0 !important; }
+  .labels-create-actions { scroll-margin-bottom: 1rem; }
+
+  @media (min-width: 768px) {
+    .labels-page .chefops-mobile-sheet-panel,
+    .labels-page + .chefops-mobile-sheet .chefops-mobile-sheet-panel {
+      width: min(720px, calc(100vw - 248px)) !important;
+      max-width: 720px !important;
+    }
+  }
+
+  @media (max-width: 767px) {
+    .labels-page,
+    .receipts-page,
+    .attendance-page,
+    .more-page,
+    .chefops-stock-page {
+      padding-left: .75rem !important;
+      padding-right: .75rem !important;
+      padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important;
+    }
+
+    .labels-page .grid-cols-\[1fr_auto_auto\],
+    html[data-chefops-mode="mobile"] .labels-page .grid-cols-\[1fr_auto_auto\] {
+      grid-template-columns: minmax(0, 1fr) auto auto !important;
+    }
+
+    .chefops-mobile-sheet-body {
+      padding: .75rem .75rem calc(1.5rem + env(safe-area-inset-bottom)) !important;
+    }
+
+    .labels-create-actions {
+      bottom: calc(-.75rem - env(safe-area-inset-bottom));
+      margin-left: -.25rem;
+      margin-right: -.25rem;
+      padding-bottom: calc(1rem + env(safe-area-inset-bottom));
+    }
+  }
+
+  html[data-chefops-mode="mobile"] .labels-page,
+  html[data-chefops-mode="mobile"] .receipts-page,
+  html[data-chefops-mode="mobile"] .attendance-page,
+  html[data-chefops-mode="mobile"] .more-page,
+  html[data-chefops-mode="mobile"] .chefops-stock-page,
+  .chefops-force-mobile .labels-page,
+  .chefops-force-mobile .receipts-page,
+  .chefops-force-mobile .attendance-page,
+  .chefops-force-mobile .more-page,
+  .chefops-force-mobile .chefops-stock-page {
+    padding-left: .75rem !important;
+    padding-right: .75rem !important;
+    padding-bottom: calc(7rem + env(safe-area-inset-bottom)) !important;
+  }
+}
+
+/* v4.4.0 — position language, KPI hierarchy and reliable mobile stock toolbar. */
+@layer components {
+  .chefops-position-badge {
+    --position-color: #64748b;
+    position: relative;
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: .45rem;
+    overflow: hidden;
+    border: 1px solid color-mix(in srgb, var(--position-color) 38%, transparent);
+    border-radius: .75rem;
+    padding: .4rem .65rem;
+    color: color-mix(in srgb, var(--position-color) 82%, #111827);
+    background-color: color-mix(in srgb, var(--position-color) 11%, white);
+    isolation: isolate;
+  }
+  .chefops-position-badge::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    opacity: .09;
+    background-color: var(--position-color);
+  }
+  .chefops-position-badge[data-pattern="coins"]::before { background-image: radial-gradient(circle at 25% 35%, currentColor 0 1.5px, transparent 1.8px), radial-gradient(circle at 72% 68%, currentColor 0 2px, transparent 2.3px); background-size: 16px 16px; }
+  .chefops-position-badge[data-pattern="counter"]::before { background-image: linear-gradient(90deg, currentColor 1px, transparent 1px), linear-gradient(currentColor 1px, transparent 1px); background-size: 13px 13px; }
+  .chefops-position-badge[data-pattern="bubbles"]::before { background-image: radial-gradient(circle, currentColor 0 1.3px, transparent 1.7px); background-size: 10px 10px; }
+  .chefops-position-badge[data-pattern="grill"]::before { background-image: repeating-linear-gradient(0deg, currentColor 0 1px, transparent 1px 6px); }
+  .chefops-position-badge[data-pattern="burst"]::before { background-image: repeating-conic-gradient(from 0deg, currentColor 0deg 8deg, transparent 8deg 24deg); }
+  .chefops-position-badge[data-pattern="diagonal"]::before { background-image: repeating-linear-gradient(135deg, currentColor 0 1px, transparent 1px 7px); }
+  .chefops-position-badge[data-pattern="boxes"]::before { background-image: linear-gradient(30deg, currentColor 12%, transparent 12.5%, transparent 87%, currentColor 87.5%), linear-gradient(150deg, currentColor 12%, transparent 12.5%, transparent 87%, currentColor 87.5%); background-size: 16px 28px; }
+  .chefops-position-badge[data-pattern="open"]::before { background-image: repeating-linear-gradient(90deg, currentColor 0 2px, transparent 2px 9px); }
+  .chefops-position-badge.is-compact { width: 2.3rem; height: 2.3rem; justify-content: center; padding: 0; flex: 0 0 2.3rem; }
+  .chefops-position-code { font-size: .7rem; line-height: 1; font-weight: 800; letter-spacing: .04em; }
+  .chefops-position-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .72rem; font-weight: 650; }
+
+  .chefops-score-strip { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .5rem; border-radius: 1rem; background: hsl(var(--muted) / .55); padding: .5rem; }
+  .chefops-score-metric { min-width: 0; border-radius: .75rem; background: hsl(var(--background) / .82); padding: .75rem; text-align: center; }
+  .chefops-performance-chart { height: 17rem; }
+  .chefops-performance-legend { display: flex; align-items: center; justify-content: center; gap: 1.25rem; flex-wrap: wrap; padding-top: .65rem; color: hsl(var(--muted-foreground)); font-size: .72rem; }
+  .chefops-performance-legend span { display: inline-flex; align-items: center; gap: .4rem; white-space: nowrap; }
+  .chefops-performance-legend i { display: inline-block; width: .7rem; height: .7rem; border-radius: .2rem; }
+  @media (min-width: 768px) {
+    .chefops-score-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+  @media (max-width: 767px) {
+    .chefops-performance-card { padding: 1rem !important; }
+    .chefops-performance-chart { height: 15rem; }
+    .chefops-score-metric { padding: .65rem .4rem; }
+  }
+
+  .chefops-stock-page { overflow: visible !important; contain: none !important; transform: none !important; }
+  .chefops-stock-toolbar {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    align-self: stretch;
+    transform: translateZ(0);
+    will-change: transform;
+  }
+  @media (max-width: 767px) {
+    body, #root, .chefops-app, .chefops-shell, .chefops-content, .chefops-content > main,
+    .chefops-content main > *, .chefops-stock-page {
+      overflow-x: clip !important;
+      transform: none !important;
+      contain: none !important;
+    }
+    .chefops-stock-toolbar {
+      top: calc(3.5rem + env(safe-area-inset-top)) !important;
+      z-index: 55 !important;
+      box-shadow: 0 8px 18px rgba(15, 23, 42, .08);
+    }
+  }
+  html[data-chefops-mode="mobile"] .chefops-stock-toolbar,
+  .chefops-force-mobile .chefops-stock-toolbar { top: calc(3.5rem + env(safe-area-inset-top)) !important; }
+}
+
+
+/* v4.4.1 — compact mobile hierarchy and sticky operational controls. */
+@layer components {
+  .chefops-sticky-tools {
+    position: -webkit-sticky;
+    position: sticky;
+    top: 0;
+    z-index: 46;
+    margin-left: -1rem;
+    margin-right: -1rem;
+    border-top: 1px solid hsl(var(--border));
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(var(--background) / .97);
+    padding: .7rem 1rem;
+    box-shadow: 0 8px 18px rgba(15, 23, 42, .06);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transform: none !important;
+    will-change: auto !important;
+    isolation: isolate;
+  }
+
+  .chefops-stock-toolbar {
+    transform: none !important;
+    will-change: auto !important;
+  }
+
+  .chefops-dashboard-kpis,
+  .chefops-performance-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .chefops-dashboard-kpi {
+    min-height: 0;
+  }
+
+  .chefops-team-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chefops-performance-heading {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: .75rem;
+  }
+
+  .chefops-performance-kpis > div,
+  .chefops-score-metric {
+    display: flex;
+    min-height: 4.25rem;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .chefops-performance-legend {
+    min-height: 2rem;
+    line-height: 1.2;
+  }
+
+  .closeup-note-before-save textarea {
+    resize: vertical;
+  }
+
+  @media (min-width: 768px) {
+    .chefops-team-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .chefops-dashboard-kpis,
+    .chefops-performance-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+  }
+
+  @media (min-width: 1280px) {
+    .chefops-team-list { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  }
+
+  @media (max-width: 767px) {
+    .chefops-sticky-tools {
+      top: calc(3.5rem + env(safe-area-inset-top));
+      margin-left: -.75rem;
+      margin-right: -.75rem;
+      padding: .6rem .75rem;
+    }
+
+    .chefops-team-list {
+      display: grid !important;
+      grid-template-columns: minmax(0, 1fr) !important;
+      gap: .4rem !important;
+    }
+
+    .chefops-team-row {
+      min-height: 2.75rem;
+      border: 1px solid hsl(var(--border) / .65);
+      padding: .45rem .6rem !important;
+    }
+
+    .chefops-dashboard-kpis {
+      gap: .55rem !important;
+    }
+
+    .chefops-dashboard-kpi {
+      border-radius: .9rem !important;
+      padding: .75rem !important;
+    }
+
+    .chefops-dashboard-kpi > span {
+      width: 2rem !important;
+      height: 2rem !important;
+      border-radius: .65rem !important;
+    }
+
+    .chefops-dashboard-kpi > p:nth-of-type(1) {
+      margin-top: .55rem !important;
+      font-size: 1.1rem !important;
+      line-height: 1.25 !important;
+    }
+
+    .chefops-dashboard-kpi > p:nth-of-type(2) {
+      margin-top: .15rem !important;
+      font-size: .68rem !important;
+    }
+
+    .chefops-performance-card {
+      padding: .8rem !important;
+    }
+
+    .chefops-performance-kpis {
+      gap: .45rem !important;
+    }
+
+    .chefops-performance-kpis > div,
+    .chefops-score-metric {
+      min-height: 3.8rem;
+      padding: .45rem .3rem !important;
+    }
+
+    .chefops-score-strip {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+      gap: .4rem !important;
+      padding: .4rem !important;
+    }
+
+    .chefops-score-metric p:first-child {
+      font-size: 1rem !important;
+      line-height: 1.2 !important;
+    }
+
+    .chefops-score-metric p:last-child {
+      margin-top: .15rem;
+      font-size: .64rem !important;
+      line-height: 1.15;
+      text-align: center;
+    }
+
+    .chefops-performance-chart {
+      height: 12.75rem !important;
+      padding-top: .75rem !important;
+      margin-top: .9rem !important;
+    }
+
+    .chefops-performance-legend {
+      justify-content: center !important;
+      gap: .8rem !important;
+      padding-top: .45rem !important;
+      font-size: .65rem !important;
+    }
+
+    .chefops-labels-toolbar > div:first-child h1,
+    .chefops-issues-toolbar + * h1 {
+      line-height: 1.15;
+    }
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-sticky-tools,
+  .chefops-force-mobile .chefops-sticky-tools {
+    top: calc(3.5rem + env(safe-area-inset-top)) !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-dashboard-kpis,
+  html[data-chefops-mode="mobile"] .chefops-performance-kpis,
+  .chefops-force-mobile .chefops-dashboard-kpis,
+  .chefops-force-mobile .chefops-performance-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-team-list,
+  .chefops-force-mobile .chefops-team-list {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* v4.4.2 — one real scroll container so every operational toolbar can remain
+   pinned, plus a quieter header and compact report filters. */
+@layer components {
+  /* All app modes use the same architecture:
+     shell/header are fixed in the viewport and <main> is the only page scroller.
+     Sticky page controls therefore pin to main's top instead of the browser body. */
+  .chefops-app,
+  .chefops-shell,
+  .chefops-content {
+    min-height: 0 !important;
+  }
+
+  .chefops-app-header {
+    position: relative !important;
+    top: auto !important;
+    z-index: 60;
+    flex: 0 0 auto;
+  }
+
+  .chefops-main-scroll {
+    min-height: 0 !important;
+    overflow-x: clip !important;
+    overflow-y: auto !important;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-gutter: stable;
+    scroll-padding-top: 0;
+    scroll-padding-bottom: calc(6rem + env(safe-area-inset-bottom));
+  }
+
+  .chefops-sticky-tools,
+  .chefops-stock-toolbar {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 70 !important;
+    transform: none !important;
+    contain: none !important;
+    will-change: auto !important;
+  }
+
+  /* Auto phone and forced phone preview both own the viewport. This replaces
+     the older document-scroll mobile rule that made sticky panels scroll away. */
+  @media (max-width: 767px) {
+    html,
+    body,
+    #root,
+    .chefops-app.chefops-mode-auto,
+    .chefops-app.chefops-force-mobile,
+    .chefops-app.chefops-force-mobile .chefops-shell,
+    .chefops-app.chefops-force-mobile .chefops-content,
+    .chefops-app.chefops-mode-auto .chefops-shell,
+    .chefops-app.chefops-mode-auto .chefops-content {
+      height: 100dvh !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-shell,
+    .chefops-app.chefops-force-mobile .chefops-shell {
+      display: flex !important;
+      flex-direction: column;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-content,
+    .chefops-app.chefops-force-mobile .chefops-content {
+      display: flex !important;
+      min-height: 0 !important;
+      flex: 1 1 auto;
+      flex-direction: column;
+    }
+
+    .chefops-app.chefops-mode-auto .chefops-main-scroll,
+    .chefops-app.chefops-force-mobile .chefops-main-scroll,
+    html[data-chefops-mode="mobile"] .chefops-main-scroll {
+      min-height: 0 !important;
+      flex: 1 1 auto;
+      overflow-x: clip !important;
+      overflow-y: auto !important;
+      padding-bottom: calc(5rem + env(safe-area-inset-bottom));
+    }
+
+    .chefops-sticky-tools,
+    .chefops-stock-toolbar,
+    html[data-chefops-mode="mobile"] .chefops-sticky-tools,
+    html[data-chefops-mode="mobile"] .chefops-stock-toolbar,
+    .chefops-force-mobile .chefops-sticky-tools,
+    .chefops-force-mobile .chefops-stock-toolbar {
+      top: 0 !important;
+      margin-top: 0 !important;
+      box-shadow: 0 8px 16px rgba(15, 23, 42, .09) !important;
+    }
+
+    /* Keep pinned controls compact; the content underneath gets the space. */
+    .chefops-sticky-tools {
+      padding-top: .55rem !important;
+      padding-bottom: .55rem !important;
+    }
+
+    .reports-page {
+      padding-left: .75rem !important;
+      padding-right: .75rem !important;
+    }
+  }
+
+  /* Forced mobile on a wide desktop still uses the exact phone scroll model. */
+  .chefops-force-mobile,
+  .chefops-force-mobile .chefops-shell,
+  .chefops-force-mobile .chefops-content {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .chefops-force-mobile .chefops-content {
+    display: flex !important;
+    flex-direction: column;
+  }
+
+  .chefops-force-mobile .chefops-main-scroll {
+    min-height: 0 !important;
+    flex: 1 1 auto;
+    overflow-y: auto !important;
+    overflow-x: clip !important;
+  }
+
+  .reports-page > section:first-of-type button {
+    min-width: 0;
+  }
+}
+
+/* v4.4.3 — restore reliable document scrolling while retaining true sticky
+   operational controls. v4.4.2 locked the whole document before the nested
+   main scroller had a dependable computed height in every PWA/window mode. */
+@layer components {
+  html,
+  body,
+  #root {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  body {
+    touch-action: pan-y;
+    overscroll-behavior-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .chefops-app,
+  .chefops-shell,
+  .chefops-content,
+  .chefops-app.chefops-mode-auto,
+  .chefops-app.chefops-force-mobile,
+  .chefops-app.chefops-force-tablet,
+  .chefops-app.chefops-force-desktop,
+  .chefops-force-mobile .chefops-shell,
+  .chefops-force-mobile .chefops-content,
+  html[data-chefops-mode="mobile"] .chefops-app,
+  html[data-chefops-mode="mobile"] .chefops-shell,
+  html[data-chefops-mode="mobile"] .chefops-content {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow: visible !important;
+  }
+
+  .chefops-shell {
+    align-items: stretch;
+  }
+
+  .chefops-content {
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .chefops-app-header {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 90 !important;
+    flex: 0 0 auto;
+  }
+
+  .chefops-main-scroll,
+  .chefops-app.chefops-mode-auto .chefops-main-scroll,
+  .chefops-app.chefops-force-mobile .chefops-main-scroll,
+  .chefops-force-mobile .chefops-main-scroll,
+  html[data-chefops-mode="mobile"] .chefops-main-scroll {
+    display: block !important;
+    min-height: 0 !important;
+    flex: 1 0 auto !important;
+    overflow: visible !important;
+    touch-action: pan-y;
+    overscroll-behavior: auto;
+    padding-bottom: calc(5rem + env(safe-area-inset-bottom)) !important;
+  }
+
+  .chefops-sticky-tools,
+  .chefops-stock-toolbar,
+  html[data-chefops-mode="mobile"] .chefops-sticky-tools,
+  html[data-chefops-mode="mobile"] .chefops-stock-toolbar,
+  .chefops-force-mobile .chefops-sticky-tools,
+  .chefops-force-mobile .chefops-stock-toolbar {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: calc(3.5rem + env(safe-area-inset-top)) !important;
+    z-index: 70 !important;
+    transform: none !important;
+    contain: none !important;
+    will-change: auto !important;
+  }
+
+  /* The page wrappers must not become accidental sticky containing blocks. */
+  .chefops-page,
+  .chefops-stock-page,
+  .reports-page,
+  .chefops-content main > *,
+  .chefops-content main > * > * {
+    overflow-anchor: auto;
+  }
+
+  @media (min-width: 768px) {
+    .chefops-sticky-tools,
+    .chefops-stock-toolbar {
+      top: 3.5rem !important;
+    }
+  }
+}
+
+
+/* v4.4.4 — real mobile sticky stack, drawer layering, and chart-flow repair.
+   Mobile uses document/body scrolling only. Every ancestor between the page
+   toolbar and the body is overflow-visible so position: sticky can attach to
+   the actual viewport instead of an accidental hidden/clip container. */
+@layer components {
+  .chefops-performance-chart {
+    display: flex !important;
+    height: auto !important;
+    min-height: 0 !important;
+    flex-direction: column;
+    overflow: visible !important;
+  }
+
+  .chefops-performance-plot {
+    width: 100%;
+    height: 15rem;
+    min-height: 15rem;
+  }
+
+  .chefops-performance-legend {
+    position: static !important;
+    inset: auto !important;
+    transform: none !important;
+    flex: 0 0 auto;
+    width: 100%;
+    margin: .55rem 0 0 !important;
+    padding: 0 !important;
+    min-height: 1.5rem !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+
+  .chefops-sticky-tools,
+  .chefops-stock-toolbar {
+    z-index: 35 !important;
+  }
+
+  @media (max-width: 767px) {
+    html {
+      height: auto !important;
+      min-height: 100% !important;
+      overflow: visible !important;
+    }
+
+    body {
+      height: auto !important;
+      min-height: 100dvh !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-y;
+    }
+
+    #root,
+    .chefops-app,
+    .chefops-shell,
+    .chefops-content,
+    .chefops-main-scroll,
+    .chefops-page,
+    .chefops-stock-page,
+    .reports-page {
+      height: auto !important;
+      min-height: 0 !important;
+      max-height: none !important;
+      overflow: visible !important;
+      contain: none !important;
+      transform: none !important;
+    }
+
+    .chefops-app,
+    .chefops-shell,
+    .chefops-content {
+      min-height: 100dvh !important;
+    }
+
+    .chefops-app-header {
+      position: -webkit-sticky !important;
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 50 !important;
+    }
+
+    .chefops-sticky-tools,
+    .chefops-stock-toolbar {
+      position: -webkit-sticky !important;
+      position: sticky !important;
+      top: calc(3.5rem + env(safe-area-inset-top)) !important;
+      z-index: 35 !important;
+      align-self: auto !important;
+      transform: none !important;
+      contain: none !important;
+      will-change: auto !important;
+    }
+
+    .chefops-performance-plot {
+      height: 11.75rem;
+      min-height: 11.75rem;
+    }
+
+    .chefops-performance-legend {
+      gap: .85rem !important;
+      font-size: .68rem !important;
+      line-height: 1.2 !important;
+    }
+  }
+
+  /* Forced phone preview in a wide desktop/PWA window follows the same
+     document-scroll model as a real phone. */
+  html[data-chefops-mode="mobile"] {
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+  }
+
+  html[data-chefops-mode="mobile"] body {
+    height: auto !important;
+    min-height: 100dvh !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-y;
+  }
+
+  html[data-chefops-mode="mobile"] #root,
+  html[data-chefops-mode="mobile"] .chefops-app,
+  html[data-chefops-mode="mobile"] .chefops-shell,
+  html[data-chefops-mode="mobile"] .chefops-content,
+  html[data-chefops-mode="mobile"] .chefops-main-scroll,
+  html[data-chefops-mode="mobile"] .chefops-page,
+  html[data-chefops-mode="mobile"] .chefops-stock-page,
+  .chefops-force-mobile,
+  .chefops-force-mobile .chefops-shell,
+  .chefops-force-mobile .chefops-content,
+  .chefops-force-mobile .chefops-main-scroll,
+  .chefops-force-mobile .chefops-page,
+  .chefops-force-mobile .chefops-stock-page {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    contain: none !important;
+    transform: none !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-app,
+  html[data-chefops-mode="mobile"] .chefops-shell,
+  html[data-chefops-mode="mobile"] .chefops-content,
+  .chefops-force-mobile,
+  .chefops-force-mobile .chefops-shell,
+  .chefops-force-mobile .chefops-content {
+    min-height: 100dvh !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-app-header,
+  .chefops-force-mobile .chefops-app-header {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 50 !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-sticky-tools,
+  html[data-chefops-mode="mobile"] .chefops-stock-toolbar,
+  .chefops-force-mobile .chefops-sticky-tools,
+  .chefops-force-mobile .chefops-stock-toolbar {
+    position: -webkit-sticky !important;
+    position: sticky !important;
+    top: calc(3.5rem + env(safe-area-inset-top)) !important;
+    z-index: 35 !important;
+    transform: none !important;
+    contain: none !important;
+    will-change: auto !important;
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-performance-plot,
+  .chefops-force-mobile .chefops-performance-plot {
+    height: 11.75rem;
+    min-height: 11.75rem;
+  }
+}
+
+/* v4.4.5-closeup-action-gap:start */
+@layer components {
+  /* The fixed bottom nav is 4rem high. The previous 4.25rem action offset
+     left a visible quarter-rem seam where form content could show through. */
+  @media (max-width: 767px) {
+    .chefops-mobile-action {
+      bottom: calc(4rem + env(safe-area-inset-bottom)) !important;
+      margin-bottom: -1px !important;
+      background: hsl(var(--background)) !important;
+      box-shadow: 0 -10px 24px rgba(15, 23, 42, .06) !important;
+    }
+  }
+
+  html[data-chefops-mode="mobile"] .chefops-mobile-action,
+  .chefops-force-mobile .chefops-mobile-action {
+    bottom: calc(4rem + env(safe-area-inset-bottom)) !important;
+    margin-bottom: -1px !important;
+    background: hsl(var(--background)) !important;
+  }
+}
+/* v4.4.5-closeup-action-gap:end */
+
+/* v4.4.6-desktop-tablet-restore:start */
+@layer components {
+  /* DESKTOP/TABLET ONLY.
+     This block restores the independent app-shell behavior from before the
+     mobile sticky work. It deliberately contains no mobile selectors. */
+
+  @media (min-width: 768px) {
+    html:not([data-chefops-mode="mobile"]),
+    html:not([data-chefops-mode="mobile"]) body,
+    html:not([data-chefops-mode="mobile"]) #root {
+      height: 100dvh !important;
+      min-height: 100dvh !important;
+      overflow: hidden !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile),
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile) .chefops-shell,
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile) .chefops-content {
+      height: 100dvh !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile) .chefops-shell {
+      display: flex !important;
+      align-items: stretch !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile) .chefops-sidebar {
+      position: relative !important;
+      top: auto !important;
+      height: 100dvh !important;
+      min-height: 0 !important;
+      flex: 0 0 auto !important;
+      overflow-x: hidden !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain !important;
+      scrollbar-gutter: stable;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile) .chefops-app-header {
+      position: relative !important;
+      top: auto !important;
+      z-index: 60 !important;
+      flex: 0 0 auto !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile) .chefops-main-scroll {
+      display: block !important;
+      min-height: 0 !important;
+      flex: 1 1 auto !important;
+      overflow-x: clip !important;
+      overflow-y: auto !important;
+      overscroll-behavior: contain !important;
+      scroll-behavior: smooth;
+      scrollbar-gutter: stable;
+      scroll-padding-top: 1rem;
+      scroll-padding-bottom: 2rem;
+      padding-bottom: 0 !important;
+      touch-action: auto !important;
+    }
+
+    /* Sticky toolbars added for phone use must remain normal content on
+       desktop/tablet. Stock keeps its older desktop sticky behavior. */
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile) .chefops-sticky-tools {
+      position: static !important;
+      top: auto !important;
+      z-index: auto !important;
+      margin: 0 !important;
+      padding-top: 0 !important;
+      padding-bottom: 0 !important;
+      box-shadow: none !important;
+      transform: none !important;
+      contain: none !important;
+      isolation: auto !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app:not(.chefops-force-mobile) .chefops-stock-toolbar {
+      position: sticky !important;
+      top: 0 !important;
+      z-index: 48 !important;
+      margin-top: 0 !important;
+      box-shadow: 0 8px 16px rgba(15, 23, 42, .06) !important;
+      isolation: isolate !important;
+    }
+
+    /* Restore the pre-mobile-change dashboard density on larger canvases. */
+    html:not([data-chefops-mode="mobile"]) .chefops-team-list {
+      grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-dashboard-kpis,
+    html:not([data-chefops-mode="mobile"]) .chefops-performance-kpis {
+      grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-performance-chart {
+      display: grid !important;
+      grid-template-rows: minmax(0, 1fr) auto !important;
+      height: 17rem !important;
+      min-height: 17rem !important;
+      overflow: hidden !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-performance-plot {
+      width: 100% !important;
+      height: auto !important;
+      min-height: 0 !important;
+      overflow: hidden !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-performance-legend {
+      position: static !important;
+      width: 100% !important;
+      min-height: 1.5rem !important;
+      margin: 0 !important;
+      padding-top: .65rem !important;
+      justify-content: center !important;
+      align-items: center !important;
+      transform: none !important;
+    }
+
+    /* AppDrawer returns to the original desktop/tablet right-side workspace.
+       Mobile drawer dimensions are not selected by this rule. */
+    html:not([data-chefops-mode="mobile"]) .chefops-drawer-overlay {
+      inset: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      max-width: none !important;
+      transform: none !important;
+      z-index: 300 !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-drawer-content {
+      top: 0 !important;
+      right: 0 !important;
+      bottom: 0 !important;
+      left: auto !important;
+      height: 100dvh !important;
+      max-height: none !important;
+      transform: none !important;
+      border: 1px solid hsl(var(--border)) !important;
+      border-right-width: 0 !important;
+      border-bottom-width: 1px !important;
+      border-radius: 24px 0 0 24px !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-drawer-header {
+      padding-top: .75rem !important;
+    }
+  }
+
+  @media (min-width: 768px) and (max-width: 1199px) {
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-shell {
+      max-width: 1040px !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-sidebar {
+      display: flex !important;
+      width: 84px !important;
+      padding-left: .65rem !important;
+      padding-right: .65rem !important;
+      flex-direction: column !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-sidebar-copy,
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-sidebar-label,
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-sidebar-user-copy {
+      display: none !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-sidebar-brand,
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-sidebar-link {
+      justify-content: center !important;
+      padding-left: .6rem !important;
+      padding-right: .6rem !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-bottom-nav,
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-mobile-brand {
+      display: none !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-desktop-heading {
+      display: block !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto main > * {
+      max-width: min(880px, calc(100vw - 112px)) !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-drawer-content {
+      width: min(680px, calc(100vw - 84px)) !important;
+      max-width: 680px !important;
+    }
+  }
+
+  @media (min-width: 1200px) {
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-shell {
+      max-width: min(1480px, 100vw) !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-sidebar {
+      display: flex !important;
+      width: 248px !important;
+      flex-direction: column !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-bottom-nav,
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-mobile-brand {
+      display: none !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto .chefops-desktop-heading {
+      display: block !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-app.chefops-mode-auto main > * {
+      max-width: min(1180px, calc(100vw - 296px)) !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-team-list {
+      grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    }
+
+    html:not([data-chefops-mode="mobile"]) .chefops-drawer-content {
+      width: min(760px, calc(100vw - 248px)) !important;
+      max-width: 760px !important;
+    }
+  }
+
+  /* Manual desktop/tablet preview also restores the old shell even when the
+     browser window itself is narrow. No mobile selector is included. */
+  html[data-chefops-mode="desktop"],
+  html[data-chefops-mode="desktop"] body,
+  html[data-chefops-mode="desktop"] #root,
+  html[data-chefops-mode="tablet"],
+  html[data-chefops-mode="tablet"] body,
+  html[data-chefops-mode="tablet"] #root {
+    height: 100dvh !important;
+    min-height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  .chefops-force-desktop,
+  .chefops-force-tablet,
+  .chefops-force-desktop .chefops-shell,
+  .chefops-force-tablet .chefops-shell,
+  .chefops-force-desktop .chefops-content,
+  .chefops-force-tablet .chefops-content {
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .chefops-force-desktop .chefops-sidebar,
+  .chefops-force-tablet .chefops-sidebar {
+    position: relative !important;
+    top: auto !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+    overscroll-behavior: contain !important;
+  }
+
+  .chefops-force-desktop .chefops-app-header,
+  .chefops-force-tablet .chefops-app-header {
+    position: relative !important;
+    top: auto !important;
+    z-index: 60 !important;
+  }
+
+  .chefops-force-desktop .chefops-main-scroll,
+  .chefops-force-tablet .chefops-main-scroll {
+    min-height: 0 !important;
+    overflow-x: clip !important;
+    overflow-y: auto !important;
+    padding-bottom: 0 !important;
+    overscroll-behavior: contain !important;
+    scrollbar-gutter: stable;
+  }
+
+  .chefops-force-desktop .chefops-sticky-tools,
+  .chefops-force-tablet .chefops-sticky-tools {
+    position: static !important;
+    top: auto !important;
+    z-index: auto !important;
+    margin: 0 !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  .chefops-force-desktop .chefops-stock-toolbar,
+  .chefops-force-tablet .chefops-stock-toolbar {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 48 !important;
+  }
+
+  .chefops-force-desktop .chefops-drawer-overlay,
+  .chefops-force-tablet .chefops-drawer-overlay {
+    inset: 0 !important;
+    left: 0 !important;
+    width: 100vw !important;
+    max-width: none !important;
+    transform: none !important;
+  }
+
+  .chefops-force-desktop .chefops-drawer-content,
+  .chefops-force-tablet .chefops-drawer-content {
+    top: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    left: auto !important;
+    height: 100dvh !important;
+    max-height: none !important;
+    transform: none !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-right-width: 0 !important;
+    border-radius: 24px 0 0 24px !important;
+  }
+
+  .chefops-force-desktop .chefops-shell {
+    display: flex !important;
+    max-width: min(1480px, 100vw) !important;
+  }
+
+  .chefops-force-desktop .chefops-sidebar {
+    display: flex !important;
+    width: 248px !important;
+    flex-direction: column !important;
+  }
+
+  .chefops-force-desktop .chefops-bottom-nav,
+  .chefops-force-desktop .chefops-mobile-brand {
+    display: none !important;
+  }
+
+  .chefops-force-desktop .chefops-desktop-heading {
+    display: block !important;
+  }
+
+  .chefops-force-desktop main > * {
+    max-width: min(1180px, calc(100vw - 296px)) !important;
+  }
+
+  .chefops-force-desktop .chefops-drawer-content {
+    width: min(760px, calc(100vw - 248px)) !important;
+    max-width: 760px !important;
+  }
+
+  .chefops-force-tablet .chefops-shell {
+    display: flex !important;
+    max-width: min(1040px, 100vw) !important;
+  }
+
+  .chefops-force-tablet .chefops-sidebar {
+    display: flex !important;
+    width: 84px !important;
+    flex-direction: column !important;
+    padding-left: .65rem !important;
+    padding-right: .65rem !important;
+  }
+
+  .chefops-force-tablet .chefops-sidebar-copy,
+  .chefops-force-tablet .chefops-sidebar-label,
+  .chefops-force-tablet .chefops-sidebar-user-copy {
+    display: none !important;
+  }
+
+  .chefops-force-tablet .chefops-sidebar-brand,
+  .chefops-force-tablet .chefops-sidebar-link {
+    justify-content: center !important;
+    padding-left: .6rem !important;
+    padding-right: .6rem !important;
+  }
+
+  .chefops-force-tablet .chefops-bottom-nav,
+  .chefops-force-tablet .chefops-mobile-brand {
+    display: none !important;
+  }
+
+  .chefops-force-tablet .chefops-desktop-heading {
+    display: block !important;
+  }
+
+  .chefops-force-tablet main > * {
+    max-width: min(880px, calc(100vw - 112px)) !important;
+  }
+
+  .chefops-force-tablet .chefops-drawer-content {
+    width: min(680px, calc(100vw - 84px)) !important;
+    max-width: 680px !important;
+  }
+}
+/* v4.4.6-desktop-tablet-restore:end */

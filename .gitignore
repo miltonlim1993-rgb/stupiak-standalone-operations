@@ -1,0 +1,17 @@
+node_modules/
+web/dist/
+web/android/.gradle/
+web/android/build/
+web/android/app/build/
+worker/.wrangler/
+.dev.vars
+.env
+.env.*
+!.env.example
+worker/wrangler.production.jsonc
+*.jks
+*.keystore
+*.apk
+*.aab
+_patch_backups/
+.DS_Store
