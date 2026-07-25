@@ -40,16 +40,8 @@ jobs:
         run: npm ci
       - name: Generate and sync Capacitor Android project
         run: npm run mobile:init
-      - name: Generate branded Android launcher icons and splash
-        run: |
-          npx -y @capacitor/assets@3.0.5 generate \
-            --android \
-            --androidProject web/android \
-            --assetPath web/assets \
-            --iconBackgroundColor '#F6B900' \
-            --iconBackgroundColorDark '#F6B900' \
-            --splashBackgroundColor '#FFFFFF' \
-            --splashBackgroundColorDark '#FFFFFF'
+      - name: Apply Stupiak's Ops Android launcher icon
+        run: node scripts/configure-android-branding.mjs
       - name: Configure native Google Credential Manager and light system bars
         run: node scripts/configure-android-native-google-auth.mjs
       - name: Restore private release keystore
@@ -96,7 +88,7 @@ jobs:
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
             --title "Stupiak's Ops signed Android release ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) with native Google Credential Manager, branded launcher assets and a light-first app shell, built from commit ${GITHUB_SHA}. Keep the signing keystore backed up securely; future updates must use the same signing certificate."
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) with native Google Credential Manager, the Stupiak's Ops launcher icon and a locked bright app shell, built from commit ${GITHUB_SHA}. Keep the signing keystore backed up securely; future updates must use the same signing certificate."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
