@@ -7,8 +7,8 @@ import { getAppPackStatus, syncAppPack } from '@/lib/app-pack'
 import { useAuth } from '@/lib/AuthContext'
 
 const MODE_KEY = 'chefops.display.mode'
-const RELEASE_FALLBACK = '4.3.0-ops-insights-data-gate'
-const DEBUG_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-debug-latest/stupiaks-ops-debug.apk'
+const RELEASE_FALLBACK = '4.5.1-cloudflare-android-release'
+const RELEASE_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-release.apk'
 
 function bytes(value) {
   const number = Number(value || 0)
@@ -37,9 +37,8 @@ export default function InstallApp() {
   const outletId = String(user?.outlet_id || '')
   const [release, setRelease] = useState({
     app_version: RELEASE_FALLBACK,
-    apk_url: DEBUG_APK_URL,
-    apk_version: 'Debug latest',
-    apk_debug: true,
+    apk_url: RELEASE_APK_URL,
+    apk_version: 'Signed release',
     production_web_url: '',
   })
   const [installReady, setInstallReady] = useState(canPromptInstall())
@@ -54,9 +53,8 @@ export default function InstallApp() {
       const publishedApkUrl = String(value?.apk_url || '').trim()
       setRelease({
         ...value,
-        apk_url: publishedApkUrl || DEBUG_APK_URL,
-        apk_version: value?.apk_version || (publishedApkUrl ? '' : 'Debug latest'),
-        apk_debug: !publishedApkUrl,
+        apk_url: publishedApkUrl || RELEASE_APK_URL,
+        apk_version: value?.apk_version || 'Signed release',
       })
     }).catch(() => undefined)
     const ready = () => setInstallReady(true)
@@ -77,7 +75,7 @@ export default function InstallApp() {
 
   const webUrl = release.production_web_url || window.location.origin
   const webQrUrl = useMemo(() => qr(webUrl), [webUrl])
-  const apkQrUrl = useMemo(() => release.apk_url ? qr(release.apk_url) : '', [release.apk_url])
+  const apkQrUrl = useMemo(() => qr(release.apk_url), [release.apk_url])
   const selectMode = (value) => { setMode(value); localStorage.setItem(MODE_KEY, value); window.location.reload() }
   const enableNotifications = async () => { if (!('Notification' in window)) return; setPermission(await Notification.requestPermission()) }
   const updateData = async () => {
@@ -117,7 +115,7 @@ export default function InstallApp() {
     <div className="grid gap-4 xl:grid-cols-2">
       <section className="rounded-2xl border border-border bg-card p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary"><Smartphone className="h-6 w-6" /></span><h2 className="mt-4 font-semibold">Install Web App (PWA)</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">This is the real browser-installed app: standalone window, service-worker shell, local data patch and device notifications.</p></div>
+          <div className="min-w-0"><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary"><Smartphone className="h-6 w-6" /></span><h2 className="mt-4 font-semibold">Install Web App (PWA)</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Browser-installed version with standalone window, service-worker shell, local data patch and device notifications.</p></div>
           <img src={webQrUrl} alt="Open Stupiak’s Ops web app QR code" className="h-28 w-28 self-center rounded-xl border border-border bg-white p-1 sm:self-auto" />
         </div>
         <div className="mt-4 flex items-center justify-between rounded-xl bg-muted/60 px-3 py-2 text-sm"><span>Status</span><span className="font-semibold">{pwaState}</span></div>
@@ -127,11 +125,11 @@ export default function InstallApp() {
 
       <section className="rounded-2xl border border-border bg-card p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><Download className="h-6 w-6" /></span><h2 className="mt-4 font-semibold">{release.apk_debug ? 'Android test APK' : 'Published Android APK'}</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">{release.apk_debug ? 'Installable debug-signed package for testing on an Android phone or tablet.' : 'A signed release is published. Download on desktop or scan this APK-specific QR code on Android.'}</p></div>
-          <img src={apkQrUrl} alt="Download Android APK QR code" className="h-28 w-28 self-center rounded-xl border border-border bg-white p-1 sm:self-auto" />
+          <div><span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700"><Download className="h-6 w-6" /></span><h2 className="mt-4 font-semibold">Signed Android release APK</h2><p className="mt-1 text-sm leading-6 text-muted-foreground">Production-signed package for direct installation on staff Android phones and tablets. Future updates must use the same signing certificate.</p></div>
+          <img src={apkQrUrl} alt="Download signed Android release APK QR code" className="h-28 w-28 self-center rounded-xl border border-border bg-white p-1 sm:self-auto" />
         </div>
-        <a href={release.apk_url} className="mt-4 flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"><Download className="mr-2 h-4 w-4" />Download APK {release.apk_version || ''}</a>
-        {release.apk_debug ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">Internal testing build. Android may ask you to allow installation from this browser. The final staff rollout should later use a privately signed release APK or Play internal testing.</div> : null}
+        <a href={release.apk_url} className="mt-4 flex h-10 items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground"><Download className="mr-2 h-4 w-4" />Download signed APK</a>
+        <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-xs leading-5 text-emerald-900">This is the signed release build, not a debug APK. Keep the private signing keystore backed up securely so installed devices can receive future updates.</div>
       </section>
     </div>
 
