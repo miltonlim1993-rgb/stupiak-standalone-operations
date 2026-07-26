@@ -2,8 +2,31 @@ import app from './index.js'
 import { loginWithGoogle, sessionCookie } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { ensureEntitySheet } from './sheets.js'
+import { markAppPackDirty } from './app-pack.js'
 
-const WORKER_REVISION = 'native-session-v2'
+const WORKER_REVISION = 'live-sync-mobile-shell-v3'
+const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
+const ENTITY_MODULE = {
+  Outlet: 'core',
+  PaymentMethod: 'core',
+  PositionMaster: 'core',
+  AppSetting: 'core',
+  MediaRule: 'core',
+  InventoryCatalog: 'inventory',
+  OutletStockList: 'inventory',
+  TaskTemplate: 'tasks',
+  TaskTemplatePhoto: 'tasks',
+  SOP: 'training',
+  SOPStep: 'training',
+  SOPAsset: 'training',
+  TrainingCourse: 'training',
+  TrainingLesson: 'training',
+  TrainingQuiz: 'training',
+  TrainingQuestion: 'training',
+  LabelProduct: 'labels',
+  LabelRule: 'labels',
+  PrinterProfile: 'labels',
+}
 
 function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/')
@@ -13,6 +36,21 @@ function isNativeAppRequest(request) {
   const origin = String(request.headers.get('Origin') || '').toLowerCase()
   const marker = String(request.headers.get('X-ChefOps-Native') || '').toLowerCase()
   return marker === 'android' || origin === 'https://localhost' || origin === 'capacitor://localhost'
+}
+
+function runtimeEnv(env, ctx) {
+  const value = Object.create(env)
+  Object.defineProperty(value, '__CHEFOPS_CTX', { value: ctx, enumerable: false })
+  return value
+}
+
+function safeSecretEqual(left, right) {
+  const a = String(left || '')
+  const b = String(right || '')
+  if (!a || !b || a.length !== b.length) return false
+  let mismatch = 0
+  for (let index = 0; index < a.length; index += 1) mismatch |= a.charCodeAt(index) ^ b.charCodeAt(index)
+  return mismatch === 0
 }
 
 function allowedOrigins(env) {
@@ -42,7 +80,7 @@ function apiCorsHeaders(request, env) {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-Requested-With',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-Requested-With',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
     'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision',
@@ -85,9 +123,48 @@ async function handleNativeGoogleLogin(request, env, pathname) {
   }
 }
 
+async function handleDataPackDirtyWebhook(request, env, pathname) {
+  if (pathname !== '/api/internal/data-pack/dirty') return null
+  if (request.method !== 'POST') {
+    const error = new Error('Method not allowed')
+    error.status = 405
+    error.code = 'method_not_allowed'
+    return errorResponse(request, env, error)
+  }
+
+  const configuredSecret = String(env.APP_PACK_WEBHOOK_SECRET || '')
+  const providedSecret = String(request.headers.get('X-ChefOps-Pack-Secret') || '')
+  if (!safeSecretEqual(configuredSecret, providedSecret)) {
+    const error = new Error('Invalid data-pack webhook secret')
+    error.status = 403
+    error.code = 'invalid_pack_webhook_secret'
+    return errorResponse(request, env, error)
+  }
+
+  try {
+    const body = await readJson(request)
+    const entity = String(body.entity || '').trim()
+    const requestedModule = String(body.module || '').trim().toLowerCase()
+    const moduleName = PACK_MODULES.has(requestedModule) ? requestedModule : ENTITY_MODULE[entity] || ''
+    const outletId = String(body.outlet_id || '').trim()
+    await markAppPackDirty(env, outletId, { modules: moduleName ? [moduleName] : [] })
+    return json(request, env, {
+      ok: true,
+      queued: true,
+      entity,
+      module: moduleName || 'all',
+      outlet_id: outletId,
+      changed_at: new Date().toISOString(),
+    }, 202)
+  } catch (error) {
+    return errorResponse(request, env, error)
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+    const runEnv = runtimeEnv(env, ctx)
 
     if (isApiPath(url.pathname)) {
       if (request.method === 'OPTIONS') {
@@ -97,10 +174,13 @@ export default {
         })
       }
 
-      const nativeLoginResponse = await handleNativeGoogleLogin(request, env, url.pathname)
+      const webhookResponse = await handleDataPackDirtyWebhook(request, runEnv, url.pathname)
+      if (webhookResponse) return withApiHeaders(request, env, webhookResponse)
+
+      const nativeLoginResponse = await handleNativeGoogleLogin(request, runEnv, url.pathname)
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
-      const response = await app.fetch(request, env, ctx)
+      const response = await app.fetch(request, runEnv, ctx)
       return withApiHeaders(request, env, response)
     }
 
@@ -109,7 +189,7 @@ export default {
 
   async scheduled(event, env, ctx) {
     if (typeof app.scheduled === 'function') {
-      return app.scheduled(event, env, ctx)
+      return app.scheduled(event, runtimeEnv(env, ctx), ctx)
     }
   },
 }
