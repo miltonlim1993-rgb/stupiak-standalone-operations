@@ -9,7 +9,6 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 
 const SHELL_VERSION = 'stable-panels-shell-v8'
-const SW_REFRESH_KEY = `chefops-sw-refreshed-${SHELL_VERSION}`
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -100,12 +99,13 @@ if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) {
-  let refreshing = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing || sessionStorage.getItem(SW_REFRESH_KEY) === '1') return
-    refreshing = true
-    sessionStorage.setItem(SW_REFRESH_KEY, '1')
-    window.location.reload()
+    // Never reload an installed PWA while a checklist, stock count or form is in progress.
+    // The active page keeps working and the new shell is used on the next normal launch.
+    localStorage.setItem('chefops.pending-shell-version', SHELL_VERSION)
+    window.dispatchEvent(new CustomEvent('chefops:shell-update-ready', {
+      detail: { version: SHELL_VERSION, deferred: true },
+    }))
   })
 
   window.addEventListener('load', () => {
