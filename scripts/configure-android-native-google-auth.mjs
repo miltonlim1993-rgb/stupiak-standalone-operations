@@ -52,16 +52,15 @@ public class MainActivity extends BridgeActivity {
         WebView webView = getBridge().getWebView();
         WebSettings webSettings = webView.getSettings();
 
-        // Respect the HTML viewport meta tag and never zoom the whole mobile UI
-        // out to fit a desktop-width layout. This is required for correct CSS
-        // pixels, touch targets, scrolling and the fixed header/footer shell.
+        // Honor width=device-width and prevent Android from shrinking the
+        // complete application into a desktop-style overview. CSS owns the
+        // fixed header/footer and the single scrolling middle pane.
         webSettings.setUseWideViewPort(true);
         webSettings.setLoadWithOverviewMode(false);
         webSettings.setSupportZoom(false);
         webSettings.setBuiltInZoomControls(false);
         webSettings.setDisplayZoomControls(false);
         webSettings.setTextZoom(100);
-        webView.setInitialScale(0);
         webView.setVerticalScrollBarEnabled(false);
         webView.setHorizontalScrollBarEnabled(false);
 
@@ -167,4 +166,4 @@ public class NativeGoogleAuthPlugin extends Plugin {
 }
 `)
 
-console.log(`Configured Android Credential Manager, mobile WebView viewport, light system bars and app version (${versionName}, versionCode ${versionCode}).`)
+console.log(`Configured Android Credential Manager, single-scroll mobile shell, light system bars and app version (${versionName}, versionCode ${versionCode}).`)
