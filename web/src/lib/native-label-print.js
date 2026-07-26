@@ -34,6 +34,22 @@ function nativePrinter() {
   return window.Capacitor?.Plugins?.NativeLabelPrint
 }
 
+function htmlForNativePrint(html) {
+  // Android PrintManager owns the print action. Remove the browser-only script
+  // so the hidden print WebView cannot start a second window.print() flow.
+  return String(html || '').replace(
+    /<script[^>]*>[\s\S]*?window\.print\([\s\S]*?<\/script>/gi,
+    '',
+  )
+}
+
+function publishPrintError(message) {
+  window.dispatchEvent(new CustomEvent('chefops:native-print-error', {
+    detail: { message },
+  }))
+  window.alert?.(message)
+}
+
 export function installNativeLabelPrintBridge() {
   if (!isNativeAndroid() || window.__chefopsNativePrintInstalled) return
   window.__chefopsNativePrintInstalled = true
@@ -67,16 +83,14 @@ export function installNativeLabelPrintBridge() {
         if (!plugin?.printHtml) {
           printing = false
           console.error('Native Android print bridge is unavailable')
-          window.dispatchEvent(new CustomEvent('chefops:native-print-error', {
-            detail: { message: 'Native Android print bridge is unavailable' },
-          }))
+          publishPrintError('Native Android print bridge is unavailable')
           return
         }
 
         const { widthMm, heightMm } = extractMillimetres(buffer)
         const jobName = extractJobName(buffer)
         Promise.resolve(plugin.printHtml({
-          html: buffer,
+          html: htmlForNativePrint(buffer),
           jobName,
           widthMm,
           heightMm,
@@ -88,9 +102,7 @@ export function installNativeLabelPrintBridge() {
           printing = false
           const message = error?.message || 'Unable to open Android print service'
           console.error('Native label print failed', error)
-          window.dispatchEvent(new CustomEvent('chefops:native-print-error', {
-            detail: { message },
-          }))
+          publishPrintError(message)
         })
       },
     }
