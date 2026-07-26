@@ -18,6 +18,13 @@ function isNativeAndroid() {
   )
 }
 
+function configureNativeSystemBars() {
+  if (!isNativeAndroid()) return
+  const systemBars = window.Capacitor?.Plugins?.SystemBars
+  Promise.resolve(systemBars?.show?.()).catch(() => undefined)
+  Promise.resolve(systemBars?.setStyle?.({ style: 'LIGHT' })).catch(() => undefined)
+}
+
 function installViewportMetrics() {
   const root = document.documentElement
   const update = () => {
@@ -39,6 +46,7 @@ function installViewportMetrics() {
 installNativeSessionFetch()
 applyTheme()
 installViewportMetrics()
+configureNativeSystemBars()
 
 if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash?')) {
   const suffix = window.location.hash.includes('?') ? `?${window.location.hash.split('?')[1]}` : window.location.search
