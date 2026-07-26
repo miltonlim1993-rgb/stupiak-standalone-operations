@@ -32,19 +32,50 @@ const desktopNav = [
 
 const MODE_KEY = 'chefops.display.mode'
 
+function nativeAndroid() {
+  const capacitor = window.Capacitor
+  return Boolean(
+    (capacitor?.isNativePlatform?.() && capacitor?.getPlatform?.() === 'android')
+    || window.location.origin === 'https://localhost'
+    || window.location.origin === 'capacitor://localhost'
+  )
+}
+
+function installedMobilePwa() {
+  return Boolean(
+    window.matchMedia?.('(display-mode: standalone)').matches
+    && window.matchMedia?.('(max-width: 767px)').matches
+  )
+}
+
+function initialMode() {
+  if (nativeAndroid() || installedMobilePwa()) return 'mobile'
+  return localStorage.getItem(MODE_KEY) || 'auto'
+}
+
 function navClass({ isActive }) {
   return `chefops-sidebar-link flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`
 }
 
 export default function Layout() {
   const { user } = useAuth()
-  const [mode, setMode] = useState(() => localStorage.getItem(MODE_KEY) || 'auto')
+  const [mode, setMode] = useState(initialMode)
   const [online, setOnline] = useState(() => navigator.onLine)
+
+  useEffect(() => {
+    if (!nativeAndroid()) return
+    localStorage.setItem(MODE_KEY, 'mobile')
+    setMode('mobile')
+  }, [])
 
   useEffect(() => {
     const onlineHandler = () => setOnline(true)
     const offlineHandler = () => setOnline(false)
     const modeHandler = (event) => {
+      if (nativeAndroid()) {
+        setMode('mobile')
+        return
+      }
       const next = String(event?.detail || localStorage.getItem(MODE_KEY) || 'auto')
       setMode(next)
     }
@@ -71,10 +102,10 @@ export default function Layout() {
   }, [mode])
 
   return (
-    <div className={`chefops-app h-[100dvh] overflow-hidden bg-muted/40 ${rootClass}`}>
+    <div className={`chefops-app h-full min-h-0 overflow-hidden bg-muted/40 ${rootClass}`}>
       <AppFoundation />
       <AppUpdateBanner />
-      <div className="chefops-shell mx-auto flex h-[100dvh] w-full overflow-hidden bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]">
+      <div className="chefops-shell mx-auto flex h-full min-h-0 w-full overflow-hidden bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]">
         <aside className="chefops-sidebar hidden border-r border-border bg-background p-4">
           <div className="chefops-sidebar-brand flex items-center gap-3 px-2 py-2">
             <Logo />
@@ -89,8 +120,8 @@ export default function Layout() {
           </div>
         </aside>
 
-        <div className="chefops-content flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          <header className="chefops-app-header sticky top-0 z-40 shrink-0 border-b border-border bg-background/92 backdrop-blur">
+        <div className="chefops-content grid h-full min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
+          <header className="chefops-app-header relative z-40 shrink-0 border-b border-border bg-background/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between gap-3 px-4 lg:px-6">
               <div className="chefops-mobile-brand flex min-w-0 items-center gap-2.5"><Logo /><span className="truncate text-lg font-bold tracking-tight">Stupiak’s Ops</span></div>
               <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{user?.outlet_id || 'All assigned outlets'}</p></div>
@@ -102,13 +133,13 @@ export default function Layout() {
           </header>
 
           <main
-            className="chefops-main-scroll min-h-0 min-w-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-y-contain"
+            className="chefops-main-scroll min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
             style={{ WebkitOverflowScrolling: 'touch' }}
           >
             <DataPackGate><Outlet /></DataPackGate>
           </main>
 
-          <nav className="chefops-bottom-nav fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+          <nav className="chefops-bottom-nav relative z-50 w-full border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
             <div className="flex h-16 items-center justify-around">
               {primaryNav.map(({ to, label, icon: Icon, end }) => (
                 <NavLink key={to} to={to} end={end} className={({ isActive }) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1.5 text-[10px] font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
