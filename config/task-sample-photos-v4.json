@@ -1,0 +1,157 @@
+{
+  "schema": "stupiaks-task-sample-photo-slots-v4",
+  "outlet_id": "RR-KCH",
+  "timezone": "Asia/Kuching",
+  "slots": [
+    {
+      "id": "sample-mor-cln-003-icebox",
+      "template_id": "tmpl-rr-morning-cleaning-v4",
+      "photo_group_id": "mor-cln-003-icebox-photo",
+      "display_order": 1,
+      "label_cn": "冰箱盒（含 2 个橙色容器）",
+      "label_en": "Ice Box including 2 Orange Containers",
+      "required_angle_cn": "从上方拍摄，完整看到内部、盖子及两个橙色容器。",
+      "required_angle_en": "Take from above, showing the full interior, lid, and both orange containers."
+    },
+    {
+      "id": "sample-toilet-overview-v3",
+      "template_id": "tmpl-rr-toilet-full-v3",
+      "photo_group_id": "toilet-overview",
+      "display_order": 1,
+      "label_cn": "厕所全景",
+      "label_en": "Toilet Overview",
+      "required_angle_cn": "站在厕所入口拍摄完整空间，包含垃圾桶、墙角及整体整洁状态。",
+      "required_angle_en": "Photograph the full toilet from the entrance, including the bin, corners and overall cleanliness."
+    },
+    {
+      "id": "sample-toilet-basin-v3",
+      "template_id": "tmpl-rr-toilet-full-v3",
+      "photo_group_id": "toilet-basin",
+      "display_order": 2,
+      "label_cn": "洗手盆与镜子",
+      "label_en": "Basin and Mirror",
+      "required_angle_cn": "正面拍摄，完整包含洗手盆、镜子、水龙头和洗手液。",
+      "required_angle_en": "Take from the front, including the basin, mirror, faucet and hand wash."
+    },
+    {
+      "id": "sample-toilet-bowl-v3",
+      "template_id": "tmpl-rr-toilet-full-v3",
+      "photo_group_id": "toilet-bowl",
+      "display_order": 3,
+      "label_cn": "马桶",
+      "label_en": "Toilet Bowl",
+      "required_angle_cn": "拍摄清洁后的马桶内外与厕纸。",
+      "required_angle_en": "Photograph the cleaned toilet bowl inside and outside together with toilet paper."
+    },
+    {
+      "id": "sample-toilet-floor-v3",
+      "template_id": "tmpl-rr-toilet-full-v3",
+      "photo_group_id": "toilet-floor",
+      "display_order": 4,
+      "label_cn": "厕所地面",
+      "label_en": "Indoor Floor",
+      "required_angle_cn": "从入口或角落拍摄完成后的干燥地面和墙角。",
+      "required_angle_en": "Photograph the dry finished floor and corners from the entrance or a corner."
+    },
+    {
+      "id": "sample-eve-cln-001-pack",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-001-pack-photo",
+      "display_order": 1,
+      "label_cn": "包装区水槽",
+      "label_en": "Packaging Basin",
+      "required_angle_cn": "从正面拍摄，包含水槽、排水口和水龙头。",
+      "required_angle_en": "Take from the front, including the basin, drain and faucet."
+    },
+    {
+      "id": "sample-eve-cln-001-grill",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-001-grill-photo",
+      "display_order": 2,
+      "label_cn": "烤炉区水槽",
+      "label_en": "Grill Basin",
+      "required_angle_cn": "从正面拍摄，清楚显示无油污和残渣。",
+      "required_angle_en": "Take from the front, clearly showing no grease or residue."
+    },
+    {
+      "id": "sample-eve-cln-001-front",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-001-front-photo",
+      "display_order": 3,
+      "label_cn": "前场水槽",
+      "label_en": "Front Basin",
+      "required_angle_cn": "拍摄整个水槽及周围表面。",
+      "required_angle_en": "Show the whole basin and surrounding surface."
+    },
+    {
+      "id": "sample-eve-cln-001-grease",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-001-grease-photo",
+      "display_order": 4,
+      "label_cn": "Grease Box",
+      "label_en": "Grease Box",
+      "required_angle_cn": "拍摄清洁后的内部及正确装回后的外观。",
+      "required_angle_en": "Photograph the clean interior and the correctly reinstalled exterior."
+    },
+    {
+      "id": "sample-eve-cln-002-prep",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-002-prep-photo",
+      "display_order": 5,
+      "label_cn": "准备工作台",
+      "label_en": "Preparation Table",
+      "required_angle_cn": "斜上方拍摄，包含整张台面、边缘及下层。",
+      "required_angle_en": "Take from an upper angle showing the full top, edges and lower shelf."
+    },
+    {
+      "id": "sample-eve-cln-002-grill",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-002-grill-photo",
+      "display_order": 6,
+      "label_cn": "烤炉工作台",
+      "label_en": "Grill Table",
+      "required_angle_cn": "拍摄整张工作台，清楚显示无油污。",
+      "required_angle_en": "Show the entire table clearly with no grease visible."
+    },
+    {
+      "id": "sample-eve-cln-002-meat",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-002-meat-photo",
+      "display_order": 7,
+      "label_cn": "肉类工作台",
+      "label_en": "Meat Table",
+      "required_angle_cn": "拍摄整张台面和下层，确保无肉屑或液体。",
+      "required_angle_en": "Show the full top and lower shelf, with no meat residue or liquid."
+    },
+    {
+      "id": "sample-eve-cln-005-garbage",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-005-garbage-photo",
+      "display_order": 8,
+      "label_cn": "垃圾桶深洗",
+      "label_en": "Garbage Bin Deep Wash",
+      "required_angle_cn": "拍摄内部、外部、盖子及轮子；垃圾桶应完全干燥。",
+      "required_angle_en": "Show inside, outside, lid and wheels; the bin must be fully dry."
+    },
+    {
+      "id": "sample-eve-cln-006-kitchen",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-006-kitchen-photo",
+      "display_order": 9,
+      "label_cn": "厨房地面",
+      "label_en": "Kitchen Floor",
+      "required_angle_cn": "从入口或角落拍摄完整厨房地面，重点包含炸炉与水槽周围。",
+      "required_angle_en": "Take from the entrance or corner, showing the full kitchen floor, especially around the fryer and basins."
+    },
+    {
+      "id": "sample-eve-cln-006-guest",
+      "template_id": "tmpl-rr-evening-closing-v4",
+      "photo_group_id": "eve-cln-006-guest-photo",
+      "display_order": 10,
+      "label_cn": "顾客区地面",
+      "label_en": "Guest Area Floor",
+      "required_angle_cn": "从入口拍摄，包含桌椅下方及主要走道。",
+      "required_angle_en": "Take from the entrance, including under tables and chairs and the main walkway."
+    }
+  ]
+}
