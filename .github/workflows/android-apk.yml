@@ -12,7 +12,7 @@ jobs:
     env:
       APK_RELEASE_TAG: android-release-latest
       APK_FILE_NAME: stupiaks-ops-release.apk
-      APK_V5_FILE_NAME: stupiaks-ops-single-scroll-v5.apk
+      APK_V6_FILE_NAME: stupiaks-ops-fixed-viewport-v6.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
       ANDROID_VERSION_NAME: 4.5.1.${{ github.run_number }}
@@ -39,11 +39,15 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate single-scroll shell source
+      - name: Validate fixed viewport shell source
         run: |
-          grep -q "flex: '1 1 0%'" web/src/components/Layout.jsx
-          grep -q "overflow-y: auto !important" web/src/viewport.css
-          grep -q "single-scroll-shell-v5" web/public/sw.js
+          grep -q "fixed-viewport-shell-v6" web/public/sw.js
+          grep -q "fixed-viewport-shell-v6" web/src/main.jsx
+          grep -q "position: absolute !important" web/src/viewport.css
+          grep -q "bottom: calc(var(--chefops-bottom-height)" web/src/viewport.css
+          grep -q "purgeNativeServiceWorkers" web/src/main.jsx
+          grep -q "App shell: Fixed Viewport v6" web/src/pages/More.jsx
+          ! grep -q "installShellGuard" web/src/main.jsx
           ! grep -q "chefops-viewport-height" web/src/viewport.css
           ! grep -q "setInitialScale" scripts/configure-android-native-google-auth.mjs
       - name: Generate and sync Capacitor Android project
@@ -75,16 +79,16 @@ jobs:
         run: |
           mkdir -p release
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_FILE_NAME}"
-          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V5_FILE_NAME}"
+          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V6_FILE_NAME}"
           cp web/android/app/build/outputs/bundle/release/app-release.aab "release/${AAB_FILE_NAME}"
-          sha256sum "release/${APK_FILE_NAME}" "release/${APK_V5_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
+          sha256sum "release/${APK_FILE_NAME}" "release/${APK_V6_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: stupiaks-ops-signed-release
           path: |
             release/stupiaks-ops-release.apk
-            release/stupiaks-ops-single-scroll-v5.apk
+            release/stupiaks-ops-fixed-viewport-v6.apk
             release/stupiaks-ops-release.aab
             release/SHA256SUMS.txt
           if-no-files-found: error
@@ -95,13 +99,13 @@ jobs:
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
             "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
-            "release/${APK_V5_FILE_NAME}#Stupiak's Ops single-scroll v5 APK" \
+            "release/${APK_V6_FILE_NAME}#Stupiak's Ops Fixed Viewport v6 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Single Scroll v5 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Single Scroll v5 removes calculated viewport heights, uses the real device viewport, fixes header/content/footer as one flex column, and makes only the middle pane vertically scrollable."
+            --title "Stupiak's Ops Fixed Viewport v6 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Fixed Viewport v6 pins the header, scroll pane and bottom navigation directly to viewport coordinates, removes the runtime style guard that overrode mobile CSS, and purges native service workers so an upgraded APK cannot load an older cached shell."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
-          echo "V5 APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V5_FILE_NAME}"
+          echo "V6 APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V6_FILE_NAME}"
           echo "AAB: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${AAB_FILE_NAME}"
