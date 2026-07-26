@@ -190,6 +190,15 @@ export const opsClient = {
     operationalAction(payload) {
       return request('/api/tasks/operational/action', { method: 'POST', body: payload })
     },
+    workflowBootstrap({ outletId, date, refresh = false }) {
+      return request('/api/tasks/v3/bootstrap', {
+        method: 'POST',
+        body: { outlet_id: outletId, date, refresh },
+      })
+    },
+    workflowAction(payload) {
+      return request('/api/tasks/v3/action', { method: 'POST', body: payload })
+    },
   },
   closeUp: {
     upsert(payload, { year } = {}) {
