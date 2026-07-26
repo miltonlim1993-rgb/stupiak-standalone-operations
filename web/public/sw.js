@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-5-1-mobile-shell-v2-gesture-printer-profile'
+const VERSION = 'chefops-v4-5-1-live-sync-mobile-shell-v3'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -29,7 +29,11 @@ function isStaticApi(url) {
     || url.pathname.includes('/api/entities/PositionMaster')
     || url.pathname.includes('/api/labels/catalog')
     || url.pathname.includes('/api/app/v4/version')
-    || url.pathname.includes('/api/app/v4/pack/')
+    || url.pathname.includes('/api/app/v4/pack/module/')
+}
+
+function isPackManifest(url) {
+  return url.pathname === '/api/app/v4/pack/manifest'
 }
 
 async function staleWhileRevalidate(request, cacheName) {
@@ -67,7 +71,8 @@ self.addEventListener('fetch', (event) => {
     return
   }
   if (url.pathname.includes('/api/')) {
-    event.respondWith(isStaticApi(url) ? staleWhileRevalidate(request, DATA_CACHE) : networkFirst(request, DATA_CACHE))
+    if (isPackManifest(url)) event.respondWith(networkFirst(request, DATA_CACHE))
+    else event.respondWith(isStaticApi(url) ? staleWhileRevalidate(request, DATA_CACHE) : networkFirst(request, DATA_CACHE))
     return
   }
   if (url.origin === self.location.origin) {
