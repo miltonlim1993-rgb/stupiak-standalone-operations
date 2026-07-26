@@ -11,7 +11,7 @@ import Layout from '@/components/Layout'
 
 const PageNotFound = lazy(() => import('@/lib/PageNotFound'))
 const Login = lazy(() => import('@/pages/Login'))
-const Dashboard = lazy(() => import('@/pages/Dashboard'))
+const Dashboard = lazy(() => import('@/pages/DashboardV3'))
 const Tasks = lazy(() => import('@/pages/TasksV3'))
 const StockCount = lazy(() => import('@/pages/StockCount'))
 const UrgentIssues = lazy(() => import('@/pages/UrgentIssues'))
