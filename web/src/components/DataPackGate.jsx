@@ -35,7 +35,7 @@ export default function DataPackGate({ children }) {
   const download = async () => {
     setDownloading(true)
     try {
-      await syncAppPack({ outletId, force: true })
+      await syncAppPack({ outletId, force: false })
       setStatus(getAppPackStatus())
     } catch {
       setStatus(getAppPackStatus())
