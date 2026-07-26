@@ -1,0 +1,39 @@
+/* Direct Print Flow v10: Close Up submit stays in normal document flow.
+   The main app shell already owns scrolling and ends above the bottom navigation.
+   A second fixed/sticky bar inside that scroll pane causes the button to cover
+   denomination inputs on some Android viewport heights. */
+
+html[data-chefops-native='android'] #chefops-mobile-main .closeup-page,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page,
+.chefops-force-mobile #chefops-mobile-main .closeup-page {
+  padding-bottom: clamp(1rem, 3dvh, 1.75rem) !important;
+}
+
+html[data-chefops-native='android'] #chefops-mobile-main .closeup-page .chefops-mobile-action,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page .chefops-mobile-action,
+.chefops-force-mobile #chefops-mobile-main .closeup-page .chefops-mobile-action {
+  position: static !important;
+  inset: auto !important;
+  z-index: auto !important;
+  display: block !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  margin: 0 !important;
+  padding: .25rem 0 .5rem !important;
+  overflow: visible !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  visibility: visible !important;
+  pointer-events: auto !important;
+}
+
+html[data-chefops-native='android'] #chefops-mobile-main .closeup-page .chefops-mobile-action > button,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page .chefops-mobile-action > button,
+.chefops-force-mobile #chefops-mobile-main .closeup-page .chefops-mobile-action > button {
+  height: 3.25rem !important;
+  width: 100% !important;
+}
