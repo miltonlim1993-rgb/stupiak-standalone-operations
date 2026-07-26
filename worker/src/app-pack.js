@@ -177,8 +177,9 @@ async function persistPack(env, outletId, modules) {
   const manifestModules = {}
 
   for (const [name, data] of Object.entries(modules)) {
+    const stableBody = JSON.stringify({ name, data })
+    const hash = (await sha256(stableBody)).slice(0, 24)
     const body = JSON.stringify({ name, generated_at: generatedAt, data })
-    const hash = (await sha256(body)).slice(0, 24)
     const moduleKey = keyFor('module', outletId, `${name}:${hash}`)
     await storePut(env, moduleKey, body)
     manifestModules[name] = {
@@ -203,16 +204,41 @@ async function persistPack(env, outletId, modules) {
     storage: env.APP_DATA_PACKS?.get ? 'cloudflare-kv' : 'worker-cache',
   }
   await storePut(env, keyFor('manifest', outletId), manifest)
-  await storePut(env, keyFor('dirty', outletId), { dirty_at: '' }, { ttl: 86400 })
+  await storePut(env, keyFor('dirty', outletId), { dirty_at: '', modules: [] }, { ttl: 86400 })
   return manifest
 }
 
-export async function markAppPackDirty(env, outletId = '') {
+async function rebuildTargets(env, targets) {
+  const shared = await sharedData(env)
+  const results = []
+  for (const target of targets) {
+    try {
+      results.push(await getOrBuildAppPack(env, target, { force: true, shared }))
+    } catch (error) {
+      console.error('App pack rebuild failed', target, error)
+    }
+  }
+  return results
+}
+
+function queueRebuild(env, outletId) {
+  const task = outletId
+    ? rebuildTargets(env, new Set(['global', outletKey(outletId)]))
+    : rebuildAllAppPacks(env)
+  const guarded = task.catch((error) => console.error('Queued app pack rebuild failed', error))
+  if (env.__CHEFOPS_CTX?.waitUntil) env.__CHEFOPS_CTX.waitUntil(guarded)
+  else void guarded
+}
+
+export async function markAppPackDirty(env, outletId = '', { modules = [] } = {}) {
   const targets = new Set(['global'])
   if (outletId) targets.add(outletKey(outletId))
+  const changedAt = new Date().toISOString()
   await Promise.all([...targets].map((target) => storePut(env, keyFor('dirty', target), {
-    dirty_at: new Date().toISOString(),
+    dirty_at: changedAt,
+    modules: [...new Set((modules || []).map((value) => String(value || '').trim()).filter(Boolean))],
   }, { ttl: 7 * 24 * 60 * 60 })))
+  queueRebuild(env, outletId)
 }
 
 async function isDirty(env, outletId, manifest) {
@@ -271,7 +297,9 @@ export async function rebuildAllAppPacks(env) {
   })
   const results = []
   for (const target of targets) {
-    try { results.push(await getOrBuildAppPack(env, target, { force: true, shared })) } catch (error) {
+    try {
+      results.push(await getOrBuildAppPack(env, target, { force: true, shared }))
+    } catch (error) {
       console.error('App pack rebuild failed', target, error)
     }
   }
