@@ -1,8 +1,9 @@
-/* Stable Panels v8: adaptive toolbars, drawers and action panels. */
+/* Native Print Panels v9: adaptive toolbars, drawers and action panels. */
 
 :root {
   --chefops-panel-max-height: min(42dvh, 19rem);
   --chefops-sheet-max-height: calc(100dvh - var(--chefops-safe-top) - .5rem);
+  --chefops-action-height: 4.5rem;
 }
 
 /* Tool panels remain part of the page flow. On normal-height screens they
@@ -82,8 +83,74 @@ html[data-chefops-mode='mobile'] #chefops-mobile-main .chefops-sticky-tools::-we
   }
 }
 
-/* Fixed submit/action panels always sit above the bottom navigation and never
-   grow beyond a useful portion of the screen. */
+/* Close Up owns a real app action bar. It is fixed immediately above the
+   bottom navigation, centered inside the 430px phone shell, and the page gets
+   matching bottom clearance so denomination fields are never hidden behind it. */
+html[data-chefops-native='android'] #chefops-mobile-main .closeup-page,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page,
+.chefops-force-mobile #chefops-mobile-main .closeup-page {
+  padding-bottom: calc(var(--chefops-action-height) + 1.25rem) !important;
+}
+
+html[data-chefops-native='android'] #chefops-mobile-main .closeup-page .chefops-mobile-action,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page .chefops-mobile-action,
+.chefops-force-mobile #chefops-mobile-main .closeup-page .chefops-mobile-action {
+  position: fixed !important;
+  right: 0 !important;
+  bottom: calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
+  left: 0 !important;
+  z-index: 105 !important;
+  display: block !important;
+  width: 100vw !important;
+  max-width: 430px !important;
+  min-height: var(--chefops-action-height) !important;
+  max-height: none !important;
+  margin: 0 auto !important;
+  padding: .65rem .75rem !important;
+  overflow: visible !important;
+  border-top: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--background) / .98) !important;
+  box-shadow: 0 -10px 24px rgb(15 23 42 / .10) !important;
+  backdrop-filter: blur(12px) !important;
+}
+
+html[data-chefops-native='android'] #chefops-mobile-main .closeup-page .chefops-mobile-action > button,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page .chefops-mobile-action > button,
+.chefops-force-mobile #chefops-mobile-main .closeup-page .chefops-mobile-action > button {
+  height: 3.25rem !important;
+}
+
+/* While the keyboard is open, remove the fixed action bar so inputs and note
+   fields retain the full visible viewport. It reappears as soon as focus leaves. */
+html[data-chefops-native='android'] #chefops-mobile-main .closeup-page:has(input:focus, textarea:focus, select:focus) .chefops-mobile-action,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page:has(input:focus, textarea:focus, select:focus) .chefops-mobile-action,
+.chefops-force-mobile #chefops-mobile-main .closeup-page:has(input:focus, textarea:focus, select:focus) .chefops-mobile-action {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
+@media (max-height: 700px) {
+  :root {
+    --chefops-action-height: 3.85rem;
+  }
+
+  html[data-chefops-native='android'] #chefops-mobile-main .closeup-page .chefops-mobile-action,
+  html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page .chefops-mobile-action,
+  .chefops-force-mobile #chefops-mobile-main .closeup-page .chefops-mobile-action {
+    padding-top: .4rem !important;
+    padding-bottom: .4rem !important;
+  }
+
+  html[data-chefops-native='android'] #chefops-mobile-main .closeup-page .chefops-mobile-action > button,
+  html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page .chefops-mobile-action > button,
+  .chefops-force-mobile #chefops-mobile-main .closeup-page .chefops-mobile-action > button {
+    height: 2.95rem !important;
+  }
+}
+
+/* Generic fixed submit/action panels always sit above the bottom navigation and
+   never grow beyond a useful portion of the screen. Close Up uses the stronger
+   scoped rules above. */
 html[data-chefops-native='android'] .chefops-mobile-action,
 html[data-chefops-mode='mobile'] .chefops-mobile-action,
 .chefops-force-mobile .chefops-mobile-action {
@@ -99,4 +166,11 @@ html[data-chefops-native='android'] #chefops-mobile-main .chefops-page,
 html[data-chefops-mode='mobile'] #chefops-mobile-main .chefops-page,
 .chefops-force-mobile #chefops-mobile-main .chefops-page {
   padding-bottom: clamp(1rem, 3dvh, 1.75rem) !important;
+}
+
+/* Re-apply Close Up clearance after the generic page rule above. */
+html[data-chefops-native='android'] #chefops-mobile-main .closeup-page,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .closeup-page,
+.chefops-force-mobile #chefops-mobile-main .closeup-page {
+  padding-bottom: calc(var(--chefops-action-height) + 1.25rem) !important;
 }
