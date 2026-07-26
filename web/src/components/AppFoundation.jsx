@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { opsClient } from '@/api/opsClient'
 import { useAuth } from '@/lib/AuthContext'
 import { getDeviceId, platformName, showSystemNotification } from '@/lib/app-device'
+import { reportDataPackageDeviceState } from '@/lib/data-package-device-state'
 import {
   checkDataPackageV2Update,
   getDataPackageV2Module,
@@ -111,19 +112,27 @@ export default function AppFoundation() {
       const lastRegistered = Number(localStorage.getItem(deviceStampKey) || 0)
       if (Date.now() - lastRegistered <= 12 * 60 * 60_000) return
 
+      const payload = {
+        outlet_id: outletId,
+        device_id: getDeviceId(),
+        platform: platformName(),
+        app_version: VERSION,
+        data_package_version: installed.manifest.version,
+        data_package_installed_at: installed.installed_at || '',
+        notification_permission: 'Notification' in window ? Notification.permission : 'unsupported',
+      }
+
       try {
-        await opsClient.app.registerDevice({
-          device_id: getDeviceId(),
-          platform: platformName(),
-          app_version: VERSION,
-          data_package_version: installed.manifest.version,
-          data_package_installed_at: installed.installed_at || '',
-          notification_permission: 'Notification' in window ? Notification.permission : 'unsupported',
-        })
+        await reportDataPackageDeviceState(payload)
         localStorage.setItem(deviceStampKey, String(Date.now()))
       } catch (error) {
-        console.warn('Unable to register this device', error)
+        console.warn('Unable to report data package device state', error)
+        return
       }
+
+      opsClient.app.registerDevice(payload).catch((error) => {
+        console.warn('Unable to update legacy device registration', error)
+      })
     }
 
     const boot = async () => {
