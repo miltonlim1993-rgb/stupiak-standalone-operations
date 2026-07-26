@@ -1,0 +1,102 @@
+/* Stable Panels v8: adaptive toolbars, drawers and action panels. */
+
+:root {
+  --chefops-panel-max-height: min(42dvh, 19rem);
+  --chefops-sheet-max-height: calc(100dvh - var(--chefops-safe-top) - .5rem);
+}
+
+/* Tool panels remain part of the page flow. On normal-height screens they
+   remain sticky but can scroll internally if a date/filter section expands. */
+html[data-chefops-native='android'] #chefops-mobile-main .chefops-sticky-tools,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .chefops-sticky-tools,
+.chefops-force-mobile #chefops-mobile-main .chefops-sticky-tools {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 80 !important;
+  max-height: var(--chefops-panel-max-height) !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  background: hsl(var(--background) / .98) !important;
+  box-shadow: 0 8px 18px rgb(15 23 42 / .07) !important;
+  scrollbar-width: none;
+}
+
+html[data-chefops-native='android'] #chefops-mobile-main .chefops-sticky-tools::-webkit-scrollbar,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .chefops-sticky-tools::-webkit-scrollbar,
+.chefops-force-mobile #chefops-mobile-main .chefops-sticky-tools::-webkit-scrollbar {
+  display: none;
+}
+
+/* A short phone, split-screen window or open keyboard should not lose most of
+   the work area to a sticky toolbar. The panel becomes normal page content and
+   scrolls away with the page. */
+@media (max-height: 700px) {
+  html[data-chefops-native='android'] #chefops-mobile-main .chefops-sticky-tools,
+  html[data-chefops-mode='mobile'] #chefops-mobile-main .chefops-sticky-tools,
+  .chefops-force-mobile #chefops-mobile-main .chefops-sticky-tools {
+    position: relative !important;
+    top: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    box-shadow: none !important;
+  }
+}
+
+/* Bottom sheets and drawers use the real dynamic viewport height, including
+   display cut-outs and Android system-bar insets. Their own body owns scrolling. */
+.chefops-mobile-sheet-panel,
+.chefops-drawer-content {
+  max-height: var(--chefops-sheet-max-height) !important;
+}
+
+.chefops-mobile-sheet-body,
+.chefops-drawer-body {
+  min-height: 0 !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+  touch-action: pan-y !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Compact layouts for short phones and landscape orientation. */
+@media (max-height: 700px) {
+  .chefops-mobile-sheet-panel,
+  .chefops-drawer-content {
+    max-height: calc(100dvh - var(--chefops-safe-top)) !important;
+    border-radius: 16px 16px 0 0 !important;
+  }
+
+  .chefops-mobile-sheet-header,
+  .chefops-drawer-header {
+    padding-top: .45rem !important;
+    padding-bottom: .45rem !important;
+  }
+
+  .chefops-mobile-sheet-handle {
+    padding-top: .35rem !important;
+  }
+}
+
+/* Fixed submit/action panels always sit above the bottom navigation and never
+   grow beyond a useful portion of the screen. */
+html[data-chefops-native='android'] .chefops-mobile-action,
+html[data-chefops-mode='mobile'] .chefops-mobile-action,
+.chefops-force-mobile .chefops-mobile-action {
+  bottom: calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
+  max-height: min(30dvh, 13rem) !important;
+  overflow-y: auto !important;
+  overscroll-behavior: contain !important;
+}
+
+/* The main content already ends above the bottom navigation. Remove oversized
+   legacy phone padding that created large blank areas on shorter screens. */
+html[data-chefops-native='android'] #chefops-mobile-main .chefops-page,
+html[data-chefops-mode='mobile'] #chefops-mobile-main .chefops-page,
+.chefops-force-mobile #chefops-mobile-main .chefops-page {
+  padding-bottom: clamp(1rem, 3dvh, 1.75rem) !important;
+}
