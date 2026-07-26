@@ -1,6 +1,5 @@
-/* Authoritative app-shell viewport rules for browser, installed PWA and Capacitor. */
+/* Single authoritative shell for browser, installed PWA and Capacitor. */
 :root {
-  --chefops-viewport-height: 100dvh;
   --chefops-header-height: 3.5rem;
   --chefops-bottom-height: 4rem;
   --chefops-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
@@ -13,7 +12,7 @@ html,
 body,
 #root {
   width: 100%;
-  height: var(--chefops-viewport-height, 100dvh);
+  height: 100%;
   min-width: 0;
   min-height: 0;
   margin: 0;
@@ -27,40 +26,53 @@ html {
 }
 
 body {
-  touch-action: manipulation;
+  touch-action: auto;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
-}
-
-html[data-chefops-native='android'] body {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: var(--chefops-viewport-height, 100dvh);
 }
 
 #root {
   isolation: isolate;
 }
 
-.chefops-app,
-.chefops-shell,
-.chefops-content {
+.chefops-app {
   width: 100%;
-  height: var(--chefops-viewport-height, 100dvh) !important;
+  height: 100dvh !important;
   min-height: 0 !important;
-  max-height: var(--chefops-viewport-height, 100dvh) !important;
+  max-height: 100dvh !important;
   overflow: hidden !important;
 }
 
+html[data-chefops-native='android'] .chefops-app {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100% !important;
+  max-height: 100% !important;
+}
+
 .chefops-shell {
+  width: 100%;
+  height: 100% !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
   align-items: stretch;
+  overflow: hidden !important;
+}
+
+html[data-chefops-native='android'] .chefops-shell {
+  max-width: none !important;
 }
 
 .chefops-content {
-  display: grid !important;
-  grid-template-rows: auto minmax(0, 1fr) auto !important;
+  display: flex !important;
+  width: 100%;
+  height: 100% !important;
   min-width: 0;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
 }
 
 .chefops-app-header,
@@ -73,6 +85,7 @@ html[data-chefops-native='android'] body {
   width: 100% !important;
   max-width: none !important;
   min-width: 0;
+  flex: 0 0 auto !important;
   transform: none !important;
   overflow: hidden;
   box-sizing: border-box;
@@ -80,31 +93,29 @@ html[data-chefops-native='android'] body {
 
 .chefops-app-header {
   z-index: 60;
-  flex: none;
 }
 
 .chefops-bottom-nav {
   z-index: 70;
-  flex: none;
 }
 
 .chefops-main-scroll {
   position: relative;
   display: block;
   width: 100%;
-  height: 100% !important;
+  height: auto !important;
   min-width: 0;
   min-height: 0 !important;
-  max-height: 100%;
+  max-height: none !important;
+  flex: 1 1 0% !important;
   padding-bottom: 0 !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   overscroll-behavior-x: none;
   overscroll-behavior-y: contain;
-  touch-action: pan-y pinch-zoom !important;
+  touch-action: pan-y !important;
   -webkit-overflow-scrolling: touch !important;
   scroll-behavior: auto;
-  scrollbar-gutter: auto;
   pointer-events: auto;
 }
 
@@ -117,15 +128,7 @@ html[data-chefops-native='android'] body {
   padding-bottom: 1.25rem !important;
 }
 
-/* Native Android and forced mobile use fixed physical rows. Only the middle row scrolls. */
-html[data-chefops-native='android'] .chefops-content,
-.chefops-force-mobile .chefops-content {
-  grid-template-rows:
-    calc(var(--chefops-header-height) + var(--chefops-safe-top))
-    minmax(0, 1fr)
-    calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
-}
-
+/* Native Android and mobile/PWA: header and footer consume only their own space. */
 html[data-chefops-native='android'] .chefops-app-header,
 .chefops-force-mobile .chefops-app-header {
   height: calc(var(--chefops-header-height) + var(--chefops-safe-top)) !important;
@@ -163,9 +166,13 @@ html[data-chefops-native='android'] .chefops-bottom-nav > div,
 
 html[data-chefops-native='android'] .chefops-main-scroll,
 .chefops-force-mobile .chefops-main-scroll {
-  height: 100% !important;
   min-height: 0 !important;
-  max-height: 100% !important;
+  padding-bottom: 0 !important;
+}
+
+/* Neutralize older mobile padding that assumed a fixed overlay footer. */
+html[data-chefops-native='android'] .chefops-content main,
+.chefops-force-mobile .chefops-content main {
   padding-bottom: 0 !important;
 }
 
@@ -202,15 +209,4 @@ html[data-chefops-native='android'] .chefops-page,
 html.chefops-edge-back-active .chefops-edge-back-indicator {
   opacity: calc(.35 + (var(--chefops-back-progress, 0) * .65));
   transform: translate3d(calc(-42px + (var(--chefops-back-progress, 0) * 48px)), -50%, 0) scale(calc(.88 + (var(--chefops-back-progress, 0) * .12)));
-}
-
-@media (max-width: 767px), (display-mode: standalone) {
-  .chefops-content main {
-    padding-bottom: 0 !important;
-  }
-
-  .chefops-content main > .mx-auto,
-  .chefops-page {
-    padding-bottom: 1.25rem !important;
-  }
 }
