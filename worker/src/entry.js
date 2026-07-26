@@ -2,10 +2,14 @@ import app from './index.js'
 import { loginWithGoogle, sessionCookie } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { ensureEntitySheet } from './sheets.js'
-import { markDataPackageDirty } from './data-package-release-store.js'
-import { handleDataPackageV2Api } from './data-package-v2-api.js'
+import { markDataPackageDirty } from './data-package-v2-store.js'
+import {
+  handleDataPackageV2Api,
+  previewDataPackageV2,
+  publishDataPackageV2,
+} from './data-package-v2-api.js'
 
-const WORKER_REVISION = 'data-package-v2-control-plane-v1'
+const WORKER_REVISION = 'data-package-v2-drive-publisher-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -52,6 +56,13 @@ function safeSecretEqual(left, right) {
   let mismatch = 0
   for (let index = 0; index < a.length; index += 1) mismatch |= a.charCodeAt(index) ^ b.charCodeAt(index)
   return mismatch === 0
+}
+
+function hasPackSecret(request, env) {
+  return safeSecretEqual(
+    String(env.APP_PACK_WEBHOOK_SECRET || ''),
+    String(request.headers.get('X-ChefOps-Pack-Secret') || ''),
+  )
 }
 
 function allowedOrigins(env) {
@@ -124,6 +135,14 @@ async function handleNativeGoogleLogin(request, env, pathname) {
   }
 }
 
+function forbiddenPackSecret(request, env) {
+  if (hasPackSecret(request, env)) return null
+  const error = new Error('Invalid data-package publisher secret')
+  error.status = 403
+  error.code = 'invalid_pack_webhook_secret'
+  return errorResponse(request, env, error)
+}
+
 async function handleDataPackDirtyWebhook(request, env, pathname) {
   if (pathname !== '/api/internal/data-pack/dirty') return null
   if (request.method !== 'POST') {
@@ -133,14 +152,8 @@ async function handleDataPackDirtyWebhook(request, env, pathname) {
     return errorResponse(request, env, error)
   }
 
-  const configuredSecret = String(env.APP_PACK_WEBHOOK_SECRET || '')
-  const providedSecret = String(request.headers.get('X-ChefOps-Pack-Secret') || '')
-  if (!safeSecretEqual(configuredSecret, providedSecret)) {
-    const error = new Error('Invalid data-pack webhook secret')
-    error.status = 403
-    error.code = 'invalid_pack_webhook_secret'
-    return errorResponse(request, env, error)
-  }
+  const forbidden = forbiddenPackSecret(request, env)
+  if (forbidden) return forbidden
 
   try {
     const body = await readJson(request)
@@ -167,6 +180,53 @@ async function handleDataPackDirtyWebhook(request, env, pathname) {
   }
 }
 
+async function handleInternalDataPackagePublisher(request, env, pathname) {
+  if (!pathname.startsWith('/api/internal/data-package-v2/')) return null
+  if (request.method !== 'POST') {
+    const error = new Error('Method not allowed')
+    error.status = 405
+    error.code = 'method_not_allowed'
+    return errorResponse(request, env, error)
+  }
+
+  const forbidden = forbiddenPackSecret(request, env)
+  if (forbidden) return forbidden
+
+  try {
+    const body = await readJson(request)
+    const outletId = String(body.outlet_id || '').trim()
+    if (!outletId) {
+      const error = new Error('outlet_id is required')
+      error.status = 400
+      error.code = 'missing_outlet'
+      throw error
+    }
+    const actor = String(body.actor || 'drive-package-publisher')
+    const mediaFiles = Array.isArray(body.media_files) ? body.media_files : []
+
+    if (pathname === '/api/internal/data-package-v2/preview') {
+      return json(request, env, await previewDataPackageV2(env, outletId, { actor, mediaFiles }))
+    }
+    if (pathname === '/api/internal/data-package-v2/publish') {
+      const result = await publishDataPackageV2(env, {
+        outletId,
+        actor,
+        expectedVersion: body.expected_version,
+        expectedSourceVersion: body.expected_source_version,
+        mediaFiles,
+      })
+      return json(request, env, { ok: true, ...result }, 201)
+    }
+
+    const error = new Error('Internal data-package endpoint not found')
+    error.status = 404
+    error.code = 'not_found'
+    throw error
+  } catch (error) {
+    return errorResponse(request, env, error)
+  }
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
@@ -182,6 +242,9 @@ export default {
 
       const webhookResponse = await handleDataPackDirtyWebhook(request, runEnv, url.pathname)
       if (webhookResponse) return withApiHeaders(request, env, webhookResponse)
+
+      const publisherResponse = await handleInternalDataPackagePublisher(request, runEnv, url.pathname)
+      if (publisherResponse) return withApiHeaders(request, env, publisherResponse)
 
       const nativeLoginResponse = await handleNativeGoogleLogin(request, runEnv, url.pathname)
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
