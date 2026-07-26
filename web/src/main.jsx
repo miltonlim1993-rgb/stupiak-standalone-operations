@@ -3,11 +3,12 @@ import ReactDOM from 'react-dom/client'
 import App from '@/App.jsx'
 import '@/index.css'
 import '@/viewport.css'
+import '@/panels-v8.css'
 import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 
-const SHELL_VERSION = 'id-pinned-scroll-shell-v7'
+const SHELL_VERSION = 'stable-panels-shell-v8'
 const SW_REFRESH_KEY = `chefops-sw-refreshed-${SHELL_VERSION}`
 
 function isNativeAndroid() {
@@ -118,4 +119,3 @@ const rootElement = document.getElementById('root')
 ReactDOM.createRoot(rootElement).render(<App />)
 window.addEventListener('load', publishShellHealth, { once: true })
 window.addEventListener('resize', publishShellHealth, { passive: true })
-window.addEventListener('chefops:live-refresh', publishShellHealth)
