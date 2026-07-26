@@ -13,8 +13,13 @@ function emptySummary(shiftId) {
   }
 }
 
-function taskShift(task) {
+function rawTaskShift(task) {
   return String(task?.shift_id || task?.config?.schedule?.shift_id || 'DAILY').toUpperCase()
+}
+
+function taskShift(task) {
+  const id = rawTaskShift(task)
+  return id === 'SHIFT_CONTROLLED' ? 'DAILY' : id
 }
 
 function activeWindow(task, now) {
@@ -61,10 +66,10 @@ export function normalizeTaskWorkflowShiftView(payload = {}) {
     if (taskShift(task) !== 'DAILY' || !['MORNING', 'NIGHT'].includes(currentShiftId)) return task
     return {
       ...task,
-      source_shift_id: 'DAILY',
+      source_shift_id: rawTaskShift(task),
       shift_id: currentShiftId,
-      shift_name_cn: task.shift_name_cn || '全天',
-      shift_name_en: task.shift_name_en || 'All Day',
+      shift_name_cn: task.shift_name_cn || '当前班次',
+      shift_name_en: task.shift_name_en || 'Current Shift',
     }
   })
 
