@@ -57,7 +57,7 @@ export default function More() {
       </div>
       <MenuSection title="Management" items={managementItems} />
       <MenuSection title="System" items={systemItems} />
-      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Stable Panels v8</p>
+      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Native Print Panels v9</p>
     </div>
   );
 }
