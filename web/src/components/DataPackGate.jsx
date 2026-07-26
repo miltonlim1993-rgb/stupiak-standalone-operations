@@ -3,6 +3,7 @@ import { DatabaseZap, Download, HardDrive, Loader2, ShieldCheck } from 'lucide-r
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/AuthContext'
+import { hasUsableAppPack, syncAppPack } from '@/lib/app-pack'
 import {
   getDataPackageV2Status,
   getInstalledDataPackage,
@@ -25,6 +26,7 @@ function statusLabel(status) {
     const total = Number(status.total_objects || 0)
     return total > 0 ? `Downloading ${completed}/${total}` : 'Downloading package'
   }
+  if (status.state === 'legacy-ready') return 'Using current operations data'
   if (status.state === 'ready') return 'Verified and ready'
   if (status.state === 'error') return 'Retry required'
   return 'Preparing'
@@ -46,6 +48,23 @@ export default function DataPackGate({ children }) {
   const [downloading, setDownloading] = useState(false)
   const attemptedOutlet = useRef('')
 
+  const enableLegacy = (reason = 'migration') => {
+    if (!hasUsableAppPack(outletId)) return false
+    setReady(true)
+    setCheckingLocal(false)
+    setStatus((current) => ({
+      ...current,
+      state: 'legacy-ready',
+      outlet_id: outletId,
+      migration_mode: true,
+      migration_reason: reason,
+      error: '',
+      error_code: '',
+      error_details: null,
+    }))
+    return true
+  }
+
   const checkLocal = async () => {
     if (!outletId) {
       setReady(false)
@@ -54,18 +73,23 @@ export default function DataPackGate({ children }) {
     }
     const installed = await getInstalledDataPackage(outletId)
     const usable = Boolean(installed?.verified && installed?.manifest?.version)
-    setReady(usable)
-    setCheckingLocal(false)
     if (usable) {
+      setReady(true)
+      setCheckingLocal(false)
       setStatus((current) => ({
         ...current,
         state: 'ready',
         outlet_id: outletId,
         installed_version: installed.manifest.version,
         total_bytes: installed.manifest.total_bytes || current.total_bytes || 0,
+        migration_mode: false,
       }))
+      return true
     }
-    return usable
+    if (enableLegacy(navigator.onLine ? 'v2-not-installed' : 'offline')) return true
+    setReady(false)
+    setCheckingLocal(false)
+    return false
   }
 
   const download = async () => {
@@ -88,11 +112,19 @@ export default function DataPackGate({ children }) {
             error: '',
             error_code: '',
             error_details: null,
+            migration_mode: false,
           }))
         },
       })
       await checkLocal()
     } catch (error) {
+      if (error?.code === 'data_package_v2_not_published') {
+        try {
+          await syncAppPack({ outletId })
+        } catch {}
+        if (enableLegacy('v2-not-published')) return
+      }
+      if (enableLegacy('v2-download-failed')) return
       setReady(false)
       setStatus((current) => ({
         ...current,
