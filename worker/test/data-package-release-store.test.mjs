@@ -3,6 +3,7 @@ import test from 'node:test'
 import {
   buildDataPackageDraft,
   getDataPackageDirtyState,
+  getDataPackageModuleBody,
   getDataPackageModuleObject,
   getLatestDataPackageManifest,
   listDataPackageReleases,
@@ -41,7 +42,10 @@ test('publishes immutable modules and moves latest only after objects exist', as
     outletId,
     generatedBy: 'owner@example.com',
     modules: {
-      tasks: { task_templates: [{ id: 'task-1', title: 'Opening' }] },
+      tasks: {
+        task_templates: [{ id: 'task-1', title: 'Opening' }],
+        lookup: { 10: 'ten', 2: 'two' },
+      },
       inventory: { outlet_stock_list: [{ stock_list_id: 'stock-1', item_name: 'Bun' }] },
     },
   })
@@ -57,6 +61,15 @@ test('publishes immutable modules and moves latest only after objects exist', as
   const latest = await getLatestDataPackageManifest(env, outletId)
   assert.equal(latest.version, published.version)
   assert.equal(latest.published_by, 'owner@example.com')
+
+  const body = await getDataPackageModuleBody(
+    env,
+    outletId,
+    'tasks',
+    latest.modules.tasks.hash,
+  )
+  assert.equal(body, draft.moduleBodies.tasks)
+  assert.equal(await sha256(body), latest.modules.tasks.hash)
 
   const module = await getDataPackageModuleObject(
     env,
