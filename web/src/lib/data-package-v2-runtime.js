@@ -1,3 +1,5 @@
+import { getDeviceId, platformName } from '@/lib/app-device'
+import { reportDataPackageDeviceState } from '@/lib/data-package-device-state'
 import {
   cleanupUnusedPackageObjects,
   getActiveDataPackage,
@@ -6,10 +8,15 @@ import {
   rollbackLocalDataPackage,
   stageAndActivateDataPackage,
 } from '@/lib/data-package-store-v2'
+import {
+  assertDataPackageStorageCapacity,
+  estimateDataPackageStorage,
+} from '@/lib/data-package-storage-preflight'
 
 const configuredApiUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
 const API_BASE_URL = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:8787' : window.location.origin)).replace(/\/$/, '')
 const STATUS_KEY = 'stupiaks.ops.data-package-v2.status'
+const APP_VERSION = '4.5.1-data-package-v2'
 
 let installPromise = null
 const hydratedModules = new Map()
@@ -159,6 +166,23 @@ if (typeof window !== 'undefined') {
   window.addEventListener('chefops:data-package-v2-activated', clearHydratedModules)
 }
 
+async function reportInstalledPackage(outletId, manifest, installedAt = '') {
+  if (!manifest?.version) return null
+  try {
+    return await reportDataPackageDeviceState({
+      outlet_id: clean(outletId),
+      device_id: getDeviceId(),
+      platform: platformName(),
+      app_version: APP_VERSION,
+      data_package_version: manifest.version,
+      data_package_installed_at: installedAt,
+      status: 'active',
+    })
+  } catch {
+    return null
+  }
+}
+
 export function getDataPackageV2Status() {
   return readStatus()
 }
@@ -182,6 +206,11 @@ export async function checkDataPackageV2Update(outletId = '') {
   }
 }
 
+export async function checkDataPackageV2Storage(outletId = '') {
+  const manifest = await api(manifestPath(outletId))
+  return estimateDataPackageStorage(manifest, outletId)
+}
+
 export async function installLatestDataPackageV2({
   outletId = '',
   force = false,
@@ -196,6 +225,8 @@ export async function installLatestDataPackageV2({
       outlet_id: outletKey(outletId),
       installed_version: active?.manifest?.version || '',
       error: '',
+      error_code: '',
+      error_details: null,
       checked_at: new Date().toISOString(),
     })
 
@@ -210,11 +241,12 @@ export async function installLatestDataPackageV2({
         checked_at: new Date().toISOString(),
       })
       onProgress({ state: 'ready', reusedRelease: true, manifest })
+      await reportInstalledPackage(outletId, manifest, active?.installed_at || '')
       return { manifest, reusedRelease: true, status: ready }
     }
 
     writeStatus({
-      state: 'downloading',
+      state: 'preflight',
       outlet_id: outletKey(outletId),
       installed_version: active?.manifest?.version || '',
       available_version: manifest.version,
@@ -222,6 +254,21 @@ export async function installLatestDataPackageV2({
       completed_bytes: 0,
       completed_objects: 0,
     })
+    onProgress({ state: 'preflight', manifest })
+
+    const storagePlan = await assertDataPackageStorageCapacity(manifest, outletId)
+    writeStatus({
+      state: 'downloading',
+      outlet_id: outletKey(outletId),
+      installed_version: active?.manifest?.version || '',
+      available_version: manifest.version,
+      total_bytes: storagePlan.download_bytes,
+      package_bytes: storagePlan.package_bytes,
+      completed_bytes: 0,
+      completed_objects: 0,
+      storage_plan: storagePlan,
+    })
+    onProgress({ state: 'downloading', storagePlan, completedBytes: 0, totalBytes: storagePlan.download_bytes })
 
     await stageAndActivateDataPackage({
       manifest,
@@ -236,37 +283,49 @@ export async function installLatestDataPackageV2({
           outlet_id: outletKey(outletId),
           installed_version: progress.state === 'ready' ? manifest.version : active?.manifest?.version || '',
           available_version: manifest.version,
-          total_bytes: progress.totalBytes || manifest.total_bytes || 0,
+          total_bytes: progress.totalBytes || storagePlan.download_bytes || manifest.total_bytes || 0,
+          package_bytes: manifest.total_bytes || 0,
           completed_bytes: progress.completedBytes || 0,
           completed_objects: progress.completedObjects || 0,
           total_objects: progress.totalObjects || 0,
           current_object: progress.item?.name || '',
           current_kind: progress.item?.kind || '',
           reused_object: Boolean(progress.reused),
+          storage_plan: storagePlan,
           error: '',
+          error_code: '',
+          error_details: null,
         })
-        onProgress(progress)
+        onProgress({ ...progress, storagePlan })
       },
     })
 
     clearHydratedModules()
+    const installedAt = new Date().toISOString()
     const ready = writeStatus({
       state: 'ready',
       outlet_id: outletKey(outletId),
       installed_version: manifest.version,
       available_version: manifest.version,
       total_bytes: manifest.total_bytes || 0,
-      installed_at: new Date().toISOString(),
+      package_bytes: manifest.total_bytes || 0,
+      installed_at: installedAt,
+      storage_plan: storagePlan,
       error: '',
+      error_code: '',
+      error_details: null,
     })
 
+    await reportInstalledPackage(outletId, manifest, installedAt)
     cleanupUnusedPackageObjects({ keepReleasesPerOutlet: 2 }).catch(() => undefined)
-    return { manifest, reusedRelease: false, status: ready }
+    return { manifest, reusedRelease: false, status: ready, storagePlan }
   })().catch((error) => {
     writeStatus({
       state: 'error',
       outlet_id: outletKey(outletId),
       error: error?.message || 'Unable to install operations data package',
+      error_code: error?.code || '',
+      error_details: error?.details || null,
       failed_at: new Date().toISOString(),
     })
     throw error
@@ -304,6 +363,7 @@ export async function rollbackInstalledDataPackageV2(outletId = '') {
     rolled_back_at: new Date().toISOString(),
     error: '',
   })
+  await reportInstalledPackage(outletId, manifest, new Date().toISOString())
   return manifest
 }
 
