@@ -7,7 +7,7 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 
-const SW_REFRESH_KEY = 'chefops-sw-refreshed-native-viewport-mobile-shell-v4'
+const SW_REFRESH_KEY = 'chefops-sw-refreshed-single-scroll-shell-v5'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -18,14 +18,8 @@ function isNativeAndroid() {
   )
 }
 
-function configureNativeViewport() {
-  if (!isNativeAndroid()) return
-  const viewport = document.querySelector('meta[name="viewport"]')
-  viewport?.setAttribute(
-    'content',
-    'width=430, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content',
-  )
-  document.documentElement.dataset.chefopsNative = 'android'
+function markRuntime() {
+  document.documentElement.dataset.chefopsNative = isNativeAndroid() ? 'android' : 'web'
 }
 
 function configureNativeSystemBars() {
@@ -35,36 +29,9 @@ function configureNativeSystemBars() {
   Promise.resolve(systemBars?.setStyle?.({ style: 'LIGHT' })).catch(() => undefined)
 }
 
-function installViewportMetrics() {
-  const root = document.documentElement
-  const update = () => {
-    const visualHeight = Number(window.visualViewport?.height || 0)
-    const layoutHeight = Number(window.innerHeight || 0)
-    const height = Math.max(320, Math.round(visualHeight || layoutHeight))
-    root.style.setProperty('--chefops-viewport-height', `${height}px`)
-    root.style.setProperty('--chefops-viewport-offset-top', `${Math.max(0, Math.round(window.visualViewport?.offsetTop || 0))}px`)
-    root.dataset.chefopsNative = isNativeAndroid() ? 'android' : 'web'
-    window.__chefopsViewport = {
-      native: isNativeAndroid(),
-      innerWidth: window.innerWidth,
-      innerHeight: window.innerHeight,
-      visualWidth: window.visualViewport?.width || 0,
-      visualHeight: window.visualViewport?.height || 0,
-      devicePixelRatio: window.devicePixelRatio || 1,
-    }
-  }
-
-  update()
-  window.addEventListener('resize', update, { passive: true })
-  window.addEventListener('orientationchange', update, { passive: true })
-  window.visualViewport?.addEventListener('resize', update, { passive: true })
-  window.visualViewport?.addEventListener('scroll', update, { passive: true })
-}
-
-configureNativeViewport()
+markRuntime()
 installNativeSessionFetch()
 applyTheme()
-installViewportMetrics()
 configureNativeSystemBars()
 
 if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash?')) {
