@@ -1,6 +1,12 @@
 import { getCurrentUser } from './auth.js'
 import { json, readJson } from './http.js'
 import { getAppPackModule, getOrBuildAppPack } from './app-pack.js'
+import { googleFetch } from './google.js'
+import {
+  getPublishedMedia,
+  publishedMediaManifest,
+  savePublishedMedia,
+} from './data-package-media-store.js'
 import {
   buildDataPackageDraft,
   getDataPackageDirtyState,
@@ -20,7 +26,12 @@ function clean(value = '') {
 function targetOutlet(user, requested = '') {
   const value = clean(requested)
   if (value) return value
-  return clean(user?.outlet_id || String(user?.outlet_ids || '').split(',')[0])
+  const firstAssigned = String(user?.outlet_ids || '')
+    .replace(/[\[\]"]/g, '')
+    .split(',')
+    .map((item) => item.trim())
+    .find(Boolean)
+  return clean(user?.outlet_id || firstAssigned)
 }
 
 function requirePublisher(user) {
@@ -44,7 +55,7 @@ function mediaReferenceKey(value = {}) {
   return url ? `url:${url}` : ''
 }
 
-function scanMediaReferences(modules = {}) {
+export function scanDataPackageMediaReferences(modules = {}) {
   const references = new Map()
   const push = (value, context) => {
     if (!value || typeof value !== 'object') return
@@ -81,29 +92,113 @@ function scanMediaReferences(modules = {}) {
   return [...references.values()]
 }
 
-async function buildSourceDraft(env, outletId, user) {
+function providedMediaMap(mediaFiles = []) {
+  const map = new Map()
+  for (const file of mediaFiles || []) {
+    const sourceKey = clean(file.source_key)
+    if (sourceKey) map.set(sourceKey, file)
+  }
+  return map
+}
+
+function applyPackagedMedia(modules = {}, resolvedBySource = new Map()) {
+  const next = {
+    ...modules,
+    tasks: modules.tasks ? { ...modules.tasks } : modules.tasks,
+    training: modules.training ? { ...modules.training } : modules.training,
+  }
+
+  if (next.tasks?.task_template_photos) {
+    next.tasks.task_template_photos = next.tasks.task_template_photos.map((row) => {
+      const media = resolvedBySource.get(mediaReferenceKey(row))
+      return media ? { ...row, package_media_id: media.hash, package_media_hash: media.hash } : row
+    })
+  }
+  if (next.training?.sop_assets) {
+    next.training.sop_assets = next.training.sop_assets.map((row) => {
+      const media = resolvedBySource.get(mediaReferenceKey(row))
+      return media ? { ...row, package_media_id: media.hash, package_media_hash: media.hash } : row
+    })
+  }
+  if (next.training?.training_lessons) {
+    next.training.training_lessons = next.training.training_lessons.map((row) => {
+      if (!row.video_url) return row
+      const media = resolvedBySource.get(mediaReferenceKey({ ...row, file_url: row.video_url }))
+      return media ? { ...row, package_video_id: media.hash, package_media_id: media.hash } : row
+    })
+  }
+  if (next.training?.training_courses) {
+    next.training.training_courses = next.training.training_courses.map((row) => {
+      if (!row.cover_image_url) return row
+      const media = resolvedBySource.get(mediaReferenceKey({ ...row, file_url: row.cover_image_url }))
+      return media ? { ...row, package_cover_media_id: media.hash } : row
+    })
+  }
+
+  return next
+}
+
+function resolveMediaReferences(references = [], mediaFiles = []) {
+  const provided = providedMediaMap(mediaFiles)
+  const resolved = []
+  const unresolved = []
+  const bySource = new Map()
+
+  for (const reference of references) {
+    const file = provided.get(reference.source_key)
+    if (!file) {
+      unresolved.push(reference)
+      continue
+    }
+    const normalized = {
+      ...file,
+      source_key: reference.source_key,
+      kind: file.kind || reference.asset_type,
+      file_name: file.file_name || reference.file_name,
+    }
+    resolved.push(normalized)
+    bySource.set(reference.source_key, normalized)
+  }
+
+  return { resolved, unresolved, bySource }
+}
+
+async function sourceModules(env, outletId) {
   const sourceManifest = await getOrBuildAppPack(env, outletId, { force: true })
   const modules = {}
-
   for (const name of MODULE_NAMES) {
     const info = sourceManifest?.modules?.[name]
     if (!info?.hash) continue
     const source = await getAppPackModule(env, outletId, name, info.hash)
     if (source?.data !== undefined) modules[name] = source.data
   }
+  return { sourceManifest, modules }
+}
 
-  const mediaReferences = scanMediaReferences(modules)
-  const sourceVersion = modules.core?.settings?.app_data_version || sourceManifest?.data_version || ''
+async function buildSourceDraft(env, outletId, actor = '', mediaFiles = []) {
+  const { sourceManifest, modules } = await sourceModules(env, outletId)
+  const mediaReferences = scanDataPackageMediaReferences(modules)
+  const resolution = resolveMediaReferences(mediaReferences, mediaFiles)
+  const packagedModules = applyPackagedMedia(modules, resolution.bySource)
+  const sourceVersion = packagedModules.core?.settings?.app_data_version || sourceManifest?.data_version || ''
+  const media = publishedMediaManifest(resolution.resolved)
   const draft = await buildDataPackageDraft({
     env,
     outletId,
-    modules,
-    media: {},
-    generatedBy: user?.email || '',
+    modules: packagedModules,
+    media,
+    generatedBy: actor,
     sourceVersion,
   })
 
-  return { draft, sourceManifest, modules, mediaReferences }
+  return {
+    draft,
+    sourceManifest,
+    modules: packagedModules,
+    mediaReferences,
+    resolvedMedia: resolution.resolved,
+    unresolvedMedia: resolution.unresolved,
+  }
 }
 
 export function compareDataPackageDraft(current, draftManifest, mediaReferences = []) {
@@ -144,13 +239,13 @@ export function compareDataPackageDraft(current, draftManifest, mediaReferences 
   }
 }
 
-async function preview(env, outletId, user) {
-  const [{ draft, sourceManifest, modules, mediaReferences }, current, dirty] = await Promise.all([
-    buildSourceDraft(env, outletId, user),
+export async function previewDataPackageV2(env, outletId, { actor = '', mediaFiles = [] } = {}) {
+  const [{ draft, sourceManifest, modules, unresolvedMedia, resolvedMedia }, current, dirty] = await Promise.all([
+    buildSourceDraft(env, outletId, actor, mediaFiles),
     getLatestDataPackageManifest(env, outletId),
     getDataPackageDirtyState(env, outletId),
   ])
-  const comparison = compareDataPackageDraft(current, draft.manifest, mediaReferences)
+  const comparison = compareDataPackageDraft(current, draft.manifest, unresolvedMedia)
   return {
     ok: true,
     outlet_id: outletId,
@@ -160,8 +255,44 @@ async function preview(env, outletId, user) {
     current_manifest: current,
     draft_manifest: draft.manifest,
     dirty,
+    packaged_media_count: resolvedMedia.length,
     comparison,
   }
+}
+
+export async function publishDataPackageV2(env, {
+  outletId = '',
+  actor = '',
+  expectedVersion = '',
+  expectedSourceVersion = '',
+  mediaFiles = [],
+} = {}) {
+  const result = await buildSourceDraft(env, outletId, actor, mediaFiles)
+  if (clean(expectedSourceVersion) && clean(expectedSourceVersion) !== clean(result.sourceManifest?.version)) {
+    const error = new Error('The Google source changed while media was being packaged. Scan the package again.')
+    error.status = 409
+    error.code = 'data_package_source_changed'
+    error.details = { expected_source_version: clean(expectedSourceVersion), actual_source_version: clean(result.sourceManifest?.version) }
+    throw error
+  }
+  if (clean(expectedVersion) && clean(expectedVersion) !== clean(result.draft.manifest.version)) {
+    const error = new Error('The source changed after preview. Preview the package again before publishing.')
+    error.status = 409
+    error.code = 'data_package_preview_outdated'
+    error.details = { expected_version: clean(expectedVersion), actual_version: clean(result.draft.manifest.version) }
+    throw error
+  }
+  if (result.unresolvedMedia.length) {
+    const error = new Error('Media files still need to be packaged before this release can be published')
+    error.status = 409
+    error.code = 'data_package_media_not_packaged'
+    error.details = { media_count: result.unresolvedMedia.length, media: result.unresolvedMedia.slice(0, 100) }
+    throw error
+  }
+
+  await savePublishedMedia(env, result.resolvedMedia)
+  const manifest = await publishDataPackageDraft(env, result.draft, { publishedBy: actor })
+  return { manifest, source_pack_version: result.sourceManifest?.version || '' }
 }
 
 function cacheHeaders(version = '') {
@@ -169,6 +300,31 @@ function cacheHeaders(version = '') {
     'Cache-Control': 'private, max-age=86400, immutable',
     ...(version ? { ETag: `"${version}"` } : {}),
   }
+}
+
+async function mediaResponse(request, env, hash) {
+  const media = await getPublishedMedia(env, hash)
+  if (!media?.source_id) {
+    const error = new Error('Published package media was not found')
+    error.status = 404
+    error.code = 'data_package_media_not_found'
+    throw error
+  }
+  const headers = {}
+  const range = request.headers.get('Range')
+  if (range) headers.Range = range
+  const upstream = await googleFetch(env, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(media.source_id)}?alt=media`, { headers })
+  const responseHeaders = new Headers(upstream.headers)
+  responseHeaders.set('Content-Type', media.mime_type || upstream.headers.get('Content-Type') || 'application/octet-stream')
+  responseHeaders.set('Cache-Control', 'private, max-age=31536000, immutable')
+  responseHeaders.set('ETag', `"${media.hash}"`)
+  responseHeaders.set('Accept-Ranges', 'bytes')
+  if (media.bytes) responseHeaders.set('X-Content-Length', String(media.bytes))
+  return new Response(upstream.body, {
+    status: upstream.status,
+    statusText: upstream.statusText,
+    headers: responseHeaders,
+  })
 }
 
 export async function handleDataPackageV2Api(request, env, url) {
@@ -206,6 +362,9 @@ export async function handleDataPackageV2Api(request, env, url) {
     return json(request, env, module, 200, cacheHeaders(hash))
   }
 
+  const mediaMatch = url.pathname.match(/^\/api\/app\/v4\/data-package\/media\/([a-f0-9]{64})$/i)
+  if (mediaMatch && request.method === 'GET') return mediaResponse(request, env, mediaMatch[1])
+
   if (url.pathname === '/api/app/v4/data-package/status' && request.method === 'GET') {
     const [manifest, releases] = await Promise.all([
       getLatestDataPackageManifest(env, outletId),
@@ -218,31 +377,24 @@ export async function handleDataPackageV2Api(request, env, url) {
     requirePublisher(user)
     const body = await readJson(request).catch(() => ({}))
     const target = targetOutlet(user, body.outlet_id || outletId)
-    return json(request, env, await preview(env, target, user))
+    return json(request, env, await previewDataPackageV2(env, target, {
+      actor: user.email || '',
+      mediaFiles: Array.isArray(body.media_files) ? body.media_files : [],
+    }))
   }
 
   if (url.pathname === '/api/app/v4/data-package/publish' && request.method === 'POST') {
     requirePublisher(user)
     const body = await readJson(request).catch(() => ({}))
     const target = targetOutlet(user, body.outlet_id || outletId)
-    const { draft, mediaReferences } = await buildSourceDraft(env, target, user)
-    const expected = clean(body.expected_version)
-    if (expected && expected !== draft.manifest.version) {
-      const error = new Error('The source changed after preview. Preview the package again before publishing.')
-      error.status = 409
-      error.code = 'data_package_preview_outdated'
-      error.details = { expected_version: expected, actual_version: draft.manifest.version }
-      throw error
-    }
-    if (mediaReferences.length && body.allow_unpacked_media !== true) {
-      const error = new Error('Media files still need to be packaged before this release can be published')
-      error.status = 409
-      error.code = 'data_package_media_not_packaged'
-      error.details = { media_count: mediaReferences.length, media: mediaReferences.slice(0, 50) }
-      throw error
-    }
-    const manifest = await publishDataPackageDraft(env, draft, { publishedBy: user.email || '' })
-    return json(request, env, { ok: true, manifest }, 201)
+    const result = await publishDataPackageV2(env, {
+      outletId: target,
+      actor: user.email || '',
+      expectedVersion: body.expected_version,
+      expectedSourceVersion: body.expected_source_version,
+      mediaFiles: Array.isArray(body.media_files) ? body.media_files : [],
+    })
+    return json(request, env, { ok: true, ...result }, 201)
   }
 
   if (url.pathname === '/api/app/v4/data-package/releases' && request.method === 'GET') {
