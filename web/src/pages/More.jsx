@@ -7,6 +7,7 @@ import {
   Clock,
   Download,
   GraduationCap,
+  Printer,
   Receipt,
   Settings,
   ShieldCheck,
@@ -36,7 +37,10 @@ export default function More() {
   const { user } = useAuth();
   const canUseControl = (ROLE_LEVEL[user?.role] || 0) >= ROLE_LEVEL.manager;
   const managementItems = [
-    ...(canUseControl ? [{ to: "/ops-control", label: "Ops Control", desc: "Approve access, assign outlets and send updates", icon: ShieldCheck }] : []),
+    ...(canUseControl ? [
+      { to: "/ops-control", label: "Ops Control", desc: "Approve access, assign outlets and send updates", icon: ShieldCheck },
+      { to: "/labels/settings", label: "Label Printer Settings", desc: "Connection, printer language, size, retry and offline queue", icon: Printer },
+    ] : []),
     { to: "/reports", label: "Reports", desc: "Export operations, stock, photo and training reports", icon: BarChart3 },
   ];
 
