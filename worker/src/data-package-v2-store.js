@@ -1,6 +1,7 @@
 import {
   getDataPackageDirtyState,
   getDataPackageManifestVersion,
+  getDataPackageModuleBody,
   getDataPackageModuleObject,
   getLatestDataPackageManifest,
   listDataPackageReleases,
@@ -139,6 +140,7 @@ export async function buildDataPackageDraft({
 export {
   getDataPackageDirtyState,
   getDataPackageManifestVersion,
+  getDataPackageModuleBody,
   getDataPackageModuleObject,
   getLatestDataPackageManifest,
   listDataPackageReleases,
