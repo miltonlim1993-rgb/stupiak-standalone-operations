@@ -5,12 +5,16 @@ import { ensureEntitySheet } from './sheets.js'
 import { assignedOutletIds, assertOutletAccess } from './permissions.js'
 import { getDataPackageModuleBody, markDataPackageDirty } from './data-package-v2-store.js'
 import {
+  listDataPackageDeviceStates,
+  saveDataPackageDeviceState,
+} from './data-package-device-store.js'
+import {
   handleDataPackageV2Api,
   previewDataPackageV2,
   publishDataPackageV2,
 } from './data-package-v2-api.js'
 
-const WORKER_REVISION = 'data-package-v2-exact-bytes-v1'
+const WORKER_REVISION = 'data-package-v2-device-state-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -234,6 +238,41 @@ async function handleInternalDataPackagePublisher(request, env, pathname) {
   }
 }
 
+async function handleDataPackageDeviceState(request, env, url) {
+  if (!url.pathname.startsWith('/api/app/v4/data-package/device')) return null
+  const user = await getCurrentUser(request, env)
+
+  if (url.pathname === '/api/app/v4/data-package/device' && request.method === 'POST') {
+    const body = await readJson(request)
+    const outletId = requestedOutletForUser(user, body.outlet_id)
+    const device = await saveDataPackageDeviceState(env, {
+      outletId,
+      deviceId: body.device_id,
+      user,
+      platform: body.platform,
+      appVersion: body.app_version,
+      packageVersion: body.data_package_version,
+      installedAt: body.data_package_installed_at,
+      status: body.status || 'active',
+    })
+    return json(request, env, { ok: true, device })
+  }
+
+  if (url.pathname === '/api/app/v4/data-package/devices' && request.method === 'GET') {
+    if (!['manager', 'owner'].includes(String(user?.role || ''))) {
+      const error = new Error('Manager access required')
+      error.status = 403
+      error.code = 'forbidden'
+      throw error
+    }
+    const outletId = requestedOutletForUser(user, url.searchParams.get('outlet_id'))
+    const devices = await listDataPackageDeviceStates(env, outletId)
+    return json(request, env, { ok: true, outlet_id: outletId, devices })
+  }
+
+  return null
+}
+
 async function handleExactDataPackageModule(request, env, url) {
   const match = url.pathname.match(/^\/api\/app\/v4\/data-package\/module\/([^/]+)$/)
   if (!match || request.method !== 'GET') return null
@@ -283,6 +322,9 @@ export default {
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
       try {
+        const deviceResponse = await handleDataPackageDeviceState(request, runEnv, url)
+        if (deviceResponse) return withApiHeaders(request, env, deviceResponse)
+
         const exactModuleResponse = await handleExactDataPackageModule(request, runEnv, url)
         if (exactModuleResponse) return withApiHeaders(request, env, exactModuleResponse)
 
