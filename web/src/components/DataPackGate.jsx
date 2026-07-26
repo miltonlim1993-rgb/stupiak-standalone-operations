@@ -16,8 +16,8 @@ function statusLabel(status) {
   if (status.state === 'checking') return 'Checking version'
   if (status.state === 'downloading') {
     const completed = Number(status.completed_modules || 0)
-    const total = Number(status.total_modules || status.changed_modules?.length || 0)
-    return total ? `Downloading ${completed}/${total}` : 'Downloading'
+    const total = Number(status.total_modules || 0)
+    return total > 0 ? `Downloading ${completed}/${total}` : 'Downloading updates'
   }
   if (status.state === 'saving') return 'Saving on device'
   if (status.state === 'ready') return 'Ready'
