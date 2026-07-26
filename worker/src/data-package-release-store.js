@@ -249,9 +249,13 @@ export async function getDataPackageManifestVersion(env, outletId = '', version 
   return storeGet(env, key('manifest', outletId, version), 'json')
 }
 
-export async function getDataPackageModuleObject(env, outletId, name, hash) {
+export async function getDataPackageModuleBody(env, outletId, name, hash) {
   if (!name || !hash) return null
-  const body = await storeGet(env, key('object', outletId, `module:${name}:${hash}`))
+  return storeGet(env, key('object', outletId, `module:${name}:${hash}`))
+}
+
+export async function getDataPackageModuleObject(env, outletId, name, hash) {
+  const body = await getDataPackageModuleBody(env, outletId, name, hash)
   if (!body) return null
   try { return JSON.parse(body) } catch { return null }
 }
