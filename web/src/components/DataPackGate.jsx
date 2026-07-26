@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { DatabaseZap, Download, Loader2, ShieldCheck } from 'lucide-react'
+import { DatabaseZap, Download, HardDrive, Loader2, ShieldCheck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/AuthContext'
@@ -19,6 +19,7 @@ function bytes(value) {
 
 function statusLabel(status) {
   if (status.state === 'checking') return 'Checking published release'
+  if (status.state === 'preflight') return 'Checking device storage'
   if (status.state === 'downloading') {
     const completed = Number(status.completed_objects || 0)
     const total = Number(status.total_objects || 0)
@@ -79,11 +80,14 @@ export default function DataPackGate({ children }) {
             state: progress.state,
             outlet_id: outletId,
             completed_bytes: progress.completedBytes || 0,
-            total_bytes: progress.totalBytes || current.total_bytes || 0,
+            total_bytes: progress.totalBytes || progress.storagePlan?.download_bytes || current.total_bytes || 0,
             completed_objects: progress.completedObjects || 0,
             total_objects: progress.totalObjects || 0,
             current_object: progress.item?.name || '',
+            storage_plan: progress.storagePlan || current.storage_plan || null,
             error: '',
+            error_code: '',
+            error_details: null,
           }))
         },
       })
@@ -95,6 +99,8 @@ export default function DataPackGate({ children }) {
         state: 'error',
         outlet_id: outletId,
         error: error.message || 'Unable to install the outlet data package',
+        error_code: error.code || '',
+        error_details: error.details || null,
       }))
     } finally {
       setDownloading(false)
@@ -129,8 +135,9 @@ export default function DataPackGate({ children }) {
 
   if (ready) return children
 
-  const busy = checkingLocal || downloading || ['checking', 'downloading'].includes(status.state)
+  const busy = checkingLocal || downloading || ['checking', 'preflight', 'downloading'].includes(status.state)
   const progress = percent(status)
+  const storage = status.storage_plan || status.error_details || null
 
   return (
     <div className="flex min-h-full w-full items-center justify-center p-4 sm:p-6">
@@ -142,8 +149,20 @@ export default function DataPackGate({ children }) {
         <div className="mt-5 grid gap-2 sm:grid-cols-3">
           <GateStat label="Outlet" value={outletId || 'Not assigned'} />
           <GateStat label="Status" value={checkingLocal ? 'Checking this device' : statusLabel(status)} />
-          <GateStat label="Package size" value={bytes(status.total_bytes)} />
+          <GateStat label="Download" value={bytes(storage?.download_bytes || status.total_bytes)} />
         </div>
+
+        {storage ? (
+          <div className="mt-4 rounded-xl border border-border bg-muted/40 p-3 text-xs leading-5">
+            <p className="flex items-center gap-2 font-semibold"><HardDrive className="h-4 w-4" /> Device storage preflight</p>
+            <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-muted-foreground">
+              <span>Free space</span><span className="text-right font-medium text-foreground">{storage.storage_estimate_supported ? bytes(storage.available_bytes) : 'Device estimate unavailable'}</span>
+              <span>Required with reserve</span><span className="text-right font-medium text-foreground">{bytes(storage.required_available_bytes)}</span>
+              <span>Reused locally</span><span className="text-right font-medium text-foreground">{bytes(storage.reused_bytes)}</span>
+            </div>
+            {storage.large_object_warning ? <p className="mt-2 text-amber-700">Large media detected: {bytes(storage.largest_object?.bytes)}. Keep the app open until verification finishes.</p> : null}
+          </div>
+        ) : null}
 
         {busy && Number(status.total_bytes || 0) > 0 ? (
           <div className="mt-4 space-y-2">
