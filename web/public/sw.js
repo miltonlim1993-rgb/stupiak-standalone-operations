@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-5-1-native-viewport-mobile-shell-v4'
+const VERSION = 'chefops-v4-5-1-single-scroll-shell-v5'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
