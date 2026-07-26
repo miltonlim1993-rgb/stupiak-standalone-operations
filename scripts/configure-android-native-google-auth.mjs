@@ -7,7 +7,8 @@ const androidRoot = path.join(root, 'web', 'android')
 const appGradlePath = path.join(androidRoot, 'app', 'build.gradle')
 const javaRoot = path.join(androidRoot, 'app', 'src', 'main', 'java', 'com', 'stupiaks', 'ops')
 const mainActivityPath = path.join(javaRoot, 'MainActivity.java')
-const pluginPath = path.join(javaRoot, 'NativeGoogleAuthPlugin.java')
+const googlePluginPath = path.join(javaRoot, 'NativeGoogleAuthPlugin.java')
+const printPluginPath = path.join(javaRoot, 'NativeLabelPrintPlugin.java')
 const versionCode = Number(process.env.ANDROID_VERSION_CODE || 1)
 const versionName = String(process.env.ANDROID_VERSION_NAME || '4.5.1').trim()
 
@@ -47,6 +48,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(NativeGoogleAuthPlugin.class);
+        registerPlugin(NativeLabelPrintPlugin.class);
         super.onCreate(savedInstanceState);
 
         WebView webView = getBridge().getWebView();
@@ -76,7 +78,7 @@ public class MainActivity extends BridgeActivity {
 }
 `)
 
-await fs.writeFile(pluginPath, `package com.stupiaks.ops;
+await fs.writeFile(googlePluginPath, `package com.stupiaks.ops;
 
 import android.os.CancellationSignal;
 
@@ -166,4 +168,123 @@ public class NativeGoogleAuthPlugin extends Plugin {
 }
 `)
 
-console.log(`Configured Android Credential Manager, single-scroll mobile shell, light system bars and app version (${versionName}, versionCode ${versionCode}).`)
+await fs.writeFile(printPluginPath, `package com.stupiaks.ops;
+
+import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
+import android.print.PrintAttributes;
+import android.print.PrintDocumentAdapter;
+import android.print.PrintManager;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
+import com.getcapacitor.JSObject;
+import com.getcapacitor.Plugin;
+import com.getcapacitor.PluginCall;
+import com.getcapacitor.PluginMethod;
+import com.getcapacitor.annotation.CapacitorPlugin;
+
+import java.util.ArrayList;
+import java.util.List;
+
+@CapacitorPlugin(name = "NativeLabelPrint")
+public class NativeLabelPrintPlugin extends Plugin {
+    private final List<WebView> activePrintViews = new ArrayList<>();
+
+    private int millimetresToMils(double millimetres) {
+        return Math.max(1, (int) Math.round((millimetres / 25.4d) * 1000d));
+    }
+
+    @PluginMethod
+    public void printHtml(PluginCall call) {
+        String html = call.getString("html");
+        if (html == null || html.trim().isEmpty()) {
+            call.reject("Label HTML is empty");
+            return;
+        }
+
+        String requestedName = call.getString("jobName", "Stupiak Ops Label");
+        final String jobName = requestedName == null || requestedName.trim().isEmpty()
+            ? "Stupiak Ops Label"
+            : requestedName.trim();
+        final double widthMm = call.getDouble("widthMm", 40d);
+        final double heightMm = call.getDouble("heightMm", 30d);
+
+        getActivity().runOnUiThread(() -> {
+            try {
+                WebView printView = new WebView(getContext());
+                WebSettings settings = printView.getSettings();
+                settings.setJavaScriptEnabled(true);
+                settings.setLoadWithOverviewMode(false);
+                settings.setUseWideViewPort(true);
+                settings.setSupportZoom(false);
+                settings.setBuiltInZoomControls(false);
+                printView.setVerticalScrollBarEnabled(false);
+                printView.setHorizontalScrollBarEnabled(false);
+                activePrintViews.add(printView);
+
+                final boolean[] started = { false };
+                printView.setWebViewClient(new WebViewClient() {
+                    @Override
+                    public void onPageFinished(WebView view, String url) {
+                        if (started[0]) return;
+                        started[0] = true;
+
+                        try {
+                            PrintManager printManager = (PrintManager) getActivity().getSystemService(Context.PRINT_SERVICE);
+                            if (printManager == null) {
+                                activePrintViews.remove(view);
+                                view.destroy();
+                                call.reject("Android print service is unavailable");
+                                return;
+                            }
+
+                            int widthMils = millimetresToMils(Math.max(20d, widthMm));
+                            int heightMils = millimetresToMils(Math.max(15d, heightMm));
+                            PrintAttributes.MediaSize mediaSize = new PrintAttributes.MediaSize(
+                                "CHEFOPS_LABEL_" + widthMils + "_" + heightMils,
+                                "ChefOps " + Math.round(widthMm) + " x " + Math.round(heightMm) + " mm",
+                                widthMils,
+                                heightMils
+                            );
+
+                            PrintAttributes attributes = new PrintAttributes.Builder()
+                                .setMediaSize(mediaSize)
+                                .setMinMargins(PrintAttributes.Margins.NO_MARGINS)
+                                .setColorMode(PrintAttributes.COLOR_MODE_MONOCHROME)
+                                .build();
+
+                            PrintDocumentAdapter adapter = view.createPrintDocumentAdapter(jobName);
+                            printManager.print(jobName, adapter, attributes);
+
+                            JSObject result = new JSObject();
+                            result.put("started", true);
+                            result.put("jobName", jobName);
+                            result.put("widthMm", widthMm);
+                            result.put("heightMm", heightMm);
+                            call.resolve(result);
+
+                            new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                                activePrintViews.remove(view);
+                                view.destroy();
+                            }, 300000L);
+                        } catch (Exception error) {
+                            activePrintViews.remove(view);
+                            view.destroy();
+                            call.reject(error.getMessage() == null ? "Unable to open Android print service" : error.getMessage());
+                        }
+                    }
+                });
+
+                printView.loadDataWithBaseURL("https://localhost/", html, "text/html", "UTF-8", null);
+            } catch (Exception error) {
+                call.reject(error.getMessage() == null ? "Unable to prepare native label print" : error.getMessage());
+            }
+        });
+    }
+}
+`)
+
+console.log(`Configured Android Credential Manager, native label printing, single-scroll mobile shell, light system bars and app version (${versionName}, versionCode ${versionCode}).`)
