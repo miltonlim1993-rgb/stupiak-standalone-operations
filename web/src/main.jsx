@@ -7,6 +7,8 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 
+const SW_REFRESH_KEY = 'chefops-sw-refreshed-mobile-shell-v2'
+
 installNativeSessionFetch()
 applyTheme()
 
@@ -18,9 +20,9 @@ if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   let refreshing = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (refreshing || sessionStorage.getItem('chefops-sw-refreshed') === '1') return
+    if (refreshing || sessionStorage.getItem(SW_REFRESH_KEY) === '1') return
     refreshing = true
-    sessionStorage.setItem('chefops-sw-refreshed', '1')
+    sessionStorage.setItem(SW_REFRESH_KEY, '1')
     window.location.reload()
   })
 
