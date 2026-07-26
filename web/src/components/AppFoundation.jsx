@@ -5,7 +5,7 @@ import { getDeviceId, platformName, showSystemNotification } from '@/lib/app-dev
 import { hasUsableAppPack, syncAppPack } from '@/lib/app-pack'
 import { queryClientInstance } from '@/lib/query-client'
 
-const VERSION = '4.5.1-native-print-panels-v9'
+const VERSION = '4.5.1-direct-print-flow-v10'
 const BOOTSTRAP_KEY = 'chefops.v4.bootstrap.public'
 const LAST_PACK_CHECK_KEY = 'chefops.data-pack.last-background-check'
 const PACK_RECHECK_MS = 30 * 60_000
