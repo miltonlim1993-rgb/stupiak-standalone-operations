@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-5-1-stable-panels-shell-v8'
+const VERSION = 'chefops-v4-5-1-native-print-panels-shell-v9'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
