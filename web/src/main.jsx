@@ -8,6 +8,7 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 
 const SW_REFRESH_KEY = 'chefops-sw-refreshed-single-scroll-shell-v5'
+const SHELL_VERSION = 'single-scroll-v5'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -27,6 +28,80 @@ function configureNativeSystemBars() {
   const systemBars = window.Capacitor?.Plugins?.SystemBars
   Promise.resolve(systemBars?.show?.()).catch(() => undefined)
   Promise.resolve(systemBars?.setStyle?.({ style: 'LIGHT' })).catch(() => undefined)
+}
+
+function installShellGuard(root) {
+  let frame = 0
+
+  const enforce = () => {
+    frame = 0
+    const app = root.querySelector('.chefops-app')
+    const shell = root.querySelector('.chefops-shell')
+    const content = root.querySelector('.chefops-content')
+    const header = root.querySelector('.chefops-app-header')
+    const main = root.querySelector('.chefops-main-scroll')
+    const nav = root.querySelector('.chefops-bottom-nav')
+    if (!app || !shell || !content || !header || !main || !nav) return
+
+    Object.assign(app.style, {
+      width: '100%',
+      height: '100dvh',
+      minHeight: '0',
+      overflow: 'hidden',
+    })
+    Object.assign(shell.style, {
+      width: '100%',
+      height: '100%',
+      minHeight: '0',
+      overflow: 'hidden',
+    })
+    Object.assign(content.style, {
+      display: 'flex',
+      flexDirection: 'column',
+      width: '100%',
+      height: '100%',
+      minHeight: '0',
+      overflow: 'hidden',
+    })
+    Object.assign(header.style, { flex: '0 0 auto' })
+    Object.assign(main.style, {
+      flex: '1 1 0%',
+      width: '100%',
+      height: 'auto',
+      minHeight: '0',
+      overflowX: 'hidden',
+      overflowY: 'auto',
+      touchAction: 'pan-y',
+      WebkitOverflowScrolling: 'touch',
+    })
+    Object.assign(nav.style, { flex: '0 0 auto' })
+
+    const navRect = nav.getBoundingClientRect()
+    const mainRect = main.getBoundingClientRect()
+    window.__chefopsShellHealth = {
+      version: SHELL_VERSION,
+      viewportWidth: window.innerWidth,
+      viewportHeight: window.innerHeight,
+      mainTop: Math.round(mainRect.top),
+      mainBottom: Math.round(mainRect.bottom),
+      mainHeight: Math.round(mainRect.height),
+      mainScrollHeight: main.scrollHeight,
+      navTop: Math.round(navRect.top),
+      navBottom: Math.round(navRect.bottom),
+      navVisible: navRect.top >= 0 && navRect.bottom <= window.innerHeight + 2,
+    }
+  }
+
+  const schedule = () => {
+    if (frame) return
+    frame = window.requestAnimationFrame(enforce)
+  }
+
+  const observer = new MutationObserver(schedule)
+  observer.observe(root, { childList: true, subtree: true })
+  window.addEventListener('resize', schedule, { passive: true })
+  window.addEventListener('orientationchange', schedule, { passive: true })
+  schedule()
 }
 
 markRuntime()
@@ -55,4 +130,6 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
   })
 }
 
-ReactDOM.createRoot(document.getElementById('root')).render(<App />)
+const rootElement = document.getElementById('root')
+ReactDOM.createRoot(rootElement).render(<App />)
+installShellGuard(rootElement)
