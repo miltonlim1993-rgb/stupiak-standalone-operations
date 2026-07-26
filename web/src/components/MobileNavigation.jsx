@@ -39,6 +39,14 @@ export default function MobileNavigation() {
     locationRef.current = location
   }, [location])
 
+  const goBack = () => {
+    const current = locationRef.current
+    if (isRootPath(current.pathname)) return false
+    if (Number(window.history.state?.idx || 0) > 0) navigate(-1)
+    else navigate('/', { replace: true })
+    return true
+  }
+
   useEffect(() => {
     const plugin = nativeAppPlugin()
     if (!plugin?.addListener) return undefined
@@ -47,12 +55,8 @@ export default function MobileNavigation() {
     let cancelled = false
 
     Promise.resolve(plugin.addListener('backButton', () => {
-      const current = locationRef.current
-      if (!isRootPath(current.pathname) && Number(window.history.state?.idx || 0) > 0) {
-        navigate(-1)
-        return
-      }
-      plugin.minimizeApp?.().catch?.(() => undefined)
+      if (goBack()) return
+      Promise.resolve(plugin.minimizeApp?.()).catch(() => undefined)
     })).then((handle) => {
       if (cancelled) handle?.remove?.()
       else listener = handle
@@ -85,7 +89,7 @@ export default function MobileNavigation() {
     const onPointerDown = (event) => {
       if (event.pointerType === 'mouse' || event.clientX > EDGE_PX || !canStartFrom(event.target)) return
       const current = locationRef.current
-      if (isRootPath(current.pathname) || Number(window.history.state?.idx || 0) <= 0) return
+      if (isRootPath(current.pathname)) return
 
       tracking = true
       pointerId = event.pointerId
@@ -116,7 +120,7 @@ export default function MobileNavigation() {
       if (!tracking || event.pointerId !== pointerId) return
       const shouldGoBack = committed || lastX - startX >= COMMIT_PX
       reset()
-      if (shouldGoBack) navigate(-1)
+      if (shouldGoBack) goBack()
     }
 
     document.addEventListener('pointerdown', onPointerDown, { passive: true })
