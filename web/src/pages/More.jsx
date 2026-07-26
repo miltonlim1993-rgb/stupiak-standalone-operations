@@ -57,6 +57,7 @@ export default function More() {
       </div>
       <MenuSection title="Management" items={managementItems} />
       <MenuSection title="System" items={systemItems} />
+      <p className="pb-2 text-center text-[11px] text-muted-foreground">App shell: Single Scroll v5</p>
     </div>
   );
 }
