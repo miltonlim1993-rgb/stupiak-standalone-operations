@@ -9,12 +9,13 @@ import { pipeline } from 'node:stream/promises'
 const DEFAULT_WORKER_URL = 'https://stupiaks-ops.sporkburger19.workers.dev'
 
 function parseArgs(argv) {
-  const result = { outlet: '', dryRun: false, workerUrl: '', actor: 'drive-package-publisher' }
+  const result = { outlet: '', dryRun: false, workerUrl: '', actor: 'drive-package-publisher', report: '' }
   for (let index = 0; index < argv.length; index += 1) {
     const value = argv[index]
     if (value === '--outlet') result.outlet = String(argv[++index] || '').trim()
     else if (value === '--worker-url') result.workerUrl = String(argv[++index] || '').trim()
     else if (value === '--actor') result.actor = String(argv[++index] || '').trim()
+    else if (value === '--report') result.report = String(argv[++index] || '').trim()
     else if (value === '--dry-run') result.dryRun = true
     else if (value === '--help' || value === '-h') result.help = true
     else throw new Error(`Unknown argument: ${value}`)
@@ -33,7 +34,8 @@ Options:
   --outlet <id>       Required outlet ID/code
   --worker-url <url>  Worker URL (defaults to production)
   --actor <name>      Publish audit name
-  --dry-run           Scan and hash without uploading or publishing
+  --report <path>     Optional JSON report output path
+  --dry-run           Read-only scan and hash; no folders, uploads or release changes
 
 Required environment values:
   GOOGLE_DATA_CLIENT_ID
@@ -78,6 +80,19 @@ function required(env, name) {
   const value = String(env[name] || '').trim()
   if (!value) throw new Error(`${name} is required. Add it to .dev.vars or your shell environment.`)
   return value
+}
+
+function reportPath(args) {
+  if (args.report) return path.resolve(args.report)
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').replace('T', '_').replace('Z', '')
+  const mode = args.dryRun ? 'dry-run' : 'publish'
+  return path.join(os.homedir(), '.stupiaks-ops-data-packages', 'reports', `${args.outlet}-${mode}-${timestamp}.json`)
+}
+
+async function writeReport(filePath, report) {
+  await fs.mkdir(path.dirname(filePath), { recursive: true })
+  await fs.writeFile(filePath, `${JSON.stringify(report, null, 2)}\n`, 'utf8')
+  return filePath
 }
 
 async function googleAccessToken(env) {
@@ -193,6 +208,7 @@ function extensionFor(fileName = '', mimeType = '') {
 }
 
 async function findPublishedFile(token, folderId, fileName) {
+  if (!folderId) return null
   const url = new URL('https://www.googleapis.com/drive/v3/files')
   url.searchParams.set('q', [
     `name='${escapeQuery(fileName)}'`,
@@ -278,43 +294,48 @@ async function packageReference({ token, mediaFolderId, reference, tempDir, dryR
     throw new Error(`Media source is missing for ${reference.source_key}`)
   }
 
-  const fileInfo = await fs.stat(tempPath)
-  const hash = await fileSha256(tempPath)
-  const effectiveMime = metadata?.mimeType || mimeType || 'application/octet-stream'
-  const effectiveName = metadata?.name || sourceName
-  const publishedName = `${hash}${extensionFor(effectiveName, effectiveMime)}`
-  let published = await findPublishedFile(token, mediaFolderId, publishedName)
-  let reused = Boolean(published)
+  try {
+    const fileInfo = await fs.stat(tempPath)
+    const hash = await fileSha256(tempPath)
+    const effectiveMime = metadata?.mimeType || mimeType || 'application/octet-stream'
+    const effectiveName = metadata?.name || sourceName
+    const publishedName = `${hash}${extensionFor(effectiveName, effectiveMime)}`
+    let published = await findPublishedFile(token, mediaFolderId, publishedName)
+    let reused = Boolean(published)
 
-  if (!published && !dryRun) {
-    published = await uploadPublishedFile(
-      token,
-      mediaFolderId,
-      tempPath,
-      publishedName,
-      effectiveMime,
+    if (!published && !dryRun) {
+      if (!mediaFolderId) throw new Error('Published media folder is unavailable')
+      published = await uploadPublishedFile(
+        token,
+        mediaFolderId,
+        tempPath,
+        publishedName,
+        effectiveMime,
+        hash,
+        reference.source_key,
+      )
+      reused = false
+    }
+
+    if (!published && dryRun) {
+      published = { id: `dry-run:${hash}`, name: publishedName, size: String(fileInfo.size), mimeType: effectiveMime }
+    }
+
+    return {
+      source_key: reference.source_key,
+      source_etag: metadata?.md5Checksum || metadata?.modifiedTime || '',
       hash,
-      reference.source_key,
-    )
-    reused = false
-  }
-
-  if (!published && dryRun) {
-    published = { id: `dry-run:${hash}`, name: publishedName, size: String(fileInfo.size), mimeType: effectiveMime }
-  }
-
-  await fs.rm(tempPath, { force: true })
-  return {
-    source_key: reference.source_key,
-    source_etag: metadata?.md5Checksum || metadata?.modifiedTime || '',
-    hash,
-    bytes: Number(fileInfo.size),
-    mime_type: effectiveMime,
-    file_name: publishedName,
-    kind: reference.asset_type || 'file',
-    published_drive_file_id: published.id,
-    uploaded_at: new Date().toISOString(),
-    reused,
+      bytes: Number(fileInfo.size),
+      mime_type: effectiveMime,
+      file_name: publishedName,
+      kind: reference.asset_type || 'file',
+      published_drive_file_id: published.id,
+      uploaded_at: new Date().toISOString(),
+      reused,
+      dry_run: dryRun,
+    }
+  } finally {
+    await fs.rm(tempPath, { force: true })
   }
 }
 
@@ -332,6 +353,7 @@ async function main() {
   const publishedRoot = required(env, 'GOOGLE_PUBLISHED_PACKAGE_FOLDER_ID')
   const token = await googleAccessToken(env)
   const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'stupiaks-data-package-'))
+  const outputPath = reportPath(args)
 
   try {
     console.log(`\nScanning ${args.outlet} source through ${workerUrl} ...`)
@@ -344,8 +366,12 @@ async function main() {
     console.log(`Modules waiting: ${(initial.comparison?.changed_modules || []).join(', ') || 'none'}`)
     console.log(`Media files: ${references.length}`)
 
-    const outletFolder = await ensureFolder(token, publishedRoot, args.outlet)
-    const mediaFolder = await ensureFolder(token, outletFolder.id, 'media')
+    const outletFolder = args.dryRun
+      ? await findFolder(token, publishedRoot, args.outlet)
+      : await ensureFolder(token, publishedRoot, args.outlet)
+    const mediaFolder = outletFolder
+      ? (args.dryRun ? await findFolder(token, outletFolder.id, 'media') : await ensureFolder(token, outletFolder.id, 'media'))
+      : null
     const mediaFiles = []
 
     for (let index = 0; index < references.length; index += 1) {
@@ -353,7 +379,7 @@ async function main() {
       process.stdout.write(`[${index + 1}/${references.length}] ${reference.file_name || reference.source_key} ... `)
       const packaged = await packageReference({
         token,
-        mediaFolderId: mediaFolder.id,
+        mediaFolderId: mediaFolder?.id || '',
         reference,
         tempDir,
         dryRun: args.dryRun,
@@ -371,11 +397,36 @@ async function main() {
       throw new Error(`${finalPreview.comparison.unresolved_media_count} media files remain unresolved after packaging`)
     }
 
+    const report = {
+      schema: 'stupiaks-ops-data-package-publisher-report-v1',
+      mode: args.dryRun ? 'dry-run' : 'publish',
+      generated_at: new Date().toISOString(),
+      outlet_id: args.outlet,
+      worker_url: workerUrl,
+      source_pack_version: initial.source_pack_version || '',
+      current_version: initial.current_manifest?.version || '',
+      draft_version: finalPreview.draft_manifest?.version || '',
+      changed_modules: finalPreview.comparison?.changed_modules || [],
+      module_changes: finalPreview.comparison?.module_changes || [],
+      media_count: mediaFiles.length,
+      media_bytes: mediaFiles.reduce((sum, item) => sum + Number(item.bytes || 0), 0),
+      reused_media_count: mediaFiles.filter((item) => item.reused).length,
+      new_media_count: mediaFiles.filter((item) => !item.reused).length,
+      total_package_bytes: Number(finalPreview.draft_manifest?.total_bytes || 0),
+      published_root_folder_id: publishedRoot,
+      outlet_folder_found: Boolean(outletFolder?.id),
+      media_folder_found: Boolean(mediaFolder?.id),
+      media_files: mediaFiles,
+      draft_manifest: finalPreview.draft_manifest || null,
+    }
+    await writeReport(outputPath, report)
+
     console.log(`Draft version: ${finalPreview.draft_manifest?.version}`)
     console.log(`Total package: ${finalPreview.draft_manifest?.total_bytes || 0} bytes`)
+    console.log(`Report: ${outputPath}`)
 
     if (args.dryRun) {
-      console.log('\nDry run complete. Nothing was uploaded or published.')
+      console.log('\nDry run complete. No Drive folder, file or release was changed.')
       return
     }
 
@@ -386,6 +437,11 @@ async function main() {
       expected_version: finalPreview.draft_manifest?.version,
       media_files: mediaFiles,
     })
+
+    report.published_at = new Date().toISOString()
+    report.published_version = published.manifest?.version || ''
+    report.published_manifest = published.manifest || null
+    await writeReport(outputPath, report)
 
     console.log('\n✅ Data Package v2 published')
     console.log(`Outlet: ${args.outlet}`)
