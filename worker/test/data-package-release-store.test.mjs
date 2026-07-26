@@ -9,7 +9,7 @@ import {
   markDataPackageDirty,
   publishDataPackageDraft,
   rollbackDataPackage,
-} from '../src/data-package-release-store.js'
+} from '../src/data-package-v2-store.js'
 
 function fakeEnv() {
   const values = new Map()
@@ -28,6 +28,11 @@ function fakeEnv() {
   }
 }
 
+async function sha256(value) {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value))
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
 test('publishes immutable modules and moves latest only after objects exist', async () => {
   const env = fakeEnv()
   const draft = await buildDataPackageDraft({
@@ -44,6 +49,8 @@ test('publishes immutable modules and moves latest only after objects exist', as
   assert.equal(draft.manifest.outlet_id, 'RR-KCH')
   assert.equal(draft.manifest.modules.tasks.records, 1)
   assert.equal(await getLatestDataPackageManifest(env, 'RR-KCH'), null)
+  assert.equal(await sha256(draft.moduleBodies.tasks), draft.manifest.modules.tasks.hash)
+  assert.equal(new TextEncoder().encode(draft.moduleBodies.tasks).length, draft.manifest.modules.tasks.bytes)
 
   const published = await publishDataPackageDraft(env, draft, { publishedBy: 'owner@example.com' })
   const latest = await getLatestDataPackageManifest(env, 'RR-KCH')
