@@ -126,7 +126,7 @@ export default function Layout() {
               <div className="chefops-mobile-brand flex min-w-0 items-center gap-2.5">
                 <Logo />
                 <span className="truncate text-lg font-bold tracking-tight">Stupiak’s Ops</span>
-                <span className="rounded-md bg-black px-1.5 py-0.5 text-[9px] font-bold text-white">v9</span>
+                <span className="rounded-md bg-black px-1.5 py-0.5 text-[9px] font-bold text-white">v10</span>
               </div>
               <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{user?.outlet_id || 'All assigned outlets'}</p></div>
               <div className="flex items-center gap-2">
