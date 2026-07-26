@@ -14,9 +14,24 @@ PREVIOUS_WORKER_VARS_KIND="missing"
 PREVIOUS_WORKER_VARS_LINK=""
 PREVIOUS_WORKER_VARS_COPY=""
 
+terminate_tree() {
+  local pid="${1:-}"
+  [[ -n "$pid" ]] || return 0
+
+  local children=""
+  children="$(pgrep -P "$pid" 2>/dev/null || true)"
+  for child in $children; do
+    terminate_tree "$child"
+  done
+
+  if kill -0 "$pid" 2>/dev/null; then
+    kill "$pid" 2>/dev/null || true
+  fi
+}
+
 cleanup() {
-  if [[ -n "$WORKER_PID" ]] && kill -0 "$WORKER_PID" 2>/dev/null; then
-    kill "$WORKER_PID" 2>/dev/null || true
+  if [[ -n "$WORKER_PID" ]]; then
+    terminate_tree "$WORKER_PID"
     wait "$WORKER_PID" 2>/dev/null || true
   fi
 
@@ -60,6 +75,7 @@ done
 
 if command -v lsof >/dev/null 2>&1 && lsof -nP -iTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
   echo "Port $PORT is already in use. Nothing was started."
+  lsof -nP -iTCP:"$PORT" -sTCP:LISTEN || true
   exit 1
 fi
 
