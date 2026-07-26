@@ -7,8 +7,8 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 
-const SW_REFRESH_KEY = 'chefops-sw-refreshed-single-scroll-shell-v5'
-const SHELL_VERSION = 'single-scroll-v5'
+const SHELL_VERSION = 'fixed-viewport-shell-v6'
+const SW_REFRESH_KEY = `chefops-sw-refreshed-${SHELL_VERSION}`
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -20,7 +20,36 @@ function isNativeAndroid() {
 }
 
 function markRuntime() {
-  document.documentElement.dataset.chefopsNative = isNativeAndroid() ? 'android' : 'web'
+  const root = document.documentElement
+  root.dataset.chefopsNative = isNativeAndroid() ? 'android' : 'web'
+  root.dataset.chefopsShell = SHELL_VERSION
+  window.__chefopsBuild = {
+    shell: SHELL_VERSION,
+    native: isNativeAndroid(),
+    origin: window.location.origin,
+  }
+}
+
+async function purgeNativeServiceWorkers() {
+  if (!isNativeAndroid()) return
+
+  try {
+    if ('serviceWorker' in navigator) {
+      const registrations = await navigator.serviceWorker.getRegistrations()
+      await Promise.all(registrations.map((registration) => registration.unregister()))
+    }
+  } catch (error) {
+    console.warn('Unable to unregister the old native service worker', error)
+  }
+
+  try {
+    if ('caches' in window) {
+      const names = await caches.keys()
+      await Promise.all(names.map((name) => caches.delete(name)))
+    }
+  } catch (error) {
+    console.warn('Unable to clear the old native shell cache', error)
+  }
 }
 
 function configureNativeSystemBars() {
@@ -30,54 +59,13 @@ function configureNativeSystemBars() {
   Promise.resolve(systemBars?.setStyle?.({ style: 'LIGHT' })).catch(() => undefined)
 }
 
-function installShellGuard(root) {
-  let frame = 0
-
-  const enforce = () => {
-    frame = 0
-    const app = root.querySelector('.chefops-app')
-    const shell = root.querySelector('.chefops-shell')
-    const content = root.querySelector('.chefops-content')
-    const header = root.querySelector('.chefops-app-header')
-    const main = root.querySelector('.chefops-main-scroll')
-    const nav = root.querySelector('.chefops-bottom-nav')
-    if (!app || !shell || !content || !header || !main || !nav) return
-
-    Object.assign(app.style, {
-      width: '100%',
-      height: '100dvh',
-      minHeight: '0',
-      overflow: 'hidden',
-    })
-    Object.assign(shell.style, {
-      width: '100%',
-      height: '100%',
-      minHeight: '0',
-      overflow: 'hidden',
-    })
-    Object.assign(content.style, {
-      display: 'flex',
-      flexDirection: 'column',
-      width: '100%',
-      height: '100%',
-      minHeight: '0',
-      overflow: 'hidden',
-    })
-    Object.assign(header.style, { flex: '0 0 auto' })
-    Object.assign(main.style, {
-      flex: '1 1 0%',
-      width: '100%',
-      height: 'auto',
-      minHeight: '0',
-      overflowX: 'hidden',
-      overflowY: 'auto',
-      touchAction: 'pan-y',
-      WebkitOverflowScrolling: 'touch',
-    })
-    Object.assign(nav.style, { flex: '0 0 auto' })
-
-    const navRect = nav.getBoundingClientRect()
+function publishShellHealth() {
+  window.requestAnimationFrame(() => {
+    const main = document.querySelector('.chefops-main-scroll')
+    const nav = document.querySelector('.chefops-bottom-nav')
+    if (!main || !nav) return
     const mainRect = main.getBoundingClientRect()
+    const navRect = nav.getBoundingClientRect()
     window.__chefopsShellHealth = {
       version: SHELL_VERSION,
       viewportWidth: window.innerWidth,
@@ -90,18 +78,7 @@ function installShellGuard(root) {
       navBottom: Math.round(navRect.bottom),
       navVisible: navRect.top >= 0 && navRect.bottom <= window.innerHeight + 2,
     }
-  }
-
-  const schedule = () => {
-    if (frame) return
-    frame = window.requestAnimationFrame(enforce)
-  }
-
-  const observer = new MutationObserver(schedule)
-  observer.observe(root, { childList: true, subtree: true })
-  window.addEventListener('resize', schedule, { passive: true })
-  window.addEventListener('orientationchange', schedule, { passive: true })
-  schedule()
+  })
 }
 
 markRuntime()
@@ -109,12 +86,18 @@ installNativeSessionFetch()
 applyTheme()
 configureNativeSystemBars()
 
+if (isNativeAndroid()) {
+  // APK assets are bundled locally. Keeping a service worker on https://localhost
+  // can serve an older shell after an in-place APK update, so native builds purge it.
+  purgeNativeServiceWorkers()
+}
+
 if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash?')) {
   const suffix = window.location.hash.includes('?') ? `?${window.location.hash.split('?')[1]}` : window.location.search
   window.history.replaceState({}, '', `/close-up${suffix || ''}`)
 }
 
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
+if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) {
   let refreshing = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (refreshing || sessionStorage.getItem(SW_REFRESH_KEY) === '1') return
@@ -132,4 +115,5 @@ if ('serviceWorker' in navigator && import.meta.env.PROD) {
 
 const rootElement = document.getElementById('root')
 ReactDOM.createRoot(rootElement).render(<App />)
-installShellGuard(rootElement)
+window.addEventListener('load', publishShellHealth, { once: true })
+window.addEventListener('resize', publishShellHealth, { passive: true })
