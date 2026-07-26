@@ -1,30 +1,18 @@
 import { useEffect, useRef } from 'react'
+
 import { opsClient } from '@/api/opsClient'
 import { useAuth } from '@/lib/AuthContext'
 import { getDeviceId, platformName, showSystemNotification } from '@/lib/app-device'
-import { hasUsableAppPack, syncAppPack } from '@/lib/app-pack'
+import {
+  checkDataPackageV2Update,
+  getDataPackageV2Module,
+  getInstalledDataPackage,
+} from '@/lib/data-package-v2-runtime'
 import { queryClientInstance } from '@/lib/query-client'
 
-const VERSION = '4.5.1-direct-print-flow-v10'
+const VERSION = '4.5.1-data-package-v2'
 const BOOTSTRAP_KEY = 'chefops.v4.bootstrap.public'
-const LAST_PACK_CHECK_KEY = 'chefops.data-pack.last-background-check'
-const PACK_RECHECK_MS = 30 * 60_000
 const NOTIFICATION_CHECK_MS = 120_000
-
-function currentYear() { return new Date().getFullYear() }
-
-function editingSurfaceOpen() {
-  const active = document.activeElement
-  const tag = String(active?.tagName || '').toUpperCase()
-  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || active?.isContentEditable) return true
-
-  return Boolean(document.querySelector([
-    '[role="dialog"]',
-    '.chefops-mobile-sheet',
-    '.chefops-drawer-overlay',
-    '[data-chefops-editing="true"]',
-  ].join(', ')))
-}
 
 export default function AppFoundation() {
   const { user } = useAuth()
@@ -45,26 +33,39 @@ export default function AppFoundation() {
       queryClientInstance.invalidateQueries({ refetchType: 'none' }).catch(() => undefined)
     }
 
-    const updatePack = async ({ ignoreAge = false, allowWhileEditing = false } = {}) => {
-      if (!hasUsableAppPack(outletId)) return null
-      if (!allowWhileEditing && editingSurfaceOpen()) {
-        localStorage.setItem('chefops.data-pack.pending-background-check', '1')
-        return null
+    const publishLocalBootstrap = async () => {
+      const installed = await getInstalledDataPackage(outletId)
+      if (!installed?.manifest?.version || cancelled) return null
+      const core = await getDataPackageV2Module('core', outletId) || {}
+      const payload = {
+        app_version: VERSION,
+        data_version: installed.manifest.data_version || installed.manifest.version,
+        data_pack_version: installed.manifest.version,
+        payment_methods: core.payment_methods || [],
+        settings: core.settings || {},
+        notification_mode: 'in-app-and-local-system',
+        cached_at: new Date().toISOString(),
       }
+      localStorage.setItem(BOOTSTRAP_KEY, JSON.stringify(payload))
+      localStorage.setItem('chefops.data.version', payload.data_version)
+      window.dispatchEvent(new CustomEvent('chefops:bootstrap', { detail: payload }))
+      return payload
+    }
 
-      const lastCheckedAt = Number(localStorage.getItem(LAST_PACK_CHECK_KEY) || 0)
-      if (!ignoreAge && Date.now() - lastCheckedAt < PACK_RECHECK_MS) return null
-
+    const announcePackageUpdate = async () => {
       try {
-        const manifest = await syncAppPack({ outletId, force: false })
-        if (cancelled) return null
-        localStorage.setItem(LAST_PACK_CHECK_KEY, String(Date.now()))
-        localStorage.removeItem('chefops.data-pack.pending-background-check')
-        localStorage.setItem('chefops.data.version', manifest.data_version || manifest.version || VERSION)
-        return manifest
-      } catch (error) {
-        console.warn('ChefOps data patch is using the last downloaded version', error)
-        return null
+        const update = await checkDataPackageV2Update(outletId)
+        if (cancelled || !update.update_available) return
+        localStorage.setItem(`chefops.data-package-v2.available.${outletId}`, JSON.stringify({
+          version: update.available_version,
+          installed_version: update.installed_version,
+          total_bytes: update.manifest?.total_bytes || 0,
+          published_at: update.manifest?.published_at || '',
+          checked_at: new Date().toISOString(),
+        }))
+        window.dispatchEvent(new CustomEvent('chefops:data-package-v2-update-available', { detail: update }))
+      } catch {
+        // Existing verified local release remains authoritative while offline.
       }
     }
 
@@ -77,8 +78,8 @@ export default function AppFoundation() {
         const seenKey = `chefops.notifications.seen.${userKey}`
         const seen = new Set(JSON.parse(localStorage.getItem(seenKey) || '[]'))
         const fresh = (rows || []).filter((row) => !seen.has(row.id))
-        let shouldRefreshPack = false
         let shouldInvalidateData = false
+        let shouldCheckPackage = false
 
         for (const row of fresh) {
           try {
@@ -86,15 +87,15 @@ export default function AppFoundation() {
             if (Array.isArray(metadata.invalidate) && metadata.invalidate.length) {
               navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
               shouldInvalidateData = true
-              shouldRefreshPack = true
             }
-            if (metadata.data_pack_update || metadata.data_pack_version) shouldRefreshPack = true
+            if (metadata.data_pack_update || metadata.data_pack_version || metadata.data_package_v2) {
+              shouldCheckPackage = true
+            }
           } catch {}
         }
 
-        // Mark cached queries stale, but never refetch an active page while a user is working.
         if (shouldInvalidateData) markQueriesStaleWithoutRefresh()
-        if (shouldRefreshPack) await updatePack({ ignoreAge: true })
+        if (shouldCheckPackage) await announcePackageUpdate()
 
         for (const row of fresh.slice(0, 3)) await showSystemNotification(row)
         ;(rows || []).forEach((row) => seen.add(row.id))
@@ -103,81 +104,63 @@ export default function AppFoundation() {
       } catch {}
     }
 
-    const boot = async () => {
-      if (!hasUsableAppPack(outletId)) return
-      const manifest = await updatePack({ ignoreAge: true, allowWhileEditing: true })
-
-      try {
-        const payload = await opsClient.app.bootstrap({ year: currentYear() })
-        if (cancelled) return
-        localStorage.setItem(BOOTSTRAP_KEY, JSON.stringify({
-          app_version: payload.app_version,
-          data_version: payload.data_version,
-          data_pack_version: payload.data_pack?.version || manifest?.version || '',
-          payment_methods: payload.payment_methods || [],
-          settings: payload.settings || {},
-          notification_mode: payload.notification_mode,
-          cached_at: new Date().toISOString(),
-        }))
-        window.dispatchEvent(new CustomEvent('chefops:bootstrap', { detail: payload }))
-      } catch (error) {
-        console.warn('ChefOps bootstrap is using the downloaded data patch', error)
-      }
-
-      await publishNotifications()
-
+    const registerDevice = async () => {
+      const installed = await getInstalledDataPackage(outletId)
+      if (!installed?.manifest?.version) return
       const deviceStampKey = `chefops.device.registered.${userKey}`
       const lastRegistered = Number(localStorage.getItem(deviceStampKey) || 0)
-      if (Date.now() - lastRegistered > 12 * 60 * 60_000) {
-        try {
-          await opsClient.app.registerDevice({
-            device_id: getDeviceId(),
-            platform: platformName(),
-            app_version: VERSION,
-            notification_permission: 'Notification' in window ? Notification.permission : 'unsupported',
-          })
-          localStorage.setItem(deviceStampKey, String(Date.now()))
-        } catch (error) {
-          console.warn('Unable to register this device', error)
-        }
+      if (Date.now() - lastRegistered <= 12 * 60 * 60_000) return
+
+      try {
+        await opsClient.app.registerDevice({
+          device_id: getDeviceId(),
+          platform: platformName(),
+          app_version: VERSION,
+          data_package_version: installed.manifest.version,
+          data_package_installed_at: installed.installed_at || '',
+          notification_permission: 'Notification' in window ? Notification.permission : 'unsupported',
+        })
+        localStorage.setItem(deviceStampKey, String(Date.now()))
+      } catch (error) {
+        console.warn('Unable to register this device', error)
       }
     }
 
-    const resume = () => {
-      if (document.visibilityState === 'hidden') return
-      publishNotifications()
-      updatePack()
+    const boot = async () => {
+      const installed = await getInstalledDataPackage(outletId)
+      if (!installed?.manifest?.version) return
+      await publishLocalBootstrap()
+      await publishNotifications()
+      await registerDevice()
     }
 
-    const onPackReady = (event) => {
-      const manifest = event?.detail?.manifest
-      if (manifest) {
-        localStorage.setItem('chefops.data.version', manifest.data_version || manifest.version || VERSION)
-      }
-      // The current screen remains untouched. New configuration is used on the
-      // next page entry or explicit refresh instead of remounting active forms.
+    const onPackageReady = async (event) => {
+      const eventOutlet = String(event?.detail?.outlet_id || '')
+      if (eventOutlet && eventOutlet !== outletId && eventOutlet !== 'global') return
+      await publishLocalBootstrap()
       markQueriesStaleWithoutRefresh()
       window.dispatchEvent(new CustomEvent('chefops:configuration-ready', { detail: event?.detail || null }))
+      await registerDevice()
     }
 
     const onVisible = () => {
-      if (document.visibilityState === 'visible') resume()
+      if (document.visibilityState === 'visible') publishNotifications()
     }
 
-    if (hasUsableAppPack(outletId)) boot()
-    window.addEventListener('chefops:data-pack-updated', onPackReady)
-    window.addEventListener('online', resume)
+    boot()
+    window.addEventListener('chefops:data-package-v2-activated', onPackageReady)
+    window.addEventListener('online', publishNotifications)
     document.addEventListener('visibilitychange', onVisible)
     navigator.storage?.persist?.().catch(() => undefined)
 
     notificationTimer = window.setInterval(() => {
-      if (hasUsableAppPack(outletId) && document.visibilityState !== 'hidden') publishNotifications()
+      if (document.visibilityState !== 'hidden') publishNotifications()
     }, NOTIFICATION_CHECK_MS)
 
     return () => {
       cancelled = true
-      window.removeEventListener('chefops:data-pack-updated', onPackReady)
-      window.removeEventListener('online', resume)
+      window.removeEventListener('chefops:data-package-v2-activated', onPackageReady)
+      window.removeEventListener('online', publishNotifications)
       document.removeEventListener('visibilitychange', onVisible)
       if (notificationTimer) window.clearInterval(notificationTimer)
     }
