@@ -1,7 +1,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { compareDataPackageDraft } from '../src/data-package-v2-api.js'
+import {
+  compareDataPackageDraft,
+  resolveDataPackageOutlet,
+} from '../src/data-package-v2-api.js'
 
 test('preview reports changed modules and reuses unchanged modules', () => {
   const current = {
@@ -58,4 +61,32 @@ test('preview is unchanged only when modules match and no media is pending', () 
   assert.equal(result.changed, false)
   assert.equal(result.download_bytes, 0)
   assert.equal(result.media_packaging_ready, true)
+})
+
+test('staff data package access is limited to assigned outlets', () => {
+  const user = {
+    role: 'staff',
+    outlet_id: 'RR-KCH',
+    outlet_ids: '["RR-KCH"]',
+  }
+
+  assert.equal(resolveDataPackageOutlet(user, ''), 'RR-KCH')
+  assert.equal(resolveDataPackageOutlet(user, 'RR-KCH'), 'RR-KCH')
+  assert.throws(
+    () => resolveDataPackageOutlet(user, 'SKONE-BTU'),
+    (error) => error?.code === 'wrong_outlet' && error?.status === 403,
+  )
+})
+
+test('manager can explicitly select an outlet', () => {
+  const user = { role: 'manager', outlet_id: '' }
+  assert.equal(resolveDataPackageOutlet(user, 'RR-KCH'), 'RR-KCH')
+})
+
+test('unassigned staff cannot fall back to a global package', () => {
+  const user = { role: 'staff', outlet_id: '', outlet_ids: '' }
+  assert.throws(
+    () => resolveDataPackageOutlet(user, ''),
+    (error) => error?.code === 'outlet_required' && error?.status === 403,
+  )
 })
