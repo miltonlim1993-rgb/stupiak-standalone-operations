@@ -2,9 +2,10 @@ import app from './index.js'
 import { loginWithGoogle, sessionCookie } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { ensureEntitySheet } from './sheets.js'
-import { markAppPackDirty } from './app-pack.js'
+import { markDataPackageDirty } from './data-package-release-store.js'
+import { handleDataPackageV2Api } from './data-package-v2-api.js'
 
-const WORKER_REVISION = 'live-sync-mobile-shell-v3'
+const WORKER_REVISION = 'data-package-v2-control-plane-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -147,14 +148,19 @@ async function handleDataPackDirtyWebhook(request, env, pathname) {
     const requestedModule = String(body.module || '').trim().toLowerCase()
     const moduleName = PACK_MODULES.has(requestedModule) ? requestedModule : ENTITY_MODULE[entity] || ''
     const outletId = String(body.outlet_id || '').trim()
-    await markAppPackDirty(env, outletId, { modules: moduleName ? [moduleName] : [] })
+    const state = await markDataPackageDirty(env, outletId, {
+      modules: moduleName ? [moduleName] : [],
+      reason: String(body.reason || (entity ? `${entity} source changed` : 'Package source changed')),
+      actor: String(body.actor || 'internal-webhook'),
+    })
     return json(request, env, {
       ok: true,
-      queued: true,
+      queued: false,
+      publish_required: true,
       entity,
       module: moduleName || 'all',
       outlet_id: outletId,
-      changed_at: new Date().toISOString(),
+      changed_at: state.dirty_at,
     }, 202)
   } catch (error) {
     return errorResponse(request, env, error)
@@ -179,6 +185,13 @@ export default {
 
       const nativeLoginResponse = await handleNativeGoogleLogin(request, runEnv, url.pathname)
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
+
+      try {
+        const packageResponse = await handleDataPackageV2Api(request, runEnv, url)
+        if (packageResponse) return withApiHeaders(request, env, packageResponse)
+      } catch (error) {
+        return withApiHeaders(request, env, errorResponse(request, runEnv, error))
+      }
 
       const response = await app.fetch(request, runEnv, ctx)
       return withApiHeaders(request, env, response)
