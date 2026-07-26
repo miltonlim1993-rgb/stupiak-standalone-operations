@@ -57,7 +57,7 @@ export default function More() {
       </div>
       <MenuSection title="Management" items={managementItems} />
       <MenuSection title="System" items={systemItems} />
-      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Fixed Viewport v6</p>
+      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: ID-Pinned Scroll v7</p>
     </div>
   );
 }
