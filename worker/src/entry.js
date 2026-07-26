@@ -3,7 +3,11 @@ import { getCurrentUser, loginWithGoogle, sessionCookie } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { ensureEntitySheet } from './sheets.js'
 import { assignedOutletIds, assertOutletAccess } from './permissions.js'
-import { getDataPackageModuleBody, markDataPackageDirty } from './data-package-v2-store.js'
+import {
+  getDataPackageModuleBody,
+  getLatestDataPackageManifest,
+  markDataPackageDirty,
+} from './data-package-v2-store.js'
 import {
   listDataPackageDeviceStates,
   saveDataPackageDeviceState,
@@ -14,7 +18,7 @@ import {
   publishDataPackageV2,
 } from './data-package-v2-api.js'
 
-const WORKER_REVISION = 'data-package-v2-device-state-v1'
+const WORKER_REVISION = 'data-package-v2-production-publisher-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -63,11 +67,18 @@ function safeSecretEqual(left, right) {
   return mismatch === 0
 }
 
+function requestPackSecret(request) {
+  return String(request.headers.get('X-ChefOps-Pack-Secret') || '')
+}
+
 function hasPackSecret(request, env) {
-  return safeSecretEqual(
-    String(env.APP_PACK_WEBHOOK_SECRET || ''),
-    String(request.headers.get('X-ChefOps-Pack-Secret') || ''),
-  )
+  return safeSecretEqual(String(env.APP_PACK_WEBHOOK_SECRET || ''), requestPackSecret(request))
+}
+
+function hasPublisherSecret(request, env) {
+  const provided = requestPackSecret(request)
+  return safeSecretEqual(String(env.DATA_PACKAGE_PUBLISH_SECRET || ''), provided)
+    || safeSecretEqual(String(env.APP_PACK_WEBHOOK_SECRET || ''), provided)
 }
 
 function allowedOrigins(env) {
@@ -148,9 +159,17 @@ async function handleNativeGoogleLogin(request, env, pathname) {
 
 function forbiddenPackSecret(request, env) {
   if (hasPackSecret(request, env)) return null
-  const error = new Error('Invalid data-package publisher secret')
+  const error = new Error('Invalid data-pack webhook secret')
   error.status = 403
   error.code = 'invalid_pack_webhook_secret'
+  return errorResponse(request, env, error)
+}
+
+function forbiddenPublisherSecret(request, env) {
+  if (hasPublisherSecret(request, env)) return null
+  const error = new Error('Invalid data-package publisher secret')
+  error.status = 403
+  error.code = 'invalid_data_package_publish_secret'
   return errorResponse(request, env, error)
 }
 
@@ -200,7 +219,7 @@ async function handleInternalDataPackagePublisher(request, env, pathname) {
     return errorResponse(request, env, error)
   }
 
-  const forbidden = forbiddenPackSecret(request, env)
+  const forbidden = forbiddenPublisherSecret(request, env)
   if (forbidden) return forbidden
 
   try {
@@ -215,6 +234,13 @@ async function handleInternalDataPackagePublisher(request, env, pathname) {
     const actor = String(body.actor || 'drive-package-publisher')
     const mediaFiles = Array.isArray(body.media_files) ? body.media_files : []
 
+    if (pathname === '/api/internal/data-package-v2/status') {
+      return json(request, env, {
+        ok: true,
+        outlet_id: outletId,
+        manifest: await getLatestDataPackageManifest(env, outletId),
+      })
+    }
     if (pathname === '/api/internal/data-package-v2/preview') {
       return json(request, env, await previewDataPackageV2(env, outletId, { actor, mediaFiles }))
     }
