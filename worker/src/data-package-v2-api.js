@@ -9,7 +9,7 @@ import {
   listDataPackageReleases,
   publishDataPackageDraft,
   rollbackDataPackage,
-} from './data-package-release-store.js'
+} from './data-package-v2-store.js'
 
 const MODULE_NAMES = ['core', 'inventory', 'tasks', 'training', 'labels']
 
