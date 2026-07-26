@@ -12,7 +12,7 @@ jobs:
     env:
       APK_RELEASE_TAG: android-release-latest
       APK_FILE_NAME: stupiaks-ops-release.apk
-      APK_V6_FILE_NAME: stupiaks-ops-fixed-viewport-v6.apk
+      APK_V7_FILE_NAME: stupiaks-ops-id-pinned-scroll-v7.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
       ANDROID_VERSION_NAME: 4.5.1.${{ github.run_number }}
@@ -39,17 +39,20 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate fixed viewport shell source
+      - name: Validate ID-pinned scroll shell source
         run: |
-          grep -q "fixed-viewport-shell-v6" web/public/sw.js
-          grep -q "fixed-viewport-shell-v6" web/src/main.jsx
-          grep -q "position: absolute !important" web/src/viewport.css
-          grep -q "bottom: calc(var(--chefops-bottom-height)" web/src/viewport.css
-          grep -q "purgeNativeServiceWorkers" web/src/main.jsx
-          grep -q "App shell: Fixed Viewport v6" web/src/pages/More.jsx
-          ! grep -q "installShellGuard" web/src/main.jsx
-          ! grep -q "chefops-viewport-height" web/src/viewport.css
-          ! grep -q "setInitialScale" scripts/configure-android-native-google-auth.mjs
+          grep -q "id-pinned-scroll-shell-v7" web/public/sw.js
+          grep -q "id-pinned-scroll-shell-v7" web/src/main.jsx
+          grep -q 'id="chefops-mobile-main"' web/src/components/Layout.jsx
+          grep -q 'id="chefops-mobile-nav"' web/src/components/Layout.jsx
+          grep -q '#chefops-mobile-main' web/src/viewport.css
+          grep -q '#chefops-mobile-nav' web/src/viewport.css
+          grep -q 'overflow-y: scroll !important' web/src/viewport.css
+          grep -q 'App shell: ID-Pinned Scroll v7' web/src/pages/More.jsx
+          grep -q 'purgeNativeServiceWorkers' web/src/main.jsx
+          ! grep -q 'installShellGuard' web/src/main.jsx
+          ! grep -q 'chefops-viewport-height' web/src/viewport.css
+          ! grep -q 'setInitialScale' scripts/configure-android-native-google-auth.mjs
       - name: Generate and sync Capacitor Android project
         run: npm run mobile:init
       - name: Apply Stupiak's Ops Android launcher icon
@@ -79,16 +82,16 @@ jobs:
         run: |
           mkdir -p release
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_FILE_NAME}"
-          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V6_FILE_NAME}"
+          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V7_FILE_NAME}"
           cp web/android/app/build/outputs/bundle/release/app-release.aab "release/${AAB_FILE_NAME}"
-          sha256sum "release/${APK_FILE_NAME}" "release/${APK_V6_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
+          sha256sum "release/${APK_FILE_NAME}" "release/${APK_V7_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: stupiaks-ops-signed-release
           path: |
             release/stupiaks-ops-release.apk
-            release/stupiaks-ops-fixed-viewport-v6.apk
+            release/stupiaks-ops-id-pinned-scroll-v7.apk
             release/stupiaks-ops-release.aab
             release/SHA256SUMS.txt
           if-no-files-found: error
@@ -99,13 +102,13 @@ jobs:
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
             "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
-            "release/${APK_V6_FILE_NAME}#Stupiak's Ops Fixed Viewport v6 APK" \
+            "release/${APK_V7_FILE_NAME}#Stupiak's Ops ID-Pinned Scroll v7 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Fixed Viewport v6 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Fixed Viewport v6 pins the header, scroll pane and bottom navigation directly to viewport coordinates, removes the runtime style guard that overrode mobile CSS, and purges native service workers so an upgraded APK cannot load an older cached shell."
+            --title "Stupiak's Ops ID-Pinned Scroll v7 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. ID-Pinned Scroll v7 gives header, main scroll pane and bottom navigation unique DOM IDs. Those ID selectors outrank legacy class-based !important mobile rules, so the middle pane remains the only touch-scrollable viewport area while the header and bottom navigation stay visible."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
-          echo "V6 APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V6_FILE_NAME}"
+          echo "V7 APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V7_FILE_NAME}"
           echo "AAB: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${AAB_FILE_NAME}"
