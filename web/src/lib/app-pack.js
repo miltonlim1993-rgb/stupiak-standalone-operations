@@ -1,3 +1,8 @@
+import {
+  getDataPackageV2Module,
+  getInstalledDataPackage,
+} from '@/lib/data-package-v2-runtime'
+
 const configuredApiUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
 const PACK_API_BASE_URL = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:8787' : window.location.origin)).replace(/\/$/, '')
 
@@ -109,6 +114,9 @@ async function fetchJson(url, options) {
 }
 
 export async function syncAppPack({ outletId = '', force = false } = {}) {
+  if (await getInstalledDataPackage(outletId)) {
+    return getInstalledDataPackage(outletId).then((release) => release?.manifest || null)
+  }
   if (activeSync && !force) return activeSync
   const run = (async () => {
     const localManifest = await hydrate(outletId)
@@ -150,7 +158,7 @@ export async function syncAppPack({ outletId = '', force = false } = {}) {
   try { return await run } finally { if (activeSync === run) activeSync = null }
 }
 
-export async function getPackedModule(name, outletId = '') {
+async function getLegacyPackedModule(name, outletId = '') {
   let manifest = memoryManifests.get(manifestKey(outletId))
   if (!manifest) manifest = await hydrate(outletId)
   if (!manifest) return null
@@ -163,6 +171,19 @@ export async function getPackedModule(name, outletId = '') {
     if (module) memoryModules.set(key, module)
   }
   return module?.data || null
+}
+
+async function runtimeModule(name, outletId = '') {
+  const active = await getInstalledDataPackage(outletId)
+  if (active?.manifest?.version) {
+    const data = await getDataPackageV2Module(name, outletId)
+    return { source: 'data-package-v2', active: true, data }
+  }
+  return { source: 'legacy-pack', active: false, data: await getLegacyPackedModule(name, outletId) }
+}
+
+export async function getPackedModule(name, outletId = '') {
+  return (await runtimeModule(name, outletId)).data || null
 }
 
 function matchesExpected(actual, expected) {
@@ -223,28 +244,28 @@ export async function getPackedEntity(entity, { filter = {}, sort = '', limit = 
   }
   const target = map[entity]
   if (!target) return null
-  let module = await getPackedModule(target[0], outletId)
-  if (!module) {
+  let runtime = await runtimeModule(target[0], outletId)
+  if (!runtime.data && !runtime.active) {
     await Promise.race([
       syncAppPack({ outletId }).catch(() => null),
       new Promise((resolve) => window.setTimeout(resolve, 1800)),
     ])
-    module = await getPackedModule(target[0], outletId)
+    runtime = await runtimeModule(target[0], outletId)
   }
-  if (!module) return null
-  if (!Array.isArray(module[target[1]])) return null
-  const rows = module[target[1]]
+  if (!runtime.data) return runtime.active ? [] : null
+  if (!Array.isArray(runtime.data[target[1]])) return runtime.active ? [] : null
+  const rows = runtime.data[target[1]]
   return sortRows(filterRows(rows, filter), sort).slice(0, Number(limit || 100))
 }
 
 export async function getPackedLabelCatalog(outletId = '') {
-  let module = await getPackedModule('labels', outletId)
-  if (!module) {
+  let runtime = await runtimeModule('labels', outletId)
+  if (!runtime.data && !runtime.active) {
     await Promise.race([
       syncAppPack({ outletId }).catch(() => null),
       new Promise((resolve) => window.setTimeout(resolve, 1800)),
     ])
-    module = await getPackedModule('labels', outletId)
+    runtime = await runtimeModule('labels', outletId)
   }
-  return module || null
+  return runtime.data || (runtime.active ? {} : null)
 }
