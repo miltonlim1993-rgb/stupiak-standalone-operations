@@ -5,30 +5,30 @@ body,
   width: 100%;
   height: 100%;
   min-height: 0;
+  margin: 0;
   overflow: hidden !important;
-  overscroll-behavior: none;
 }
 
 html {
   background: hsl(var(--background));
   color-scheme: light;
+  overscroll-behavior: none;
 }
 
 body {
-  position: fixed;
-  inset: 0;
-  margin: 0;
-  touch-action: manipulation;
+  min-height: 100%;
+  touch-action: auto;
   -webkit-text-size-adjust: 100%;
+  -webkit-tap-highlight-color: transparent;
 }
 
 #root {
-  position: fixed;
-  inset: 0;
+  isolation: isolate;
 }
 
 .chefops-app,
-.chefops-shell {
+.chefops-shell,
+.chefops-content {
   height: 100%;
   min-height: 0 !important;
   overflow: hidden !important;
@@ -36,35 +36,82 @@ body {
 
 .chefops-content {
   display: grid !important;
-  grid-template-rows: auto minmax(0, 1fr);
-  height: 100%;
-  min-height: 0 !important;
-  overflow: hidden !important;
+  grid-template-rows: auto minmax(0, 1fr) auto !important;
+}
+
+.chefops-app-header,
+.chefops-bottom-nav {
+  position: relative !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 100% !important;
+  max-width: none !important;
+  transform: none !important;
+  min-width: 0;
 }
 
 .chefops-app-header {
-  position: relative !important;
-  top: auto !important;
   z-index: 60;
-  min-width: 0;
+}
+
+.chefops-bottom-nav {
+  z-index: 70;
+  flex: none;
 }
 
 .chefops-main-scroll {
   position: relative;
+  width: 100%;
   min-width: 0;
   min-height: 0 !important;
-  height: 100%;
+  height: auto !important;
   overflow-x: hidden !important;
-  overflow-y: scroll !important;
+  overflow-y: auto !important;
   overscroll-behavior-x: none;
-  overscroll-behavior-y: contain;
-  touch-action: pan-y !important;
+  overscroll-behavior-y: auto;
+  touch-action: pan-y pinch-zoom !important;
   -webkit-overflow-scrolling: touch;
-  scrollbar-gutter: stable;
+  scroll-behavior: auto;
+  scrollbar-gutter: auto;
 }
 
 .chefops-main-scroll > * {
-  min-height: min-content;
+  min-width: 0;
+}
+
+.chefops-page,
+.chefops-main-scroll > .mx-auto {
+  padding-bottom: 1.25rem !important;
+}
+
+.chefops-edge-back-indicator {
+  position: fixed;
+  top: 50%;
+  left: max(8px, env(safe-area-inset-left));
+  z-index: 200;
+  display: flex;
+  width: 42px;
+  height: 42px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid hsl(var(--border));
+  border-radius: 999px;
+  background: hsl(var(--background) / .96);
+  color: hsl(var(--foreground));
+  box-shadow: 0 8px 28px rgb(0 0 0 / .16);
+  font-size: 34px;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  transform: translate3d(-54px, -50%, 0) scale(.88);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+html.chefops-edge-back-active .chefops-edge-back-indicator {
+  opacity: calc(.35 + (var(--chefops-back-progress, 0) * .65));
+  transform: translate3d(calc(-42px + (var(--chefops-back-progress, 0) * 48px)), -50%, 0) scale(calc(.88 + (var(--chefops-back-progress, 0) * .12)));
 }
 
 @supports (height: 100dvh) {
@@ -72,8 +119,31 @@ body {
   body,
   #root,
   .chefops-app,
-  .chefops-shell {
+  .chefops-shell,
+  .chefops-content {
     height: 100dvh;
+  }
+}
+
+@supports (height: 100svh) {
+  html,
+  body,
+  #root,
+  .chefops-app,
+  .chefops-shell,
+  .chefops-content {
+    height: 100svh;
+  }
+}
+
+@media (max-width: 767px), (display-mode: standalone) {
+  .chefops-content main {
+    padding-bottom: 0 !important;
+  }
+
+  .chefops-content main > .mx-auto,
+  .chefops-page {
+    padding-bottom: 1.25rem !important;
   }
 }
 
@@ -85,6 +155,10 @@ body {
   }
 
   .chefops-main-scroll {
-    overflow-y: scroll !important;
+    overflow-y: auto !important;
   }
+}
+
+html[data-chefops-native='android'] .chefops-main-scroll {
+  overscroll-behavior-y: contain;
 }
