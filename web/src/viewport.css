@@ -3,6 +3,10 @@
   --chefops-viewport-height: 100dvh;
   --chefops-header-height: 3.5rem;
   --chefops-bottom-height: 4rem;
+  --chefops-safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --chefops-safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --chefops-safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --chefops-safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
 }
 
 html,
@@ -117,17 +121,19 @@ html[data-chefops-native='android'] body {
 html[data-chefops-native='android'] .chefops-content,
 .chefops-force-mobile .chefops-content {
   grid-template-rows:
-    calc(var(--chefops-header-height) + env(safe-area-inset-top))
+    calc(var(--chefops-header-height) + var(--chefops-safe-top))
     minmax(0, 1fr)
-    calc(var(--chefops-bottom-height) + env(safe-area-inset-bottom)) !important;
+    calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
 }
 
 html[data-chefops-native='android'] .chefops-app-header,
 .chefops-force-mobile .chefops-app-header {
-  height: calc(var(--chefops-header-height) + env(safe-area-inset-top)) !important;
-  min-height: calc(var(--chefops-header-height) + env(safe-area-inset-top)) !important;
-  max-height: calc(var(--chefops-header-height) + env(safe-area-inset-top)) !important;
-  padding-top: env(safe-area-inset-top);
+  height: calc(var(--chefops-header-height) + var(--chefops-safe-top)) !important;
+  min-height: calc(var(--chefops-header-height) + var(--chefops-safe-top)) !important;
+  max-height: calc(var(--chefops-header-height) + var(--chefops-safe-top)) !important;
+  padding-top: var(--chefops-safe-top);
+  padding-right: var(--chefops-safe-right);
+  padding-left: var(--chefops-safe-left);
 }
 
 html[data-chefops-native='android'] .chefops-app-header > div,
@@ -140,10 +146,12 @@ html[data-chefops-native='android'] .chefops-app-header > div,
 html[data-chefops-native='android'] .chefops-bottom-nav,
 .chefops-force-mobile .chefops-bottom-nav {
   display: block !important;
-  height: calc(var(--chefops-bottom-height) + env(safe-area-inset-bottom)) !important;
-  min-height: calc(var(--chefops-bottom-height) + env(safe-area-inset-bottom)) !important;
-  max-height: calc(var(--chefops-bottom-height) + env(safe-area-inset-bottom)) !important;
-  padding-bottom: env(safe-area-inset-bottom) !important;
+  height: calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
+  min-height: calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
+  max-height: calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
+  padding-right: var(--chefops-safe-right) !important;
+  padding-bottom: var(--chefops-safe-bottom) !important;
+  padding-left: var(--chefops-safe-left) !important;
 }
 
 html[data-chefops-native='android'] .chefops-bottom-nav > div,
@@ -171,7 +179,7 @@ html[data-chefops-native='android'] .chefops-page,
 .chefops-edge-back-indicator {
   position: fixed;
   top: 50%;
-  left: max(8px, env(safe-area-inset-left));
+  left: max(8px, var(--chefops-safe-left));
   z-index: 200;
   display: flex;
   width: 42px;
