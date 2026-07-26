@@ -34,7 +34,7 @@ for (const permission of permissions) {
 }
 await fs.writeFile(manifestPath, manifest)
 
-await fs.writeFile(pluginPath, `package com.stupiaks.ops;
+await fs.writeFile(pluginPath, String.raw`package com.stupiaks.ops;
 
 import android.Manifest;
 import android.bluetooth.BluetoothAdapter;
