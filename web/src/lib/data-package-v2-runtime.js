@@ -77,6 +77,12 @@ function absolutePackagePath(path = '') {
   return `${API_BASE_URL}${value.startsWith('/') ? value : `/${value}`}`
 }
 
+function packageObjectUrl(path = '', outletId = '') {
+  const url = new URL(absolutePackagePath(path))
+  if (clean(outletId)) url.searchParams.set('outlet_id', clean(outletId))
+  return url.toString()
+}
+
 function mediaId(value = {}, fields = []) {
   for (const field of fields) {
     const result = clean(value?.[field])
@@ -273,7 +279,7 @@ export async function installLatestDataPackageV2({
     await stageAndActivateDataPackage({
       manifest,
       outletId,
-      fetcher: (path) => fetch(absolutePackagePath(path), {
+      fetcher: (path) => fetch(packageObjectUrl(path, outletId), {
         credentials: 'include',
         cache: 'no-store',
       }),
