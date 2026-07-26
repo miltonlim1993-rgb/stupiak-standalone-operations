@@ -14,13 +14,16 @@ export default function MobileSheet({
   useEffect(() => {
     if (!open) return undefined;
     const previousOverflow = document.body.style.overflow;
+    const previousTouchAction = document.body.style.touchAction;
     document.body.style.overflow = "hidden";
+    document.body.style.touchAction = "none";
     const onKeyDown = (event) => {
       if (event.key === "Escape" && !closeDisabled) onClose?.();
     };
     window.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = previousOverflow;
+      document.body.style.touchAction = previousTouchAction;
       window.removeEventListener("keydown", onKeyDown);
     };
   }, [open, onClose, closeDisabled]);
@@ -28,7 +31,7 @@ export default function MobileSheet({
   if (!open) return null;
 
   return createPortal(
-    <div className="chefops-mobile-sheet fixed inset-0 z-[100]">
+    <div className="chefops-mobile-sheet fixed inset-0 z-[100]" data-no-swipe-back>
       <button
         type="button"
         aria-label="Close drawer"
@@ -62,7 +65,10 @@ export default function MobileSheet({
           </button>
         </header>
 
-        <div className="chefops-mobile-sheet-body min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+        <div
+          className="chefops-mobile-sheet-body min-h-0 flex-1 touch-pan-y overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3 pb-[calc(1rem+env(safe-area-inset-bottom))]"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {children}
         </div>
       </section>
