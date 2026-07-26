@@ -4,12 +4,13 @@ import App from '@/App.jsx'
 import '@/index.css'
 import '@/viewport.css'
 import '@/panels-v8.css'
+import '@/direct-print-v10.css'
 import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = 'native-print-panels-shell-v9'
+const SHELL_VERSION = 'direct-print-flow-shell-v10'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
