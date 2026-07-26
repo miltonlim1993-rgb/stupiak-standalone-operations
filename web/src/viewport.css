@@ -1,4 +1,4 @@
-/* Single authoritative shell for browser, installed PWA and Capacitor. */
+/* Authoritative shell geometry for browser, installed PWA and Capacitor. */
 :root {
   --chefops-header-height: 3.5rem;
   --chefops-bottom-height: 4rem;
@@ -16,7 +16,6 @@ body,
   min-width: 0;
   min-height: 0;
   margin: 0;
-  overflow: hidden !important;
 }
 
 html {
@@ -26,16 +25,19 @@ html {
 }
 
 body {
+  overflow: hidden !important;
   touch-action: auto;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
 }
 
 #root {
+  overflow: hidden !important;
   isolation: isolate;
 }
 
 .chefops-app {
+  position: relative;
   width: 100%;
   height: 100dvh !important;
   min-height: 0 !important;
@@ -43,28 +45,18 @@ body {
   overflow: hidden !important;
 }
 
-html[data-chefops-native='android'] .chefops-app {
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100% !important;
-  max-height: 100% !important;
-}
-
 .chefops-shell {
+  position: relative;
   width: 100%;
-  height: 100% !important;
+  height: 100dvh !important;
   min-height: 0 !important;
-  max-height: 100% !important;
+  max-height: 100dvh !important;
   align-items: stretch;
   overflow: hidden !important;
 }
 
-html[data-chefops-native='android'] .chefops-shell {
-  max-width: none !important;
-}
-
 .chefops-content {
+  position: relative;
   display: flex !important;
   width: 100%;
   height: 100% !important;
@@ -77,38 +69,17 @@ html[data-chefops-native='android'] .chefops-shell {
 
 .chefops-app-header,
 .chefops-bottom-nav {
-  position: relative !important;
-  top: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  left: auto !important;
   width: 100% !important;
   max-width: none !important;
   min-width: 0;
-  flex: 0 0 auto !important;
-  transform: none !important;
-  overflow: hidden;
   box-sizing: border-box;
 }
 
-.chefops-app-header {
-  z-index: 60;
-}
-
-.chefops-bottom-nav {
-  z-index: 70;
-}
-
 .chefops-main-scroll {
-  position: relative;
   display: block;
   width: 100%;
-  height: auto !important;
   min-width: 0;
   min-height: 0 !important;
-  max-height: none !important;
-  flex: 1 1 0% !important;
-  padding-bottom: 0 !important;
   overflow-x: hidden !important;
   overflow-y: auto !important;
   overscroll-behavior-x: none;
@@ -128,15 +99,44 @@ html[data-chefops-native='android'] .chefops-shell {
   padding-bottom: 1.25rem !important;
 }
 
-/* Native Android and mobile/PWA: header and footer consume only their own space. */
+/*
+ * Mobile/PWA/Capacitor geometry does not depend on a flex height chain.
+ * Header, main and footer are pinned to physical viewport coordinates.
+ */
+html[data-chefops-native='android'] .chefops-shell,
+.chefops-force-mobile .chefops-shell {
+  height: 100dvh !important;
+  max-height: 100dvh !important;
+}
+
+html[data-chefops-native='android'] .chefops-content,
+.chefops-force-mobile .chefops-content {
+  position: absolute !important;
+  inset: 0 !important;
+  display: block !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: hidden !important;
+}
+
 html[data-chefops-native='android'] .chefops-app-header,
 .chefops-force-mobile .chefops-app-header {
+  position: absolute !important;
+  top: 0 !important;
+  right: 0 !important;
+  left: 0 !important;
+  z-index: 60;
+  display: block !important;
   height: calc(var(--chefops-header-height) + var(--chefops-safe-top)) !important;
   min-height: calc(var(--chefops-header-height) + var(--chefops-safe-top)) !important;
   max-height: calc(var(--chefops-header-height) + var(--chefops-safe-top)) !important;
   padding-top: var(--chefops-safe-top);
   padding-right: var(--chefops-safe-right);
   padding-left: var(--chefops-safe-left);
+  overflow: hidden;
+  transform: none !important;
 }
 
 html[data-chefops-native='android'] .chefops-app-header > div,
@@ -146,8 +146,29 @@ html[data-chefops-native='android'] .chefops-app-header > div,
   max-height: var(--chefops-header-height) !important;
 }
 
+html[data-chefops-native='android'] .chefops-main-scroll,
+.chefops-force-mobile .chefops-main-scroll {
+  position: absolute !important;
+  top: calc(var(--chefops-header-height) + var(--chefops-safe-top)) !important;
+  right: 0 !important;
+  bottom: calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
+  left: 0 !important;
+  z-index: 10;
+  height: auto !important;
+  min-height: 0 !important;
+  max-height: none !important;
+  padding-bottom: 0 !important;
+  overflow-y: scroll !important;
+  contain: layout paint;
+}
+
 html[data-chefops-native='android'] .chefops-bottom-nav,
 .chefops-force-mobile .chefops-bottom-nav {
+  position: absolute !important;
+  right: 0 !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  z-index: 70;
   display: block !important;
   height: calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
   min-height: calc(var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
@@ -155,6 +176,8 @@ html[data-chefops-native='android'] .chefops-bottom-nav,
   padding-right: var(--chefops-safe-right) !important;
   padding-bottom: var(--chefops-safe-bottom) !important;
   padding-left: var(--chefops-safe-left) !important;
+  overflow: hidden;
+  transform: none !important;
 }
 
 html[data-chefops-native='android'] .chefops-bottom-nav > div,
@@ -164,13 +187,6 @@ html[data-chefops-native='android'] .chefops-bottom-nav > div,
   max-height: var(--chefops-bottom-height) !important;
 }
 
-html[data-chefops-native='android'] .chefops-main-scroll,
-.chefops-force-mobile .chefops-main-scroll {
-  min-height: 0 !important;
-  padding-bottom: 0 !important;
-}
-
-/* Neutralize older mobile padding that assumed a fixed overlay footer. */
 html[data-chefops-native='android'] .chefops-content main,
 .chefops-force-mobile .chefops-content main {
   padding-bottom: 0 !important;
