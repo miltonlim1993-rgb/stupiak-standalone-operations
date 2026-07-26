@@ -1,6 +1,14 @@
 import { useEffect } from 'react'
 
+import { opsClient } from '@/api/opsClient'
+import { normalizeTaskWorkflowShiftView } from '@/lib/task-shift-view-v3'
 import TasksV3 from '@/pages/TasksV3'
+
+if (!opsClient.tasks.__taskShiftViewV3Installed) {
+  const originalBootstrap = opsClient.tasks.workflowBootstrap.bind(opsClient.tasks)
+  opsClient.tasks.workflowBootstrap = async (options) => normalizeTaskWorkflowShiftView(await originalBootstrap(options))
+  Object.defineProperty(opsClient.tasks, '__taskShiftViewV3Installed', { value: true })
+}
 
 export default function TasksV3Page() {
   useEffect(() => {
