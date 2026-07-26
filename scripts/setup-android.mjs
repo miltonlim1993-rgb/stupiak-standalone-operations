@@ -11,7 +11,7 @@ function run(command, args, cwd = root) {
 }
 
 if (!existsSync(path.join(web, 'package.json'))) throw new Error('Run this from the ChefOps project root.')
-run('npm', ['install', '-w', 'web', '@capacitor/core@^8', '@capacitor/android@^8'])
+run('npm', ['install', '-w', 'web', '@capacitor/core@^8', '@capacitor/android@^8', '@capacitor/app@^8'])
 run('npm', ['install', '-D', '-w', 'web', '@capacitor/cli@^8'])
 run('npm', ['run', 'build', '-w', 'web'])
 if (!existsSync(path.join(web, 'android'))) run('npx', ['cap', 'add', 'android'], web)
