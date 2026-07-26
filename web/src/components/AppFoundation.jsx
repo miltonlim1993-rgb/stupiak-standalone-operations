@@ -5,12 +5,26 @@ import { getDeviceId, platformName, showSystemNotification } from '@/lib/app-dev
 import { hasUsableAppPack, syncAppPack } from '@/lib/app-pack'
 import { queryClientInstance } from '@/lib/query-client'
 
-const VERSION = '4.5.1-live-sync-mobile-shell-v3'
+const VERSION = '4.5.1-stable-panels-v8'
 const BOOTSTRAP_KEY = 'chefops.v4.bootstrap.public'
-const LIVE_REFRESH_MS = 20_000
-const PACK_CHECK_MS = 45_000
+const LAST_PACK_CHECK_KEY = 'chefops.data-pack.last-background-check'
+const PACK_RECHECK_MS = 30 * 60_000
+const NOTIFICATION_CHECK_MS = 120_000
 
 function currentYear() { return new Date().getFullYear() }
+
+function editingSurfaceOpen() {
+  const active = document.activeElement
+  const tag = String(active?.tagName || '').toUpperCase()
+  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || active?.isContentEditable) return true
+
+  return Boolean(document.querySelector([
+    '[role="dialog"]',
+    '.chefops-mobile-sheet',
+    '.chefops-drawer-overlay',
+    '[data-chefops-editing="true"]',
+  ].join(', ')))
+}
 
 export default function AppFoundation() {
   const { user } = useAuth()
@@ -21,18 +35,31 @@ export default function AppFoundation() {
     const userKey = String(user.id || user.email || '')
     if (startedFor.current === userKey) return undefined
     startedFor.current = userKey
+
     let cancelled = false
     let notificationTimer = null
-    let packTimer = null
-    let liveTimer = null
     const outletId = String(user.outlet_id || '').trim()
     localStorage.setItem('chefops.data-pack.outlet', outletId)
 
-    const updatePack = async () => {
+    const markQueriesStaleWithoutRefresh = () => {
+      queryClientInstance.invalidateQueries({ refetchType: 'none' }).catch(() => undefined)
+    }
+
+    const updatePack = async ({ ignoreAge = false, allowWhileEditing = false } = {}) => {
       if (!hasUsableAppPack(outletId)) return null
+      if (!allowWhileEditing && editingSurfaceOpen()) {
+        localStorage.setItem('chefops.data-pack.pending-background-check', '1')
+        return null
+      }
+
+      const lastCheckedAt = Number(localStorage.getItem(LAST_PACK_CHECK_KEY) || 0)
+      if (!ignoreAge && Date.now() - lastCheckedAt < PACK_RECHECK_MS) return null
+
       try {
         const manifest = await syncAppPack({ outletId, force: false })
         if (cancelled) return null
+        localStorage.setItem(LAST_PACK_CHECK_KEY, String(Date.now()))
+        localStorage.removeItem('chefops.data-pack.pending-background-check')
         localStorage.setItem('chefops.data.version', manifest.data_version || manifest.version || VERSION)
         return manifest
       } catch (error) {
@@ -41,34 +68,34 @@ export default function AppFoundation() {
       }
     }
 
-    const refreshLiveScreens = () => {
-      if (cancelled || document.visibilityState === 'hidden') return
-      queryClientInstance.invalidateQueries({ refetchType: 'active' }).catch(() => undefined)
-      window.dispatchEvent(new CustomEvent('chefops:live-refresh', {
-        detail: { outlet_id: outletId, at: new Date().toISOString() },
-      }))
-    }
-
     const publishNotifications = async () => {
       try {
         const rows = await opsClient.notifications.list({ unreadOnly: true, limit: 50 })
         if (cancelled) return
         window.__chefopsNotifications = rows || []
+
         const seenKey = `chefops.notifications.seen.${userKey}`
         const seen = new Set(JSON.parse(localStorage.getItem(seenKey) || '[]'))
         const fresh = (rows || []).filter((row) => !seen.has(row.id))
         let shouldRefreshPack = false
+        let shouldInvalidateData = false
+
         for (const row of fresh) {
           try {
             const metadata = JSON.parse(row.metadata_json || '{}')
             if (Array.isArray(metadata.invalidate) && metadata.invalidate.length) {
               navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
+              shouldInvalidateData = true
               shouldRefreshPack = true
             }
             if (metadata.data_pack_update || metadata.data_pack_version) shouldRefreshPack = true
           } catch {}
         }
-        if (shouldRefreshPack) await updatePack()
+
+        // Mark cached queries stale, but never refetch an active page while a user is working.
+        if (shouldInvalidateData) markQueriesStaleWithoutRefresh()
+        if (shouldRefreshPack) await updatePack({ ignoreAge: true })
+
         for (const row of fresh.slice(0, 3)) await showSystemNotification(row)
         ;(rows || []).forEach((row) => seen.add(row.id))
         localStorage.setItem(seenKey, JSON.stringify([...seen].slice(-500)))
@@ -78,10 +105,10 @@ export default function AppFoundation() {
 
     const boot = async () => {
       if (!hasUsableAppPack(outletId)) return
-      const manifest = await updatePack()
-      let payload = null
+      const manifest = await updatePack({ ignoreAge: true, allowWhileEditing: true })
+
       try {
-        payload = await opsClient.app.bootstrap({ year: currentYear() })
+        const payload = await opsClient.app.bootstrap({ year: currentYear() })
         if (cancelled) return
         localStorage.setItem(BOOTSTRAP_KEY, JSON.stringify({
           app_version: payload.app_version,
@@ -98,7 +125,6 @@ export default function AppFoundation() {
       }
 
       await publishNotifications()
-      refreshLiveScreens()
 
       const deviceStampKey = `chefops.device.registered.${userKey}`
       const lastRegistered = Number(localStorage.getItem(deviceStampKey) || 0)
@@ -119,36 +145,41 @@ export default function AppFoundation() {
 
     const resume = () => {
       if (document.visibilityState === 'hidden') return
+      publishNotifications()
       updatePack()
-      refreshLiveScreens()
     }
-    const onPackReady = () => boot()
-    const onVisible = () => { if (document.visibilityState === 'visible') resume() }
+
+    const onPackReady = (event) => {
+      const manifest = event?.detail?.manifest
+      if (manifest) {
+        localStorage.setItem('chefops.data.version', manifest.data_version || manifest.version || VERSION)
+      }
+      // The current screen remains untouched. New configuration is used on the
+      // next page entry or explicit refresh instead of remounting active forms.
+      markQueriesStaleWithoutRefresh()
+      window.dispatchEvent(new CustomEvent('chefops:configuration-ready', { detail: event?.detail || null }))
+    }
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') resume()
+    }
 
     if (hasUsableAppPack(outletId)) boot()
     window.addEventListener('chefops:data-pack-updated', onPackReady)
-    window.addEventListener('focus', resume)
     window.addEventListener('online', resume)
     document.addEventListener('visibilitychange', onVisible)
     navigator.storage?.persist?.().catch(() => undefined)
 
     notificationTimer = window.setInterval(() => {
       if (hasUsableAppPack(outletId) && document.visibilityState !== 'hidden') publishNotifications()
-    }, 120_000)
-    packTimer = window.setInterval(() => {
-      if (hasUsableAppPack(outletId) && document.visibilityState !== 'hidden') updatePack()
-    }, PACK_CHECK_MS)
-    liveTimer = window.setInterval(refreshLiveScreens, LIVE_REFRESH_MS)
+    }, NOTIFICATION_CHECK_MS)
 
     return () => {
       cancelled = true
       window.removeEventListener('chefops:data-pack-updated', onPackReady)
-      window.removeEventListener('focus', resume)
       window.removeEventListener('online', resume)
       document.removeEventListener('visibilitychange', onVisible)
       if (notificationTimer) window.clearInterval(notificationTimer)
-      if (packTimer) window.clearInterval(packTimer)
-      if (liveTimer) window.clearInterval(liveTimer)
     }
   }, [user])
 
