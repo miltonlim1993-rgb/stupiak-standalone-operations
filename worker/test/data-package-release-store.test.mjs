@@ -35,9 +35,10 @@ async function sha256(value) {
 
 test('publishes immutable modules and moves latest only after objects exist', async () => {
   const env = fakeEnv()
+  const outletId = 'TEST-PUBLISH'
   const draft = await buildDataPackageDraft({
     env,
-    outletId: 'RR-KCH',
+    outletId,
     generatedBy: 'owner@example.com',
     modules: {
       tasks: { task_templates: [{ id: 'task-1', title: 'Opening' }] },
@@ -46,20 +47,20 @@ test('publishes immutable modules and moves latest only after objects exist', as
   })
 
   assert.equal(draft.manifest.format_version, 2)
-  assert.equal(draft.manifest.outlet_id, 'RR-KCH')
+  assert.equal(draft.manifest.outlet_id, outletId)
   assert.equal(draft.manifest.modules.tasks.records, 1)
-  assert.equal(await getLatestDataPackageManifest(env, 'RR-KCH'), null)
+  assert.equal(await getLatestDataPackageManifest(env, outletId), null)
   assert.equal(await sha256(draft.moduleBodies.tasks), draft.manifest.modules.tasks.hash)
   assert.equal(new TextEncoder().encode(draft.moduleBodies.tasks).length, draft.manifest.modules.tasks.bytes)
 
   const published = await publishDataPackageDraft(env, draft, { publishedBy: 'owner@example.com' })
-  const latest = await getLatestDataPackageManifest(env, 'RR-KCH')
+  const latest = await getLatestDataPackageManifest(env, outletId)
   assert.equal(latest.version, published.version)
   assert.equal(latest.published_by, 'owner@example.com')
 
   const module = await getDataPackageModuleObject(
     env,
-    'RR-KCH',
+    outletId,
     'tasks',
     latest.modules.tasks.hash,
   )
@@ -68,22 +69,23 @@ test('publishes immutable modules and moves latest only after objects exist', as
 
 test('source edits mark dirty without replacing the published release', async () => {
   const env = fakeEnv()
+  const outletId = 'TEST-DIRTY'
   const first = await buildDataPackageDraft({
     env,
-    outletId: 'RR-KCH',
+    outletId,
     modules: { tasks: { task_templates: [{ id: 'task-1', title: 'Opening' }] } },
   })
   await publishDataPackageDraft(env, first, { publishedBy: 'owner@example.com' })
   const publishedVersion = first.manifest.version
 
-  await markDataPackageDirty(env, 'RR-KCH', {
+  await markDataPackageDirty(env, outletId, {
     modules: ['tasks'],
     reason: 'TaskTemplate changed',
     actor: 'owner@example.com',
   })
 
-  const dirty = await getDataPackageDirtyState(env, 'RR-KCH')
-  const latest = await getLatestDataPackageManifest(env, 'RR-KCH')
+  const dirty = await getDataPackageDirtyState(env, outletId)
+  const latest = await getLatestDataPackageManifest(env, outletId)
   assert.equal(dirty.dirty, true)
   assert.deepEqual(dirty.modules, ['tasks'])
   assert.equal(latest.version, publishedVersion)
@@ -91,25 +93,26 @@ test('source edits mark dirty without replacing the published release', async ()
 
 test('keeps release history and supports pointer rollback', async () => {
   const env = fakeEnv()
+  const outletId = 'TEST-ROLLBACK'
   const first = await buildDataPackageDraft({
     env,
-    outletId: 'RR-KCH',
+    outletId,
     modules: { tasks: { task_templates: [{ id: 'task-1', title: 'Opening' }] } },
   })
   await publishDataPackageDraft(env, first, { publishedBy: 'owner@example.com' })
 
   const second = await buildDataPackageDraft({
     env,
-    outletId: 'RR-KCH',
+    outletId,
     modules: { tasks: { task_templates: [{ id: 'task-1', title: 'Opening v2' }] } },
   })
   await publishDataPackageDraft(env, second, { publishedBy: 'owner@example.com' })
 
-  const releases = await listDataPackageReleases(env, 'RR-KCH')
+  const releases = await listDataPackageReleases(env, outletId)
   assert.equal(releases.releases.length, 2)
   assert.equal(releases.latest.version, second.manifest.version)
 
-  await rollbackDataPackage(env, 'RR-KCH', first.manifest.version, { actor: 'owner@example.com' })
-  const latest = await getLatestDataPackageManifest(env, 'RR-KCH')
+  await rollbackDataPackage(env, outletId, first.manifest.version, { actor: 'owner@example.com' })
+  const latest = await getLatestDataPackageManifest(env, outletId)
   assert.equal(latest.version, first.manifest.version)
 })
