@@ -3,9 +3,12 @@ import { opsClient } from '@/api/opsClient'
 import { useAuth } from '@/lib/AuthContext'
 import { getDeviceId, platformName, showSystemNotification } from '@/lib/app-device'
 import { hasUsableAppPack, syncAppPack } from '@/lib/app-pack'
+import { queryClientInstance } from '@/lib/query-client'
 
-const VERSION = '4.5.1-task-issue-media-drafts-rules-routes'
+const VERSION = '4.5.1-live-sync-mobile-shell-v3'
 const BOOTSTRAP_KEY = 'chefops.v4.bootstrap.public'
+const LIVE_REFRESH_MS = 20_000
+const PACK_CHECK_MS = 45_000
 
 function currentYear() { return new Date().getFullYear() }
 
@@ -21,12 +24,14 @@ export default function AppFoundation() {
     let cancelled = false
     let notificationTimer = null
     let packTimer = null
+    let liveTimer = null
     const outletId = String(user.outlet_id || '').trim()
     localStorage.setItem('chefops.data-pack.outlet', outletId)
 
-    const updatePack = async (force = false) => {
+    const updatePack = async () => {
+      if (!hasUsableAppPack(outletId)) return null
       try {
-        const manifest = await syncAppPack({ outletId, force })
+        const manifest = await syncAppPack({ outletId, force: false })
         if (cancelled) return null
         localStorage.setItem('chefops.data.version', manifest.data_version || manifest.version || VERSION)
         return manifest
@@ -34,6 +39,14 @@ export default function AppFoundation() {
         console.warn('ChefOps data patch is using the last downloaded version', error)
         return null
       }
+    }
+
+    const refreshLiveScreens = () => {
+      if (cancelled || document.visibilityState === 'hidden') return
+      queryClientInstance.invalidateQueries({ refetchType: 'active' }).catch(() => undefined)
+      window.dispatchEvent(new CustomEvent('chefops:live-refresh', {
+        detail: { outlet_id: outletId, at: new Date().toISOString() },
+      }))
     }
 
     const publishNotifications = async () => {
@@ -55,7 +68,7 @@ export default function AppFoundation() {
             if (metadata.data_pack_update || metadata.data_pack_version) shouldRefreshPack = true
           } catch {}
         }
-        if (shouldRefreshPack) await updatePack(true)
+        if (shouldRefreshPack) await updatePack()
         for (const row of fresh.slice(0, 3)) await showSystemNotification(row)
         ;(rows || []).forEach((row) => seen.add(row.id))
         localStorage.setItem(seenKey, JSON.stringify([...seen].slice(-500)))
@@ -65,7 +78,7 @@ export default function AppFoundation() {
 
     const boot = async () => {
       if (!hasUsableAppPack(outletId)) return
-      const manifest = await updatePack(false)
+      const manifest = await updatePack()
       let payload = null
       try {
         payload = await opsClient.app.bootstrap({ year: currentYear() })
@@ -85,6 +98,7 @@ export default function AppFoundation() {
       }
 
       await publishNotifications()
+      refreshLiveScreens()
 
       const deviceStampKey = `chefops.device.registered.${userKey}`
       const lastRegistered = Number(localStorage.getItem(deviceStampKey) || 0)
@@ -103,17 +117,38 @@ export default function AppFoundation() {
       }
     }
 
+    const resume = () => {
+      if (document.visibilityState === 'hidden') return
+      updatePack()
+      refreshLiveScreens()
+    }
     const onPackReady = () => boot()
+    const onVisible = () => { if (document.visibilityState === 'visible') resume() }
+
     if (hasUsableAppPack(outletId)) boot()
     window.addEventListener('chefops:data-pack-updated', onPackReady)
+    window.addEventListener('focus', resume)
+    window.addEventListener('online', resume)
+    document.addEventListener('visibilitychange', onVisible)
     navigator.storage?.persist?.().catch(() => undefined)
-    notificationTimer = window.setInterval(() => { if (hasUsableAppPack(outletId)) publishNotifications() }, 120_000)
-    packTimer = window.setInterval(() => { if (hasUsableAppPack(outletId)) updatePack(false) }, 15 * 60_000)
+
+    notificationTimer = window.setInterval(() => {
+      if (hasUsableAppPack(outletId) && document.visibilityState !== 'hidden') publishNotifications()
+    }, 120_000)
+    packTimer = window.setInterval(() => {
+      if (hasUsableAppPack(outletId) && document.visibilityState !== 'hidden') updatePack()
+    }, PACK_CHECK_MS)
+    liveTimer = window.setInterval(refreshLiveScreens, LIVE_REFRESH_MS)
+
     return () => {
       cancelled = true
       window.removeEventListener('chefops:data-pack-updated', onPackReady)
+      window.removeEventListener('focus', resume)
+      window.removeEventListener('online', resume)
+      document.removeEventListener('visibilitychange', onVisible)
       if (notificationTimer) window.clearInterval(notificationTimer)
       if (packTimer) window.clearInterval(packTimer)
+      if (liveTimer) window.clearInterval(liveTimer)
     }
   }, [user])
 
