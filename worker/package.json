@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "wrangler dev --config wrangler.dev.jsonc --port 8787",
     "deploy": "wrangler deploy",
-    "check": "wrangler deploy --dry-run"
+    "check": "wrangler deploy --dry-run",
+    "test:data-package": "node --test test/data-package-release-store.test.mjs"
   },
   "dependencies": {
     "jose": "^6.1.0"
