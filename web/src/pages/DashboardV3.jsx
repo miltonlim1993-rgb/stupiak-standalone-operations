@@ -6,6 +6,7 @@ import { opsClient } from '@/api/opsClient'
 import { useAuth } from '@/lib/AuthContext'
 import { todayStr } from '@/lib/ops-helpers'
 import { parseOutletIds } from '@/lib/outlets'
+import { normalizeTaskWorkflowShiftView } from '@/lib/task-shift-view-v3'
 import Dashboard from '@/pages/Dashboard'
 
 function shiftMeta(shiftId) {
@@ -28,7 +29,7 @@ export default function DashboardV3() {
     let cancelled = false
     if (!outletId) return undefined
     opsClient.tasks.workflowBootstrap({ outletId, date: todayStr(), refresh: false })
-      .then((result) => { if (!cancelled) setTaskData(result) })
+      .then((result) => { if (!cancelled) setTaskData(normalizeTaskWorkflowShiftView(result)) })
       .catch(() => { if (!cancelled) setTaskData(null) })
     return () => { cancelled = true }
   }, [outletId])
