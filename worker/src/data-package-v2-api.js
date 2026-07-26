@@ -2,6 +2,7 @@ import { getCurrentUser } from './auth.js'
 import { json, readJson } from './http.js'
 import { getAppPackModule, getOrBuildAppPack } from './app-pack.js'
 import { googleFetch } from './google.js'
+import { assignedOutletIds, assertOutletAccess } from './permissions.js'
 import {
   getPublishedMedia,
   publishedMediaManifest,
@@ -23,15 +24,25 @@ function clean(value = '') {
   return String(value || '').trim()
 }
 
-function targetOutlet(user, requested = '') {
+export function resolveDataPackageOutlet(user, requested = '') {
   const value = clean(requested)
-  if (value) return value
-  const firstAssigned = String(user?.outlet_ids || '')
-    .replace(/[\[\]"]/g, '')
-    .split(',')
-    .map((item) => item.trim())
-    .find(Boolean)
-  return clean(user?.outlet_id || firstAssigned)
+  if (value) {
+    assertOutletAccess(user, value)
+    return value
+  }
+
+  const fallback = clean(user?.outlet_id || assignedOutletIds(user)[0] || '')
+  if (fallback) {
+    assertOutletAccess(user, fallback)
+    return fallback
+  }
+
+  if (['manager', 'owner'].includes(clean(user?.role).toLowerCase())) return ''
+
+  const error = new Error('No outlet is assigned to your account')
+  error.status = 403
+  error.code = 'outlet_required'
+  throw error
 }
 
 function requirePublisher(user) {
@@ -302,7 +313,23 @@ function cacheHeaders(version = '') {
   }
 }
 
-async function mediaResponse(request, env, hash) {
+function manifestHasMedia(manifest, hash) {
+  const normalized = clean(hash).toLowerCase()
+  if (!normalized) return false
+  const files = manifest?.media?.files || {}
+  if (files[normalized]) return true
+  return Object.values(files).some((item) => clean(item?.hash || item?.id).toLowerCase() === normalized)
+}
+
+async function mediaResponse(request, env, hash, outletId) {
+  const manifest = await getLatestDataPackageManifest(env, outletId)
+  if (!manifestHasMedia(manifest, hash)) {
+    const error = new Error('Published package media was not found for this outlet')
+    error.status = 404
+    error.code = 'data_package_media_not_found'
+    throw error
+  }
+
   const media = await getPublishedMedia(env, hash)
   if (!media?.source_id) {
     const error = new Error('Published package media was not found')
@@ -332,7 +359,7 @@ export async function handleDataPackageV2Api(request, env, url) {
 
   const user = await getCurrentUser(request, env)
   const requestedOutlet = clean(url.searchParams.get('outlet_id'))
-  const outletId = targetOutlet(user, requestedOutlet)
+  const outletId = resolveDataPackageOutlet(user, requestedOutlet)
 
   if (url.pathname === '/api/app/v4/data-package/manifest' && request.method === 'GET') {
     const manifest = await getLatestDataPackageManifest(env, outletId)
@@ -363,7 +390,7 @@ export async function handleDataPackageV2Api(request, env, url) {
   }
 
   const mediaMatch = url.pathname.match(/^\/api\/app\/v4\/data-package\/media\/([a-f0-9]{64})$/i)
-  if (mediaMatch && request.method === 'GET') return mediaResponse(request, env, mediaMatch[1])
+  if (mediaMatch && request.method === 'GET') return mediaResponse(request, env, mediaMatch[1], outletId)
 
   if (url.pathname === '/api/app/v4/data-package/status' && request.method === 'GET') {
     const [manifest, releases] = await Promise.all([
@@ -376,7 +403,7 @@ export async function handleDataPackageV2Api(request, env, url) {
   if (url.pathname === '/api/app/v4/data-package/preview' && request.method === 'POST') {
     requirePublisher(user)
     const body = await readJson(request).catch(() => ({}))
-    const target = targetOutlet(user, body.outlet_id || outletId)
+    const target = resolveDataPackageOutlet(user, body.outlet_id || outletId)
     return json(request, env, await previewDataPackageV2(env, target, {
       actor: user.email || '',
       mediaFiles: Array.isArray(body.media_files) ? body.media_files : [],
@@ -386,7 +413,7 @@ export async function handleDataPackageV2Api(request, env, url) {
   if (url.pathname === '/api/app/v4/data-package/publish' && request.method === 'POST') {
     requirePublisher(user)
     const body = await readJson(request).catch(() => ({}))
-    const target = targetOutlet(user, body.outlet_id || outletId)
+    const target = resolveDataPackageOutlet(user, body.outlet_id || outletId)
     const result = await publishDataPackageV2(env, {
       outletId: target,
       actor: user.email || '',
@@ -405,7 +432,7 @@ export async function handleDataPackageV2Api(request, env, url) {
   if (url.pathname === '/api/app/v4/data-package/rollback' && request.method === 'POST') {
     requirePublisher(user)
     const body = await readJson(request)
-    const target = targetOutlet(user, body.outlet_id || outletId)
+    const target = resolveDataPackageOutlet(user, body.outlet_id || outletId)
     const manifest = await rollbackDataPackage(env, target, clean(body.version), { actor: user.email || '' })
     return json(request, env, { ok: true, manifest })
   }
