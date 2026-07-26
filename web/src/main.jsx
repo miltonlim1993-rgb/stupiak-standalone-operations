@@ -7,7 +7,7 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 
-const SHELL_VERSION = 'fixed-viewport-shell-v6'
+const SHELL_VERSION = 'id-pinned-scroll-shell-v7'
 const SW_REFRESH_KEY = `chefops-sw-refreshed-${SHELL_VERSION}`
 
 function isNativeAndroid() {
@@ -61,8 +61,8 @@ function configureNativeSystemBars() {
 
 function publishShellHealth() {
   window.requestAnimationFrame(() => {
-    const main = document.querySelector('.chefops-main-scroll')
-    const nav = document.querySelector('.chefops-bottom-nav')
+    const main = document.getElementById('chefops-mobile-main')
+    const nav = document.getElementById('chefops-mobile-nav')
     if (!main || !nav) return
     const mainRect = main.getBoundingClientRect()
     const navRect = nav.getBoundingClientRect()
@@ -74,6 +74,7 @@ function publishShellHealth() {
       mainBottom: Math.round(mainRect.bottom),
       mainHeight: Math.round(mainRect.height),
       mainScrollHeight: main.scrollHeight,
+      mainCanScroll: main.scrollHeight > main.clientHeight + 1,
       navTop: Math.round(navRect.top),
       navBottom: Math.round(navRect.bottom),
       navVisible: navRect.top >= 0 && navRect.bottom <= window.innerHeight + 2,
@@ -117,3 +118,4 @@ const rootElement = document.getElementById('root')
 ReactDOM.createRoot(rootElement).render(<App />)
 window.addEventListener('load', publishShellHealth, { once: true })
 window.addEventListener('resize', publishShellHealth, { passive: true })
+window.addEventListener('chefops:live-refresh', publishShellHealth)
