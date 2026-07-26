@@ -1,5 +1,7 @@
 import { opsClient } from '@/api/opsClient'
 
+let serverProfileCache = null
+
 function isNativeAndroid() {
   const capacitor = window.Capacitor
   return Boolean(
@@ -58,21 +60,30 @@ function readCachedProfile(outletId) {
   }
 }
 
+function saveResolvedProfile(outletId, profile) {
+  if (!outletId || !profile) return
+  try {
+    localStorage.setItem(cacheKey(outletId), JSON.stringify({
+      saved_at: new Date().toISOString(),
+      form: profile,
+    }))
+  } catch {}
+}
+
 async function resolvePrinterProfile() {
   const outletId = String(localStorage.getItem('chefops.data-pack.outlet') || '').trim()
   const cached = readCachedProfile(outletId)
-  let server = null
+  if (cached) return { ...cached, outlet_id: cached.outlet_id || outletId }
+  if (serverProfileCache?.outlet_id === outletId) return serverProfileCache
 
   try {
-    server = await opsClient.labels.printerProfile({ outletId })
+    const server = await opsClient.labels.printerProfile({ outletId })
+    serverProfileCache = { ...(server || {}), outlet_id: server?.outlet_id || outletId }
+    saveResolvedProfile(outletId, serverProfileCache)
+    return serverProfileCache
   } catch (error) {
     console.debug('Direct printer profile could not be refreshed', error)
-  }
-
-  return {
-    ...(server || {}),
-    ...(cached || {}),
-    outlet_id: server?.outlet_id || cached?.outlet_id || outletId,
+    return { outlet_id: outletId }
   }
 }
 
