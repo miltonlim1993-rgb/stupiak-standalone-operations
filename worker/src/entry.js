@@ -1,15 +1,16 @@
 import app from './index.js'
-import { loginWithGoogle, sessionCookie } from './auth.js'
+import { getCurrentUser, loginWithGoogle, sessionCookie } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { ensureEntitySheet } from './sheets.js'
-import { markDataPackageDirty } from './data-package-v2-store.js'
+import { assignedOutletIds, assertOutletAccess } from './permissions.js'
+import { getDataPackageModuleBody, markDataPackageDirty } from './data-package-v2-store.js'
 import {
   handleDataPackageV2Api,
   previewDataPackageV2,
   publishDataPackageV2,
 } from './data-package-v2-api.js'
 
-const WORKER_REVISION = 'data-package-v2-drive-publisher-v1'
+const WORKER_REVISION = 'data-package-v2-exact-bytes-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -111,6 +112,12 @@ function withApiHeaders(request, env, response) {
     statusText: response.statusText,
     headers,
   })
+}
+
+function requestedOutletForUser(user, requested = '') {
+  const value = String(requested || user?.outlet_id || assignedOutletIds(user)[0] || '').trim()
+  if (value && !['manager', 'owner'].includes(String(user?.role || ''))) assertOutletAccess(user, value)
+  return value
 }
 
 async function handleNativeGoogleLogin(request, env, pathname) {
@@ -227,6 +234,32 @@ async function handleInternalDataPackagePublisher(request, env, pathname) {
   }
 }
 
+async function handleExactDataPackageModule(request, env, url) {
+  const match = url.pathname.match(/^\/api\/app\/v4\/data-package\/module\/([^/]+)$/)
+  if (!match || request.method !== 'GET') return null
+
+  const user = await getCurrentUser(request, env)
+  const outletId = requestedOutletForUser(user, url.searchParams.get('outlet_id'))
+  const name = decodeURIComponent(match[1])
+  const hash = String(url.searchParams.get('hash') || '').trim()
+  const body = await getDataPackageModuleBody(env, outletId, name, hash)
+  if (!body) {
+    const error = new Error('Data Package v2 module was not found')
+    error.status = 404
+    error.code = 'data_package_v2_module_not_found'
+    throw error
+  }
+  return new Response(body, {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'private, max-age=31536000, immutable',
+      'ETag': `"${hash}"`,
+      'Content-Length': String(new TextEncoder().encode(body).length),
+    },
+  })
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
@@ -250,6 +283,9 @@ export default {
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
       try {
+        const exactModuleResponse = await handleExactDataPackageModule(request, runEnv, url)
+        if (exactModuleResponse) return withApiHeaders(request, env, exactModuleResponse)
+
         const packageResponse = await handleDataPackageV2Api(request, runEnv, url)
         if (packageResponse) return withApiHeaders(request, env, packageResponse)
       } catch (error) {
