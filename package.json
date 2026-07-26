@@ -15,7 +15,7 @@
     "setup:google": "node scripts/setup-google.mjs",
     "deploy:secrets": "node scripts/push-worker-secrets.mjs",
     "audit:base44": "node scripts/audit-base44.mjs",
-    "audit:task-source": "node scripts/audit-task-package-source-stability.mjs",
+    "audit:task-source": "node scripts/audit-task-package-source-v4.mjs",
     "package:zip": "node scripts/package-project.mjs",
     "package:publish-drive": "node scripts/publish-drive-data-package.mjs",
     "package:verify-rc": "node scripts/verify-data-package-release-candidate.mjs",
