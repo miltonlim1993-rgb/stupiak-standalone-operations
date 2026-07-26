@@ -23,11 +23,11 @@ function activeWindow(task, now) {
   return Number.isFinite(opensAt) && Number.isFinite(locksAt) && now >= opensAt && now <= locksAt
 }
 
-function currentShiftFromTasks(tasks, serverTime) {
-  const supplied = String(serverTime?.current_shift_id || '').toUpperCase()
+function currentShiftFromTasks(tasks, payload) {
+  const supplied = String(payload?.current_shift_id || '').toUpperCase()
   if (['MORNING', 'NIGHT'].includes(supplied)) return supplied
 
-  const now = Date.parse(serverTime?.server_time || '') || Date.now()
+  const now = Date.parse(payload?.server_time || '') || Date.now()
   const shiftTasks = (tasks || []).filter((task) => ['MORNING', 'NIGHT'].includes(taskShift(task)))
   const active = shiftTasks
     .filter((task) => activeWindow(task, now))
@@ -71,7 +71,6 @@ export function normalizeTaskWorkflowShiftView(payload = {}) {
   const morning = tasks.filter((task) => taskShift(task) === 'MORNING')
   const night = tasks.filter((task) => taskShift(task) === 'NIGHT')
   const daily = sourceTasks.filter((task) => taskShift(task) === 'DAILY')
-  const all = sourceTasks
 
   return {
     ...payload,
@@ -79,10 +78,10 @@ export function normalizeTaskWorkflowShiftView(payload = {}) {
     current_shift_id: currentShiftId,
     progress: {
       ...(payload.progress || {}),
-      MORNING: summarize(currentShiftId === 'MORNING' ? morning : [...morning, ...daily], 'MORNING'),
-      NIGHT: summarize(currentShiftId === 'NIGHT' ? night : [...night, ...daily], 'NIGHT'),
+      MORNING: summarize(morning, 'MORNING'),
+      NIGHT: summarize(night, 'NIGHT'),
       DAILY: summarize(daily, 'DAILY'),
-      ALL: summarize(all, 'ALL'),
+      ALL: summarize(sourceTasks, 'ALL'),
     },
   }
 }
