@@ -102,10 +102,16 @@ export default function Layout() {
   }, [mode])
 
   return (
-    <div className={`chefops-app h-full min-h-0 overflow-hidden bg-muted/40 ${rootClass}`}>
+    <div
+      className={`chefops-app min-h-0 overflow-hidden bg-muted/40 ${rootClass}`}
+      style={{ width: '100%', height: '100dvh' }}
+    >
       <AppFoundation />
       <AppUpdateBanner />
-      <div className="chefops-shell mx-auto flex h-full min-h-0 w-full overflow-hidden bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]">
+      <div
+        className="chefops-shell mx-auto flex min-h-0 w-full overflow-hidden bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]"
+        style={{ height: '100%', minHeight: 0 }}
+      >
         <aside className="chefops-sidebar hidden border-r border-border bg-background p-4">
           <div className="chefops-sidebar-brand flex items-center gap-3 px-2 py-2">
             <Logo />
@@ -120,8 +126,14 @@ export default function Layout() {
           </div>
         </aside>
 
-        <div className="chefops-content grid h-full min-h-0 min-w-0 flex-1 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden">
-          <header className="chefops-app-header relative z-40 shrink-0 border-b border-border bg-background/95 backdrop-blur">
+        <div
+          className="chefops-content min-h-0 min-w-0 flex-1 overflow-hidden"
+          style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}
+        >
+          <header
+            className="chefops-app-header relative z-40 border-b border-border bg-background/95 backdrop-blur"
+            style={{ flex: '0 0 auto' }}
+          >
             <div className="flex h-14 items-center justify-between gap-3 px-4 lg:px-6">
               <div className="chefops-mobile-brand flex min-w-0 items-center gap-2.5"><Logo /><span className="truncate text-lg font-bold tracking-tight">Stupiak’s Ops</span></div>
               <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{user?.outlet_id || 'All assigned outlets'}</p></div>
@@ -134,12 +146,23 @@ export default function Layout() {
 
           <main
             className="chefops-main-scroll min-h-0 min-w-0 overflow-x-hidden overflow-y-auto"
-            style={{ WebkitOverflowScrolling: 'touch' }}
+            style={{
+              flex: '1 1 0%',
+              minHeight: 0,
+              overflowX: 'hidden',
+              overflowY: 'auto',
+              overscrollBehaviorY: 'contain',
+              touchAction: 'pan-y',
+              WebkitOverflowScrolling: 'touch',
+            }}
           >
             <DataPackGate><Outlet /></DataPackGate>
           </main>
 
-          <nav className="chefops-bottom-nav relative z-50 w-full border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+          <nav
+            className="chefops-bottom-nav relative z-50 w-full border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+            style={{ flex: '0 0 auto' }}
+          >
             <div className="flex h-16 items-center justify-around">
               {primaryNav.map(({ to, label, icon: Icon, end }) => (
                 <NavLink key={to} to={to} end={end} className={({ isActive }) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1.5 text-[10px] font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
