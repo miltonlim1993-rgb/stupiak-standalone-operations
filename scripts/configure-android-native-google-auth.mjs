@@ -36,6 +36,8 @@ await fs.writeFile(mainActivityPath, `package com.stupiaks.ops;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.webkit.CookieManager;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 
 import androidx.core.view.WindowCompat;
 
@@ -47,14 +49,30 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(NativeGoogleAuthPlugin.class);
         super.onCreate(savedInstanceState);
 
+        WebView webView = getBridge().getWebView();
+        WebSettings webSettings = webView.getSettings();
+
+        // Respect the HTML viewport meta tag and never zoom the whole mobile UI
+        // out to fit a desktop-width layout. This is required for correct CSS
+        // pixels, touch targets, scrolling and the fixed header/footer shell.
+        webSettings.setUseWideViewPort(true);
+        webSettings.setLoadWithOverviewMode(false);
+        webSettings.setSupportZoom(false);
+        webSettings.setBuiltInZoomControls(false);
+        webSettings.setDisplayZoomControls(false);
+        webSettings.setTextZoom(100);
+        webView.setInitialScale(0);
+        webView.setVerticalScrollBarEnabled(false);
+        webView.setHorizontalScrollBarEnabled(false);
+
         CookieManager cookieManager = CookieManager.getInstance();
         cookieManager.setAcceptCookie(true);
-        cookieManager.setAcceptThirdPartyCookies(getBridge().getWebView(), true);
+        cookieManager.setAcceptThirdPartyCookies(webView, true);
 
         getWindow().setStatusBarColor(Color.WHITE);
         getWindow().setNavigationBarColor(Color.WHITE);
-        WindowCompat.getInsetsController(getWindow(), getBridge().getWebView()).setAppearanceLightStatusBars(true);
-        WindowCompat.getInsetsController(getWindow(), getBridge().getWebView()).setAppearanceLightNavigationBars(true);
+        WindowCompat.getInsetsController(getWindow(), webView).setAppearanceLightStatusBars(true);
+        WindowCompat.getInsetsController(getWindow(), webView).setAppearanceLightNavigationBars(true);
     }
 }
 `)
@@ -149,4 +167,4 @@ public class NativeGoogleAuthPlugin extends Plugin {
 }
 `)
 
-console.log(`Configured Android Credential Manager, light system bars and app version (${versionName}, versionCode ${versionCode}).`)
+console.log(`Configured Android Credential Manager, mobile WebView viewport, light system bars and app version (${versionName}, versionCode ${versionCode}).`)
