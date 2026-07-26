@@ -7,7 +7,7 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 
-const SW_REFRESH_KEY = 'chefops-sw-refreshed-live-sync-mobile-shell-v3'
+const SW_REFRESH_KEY = 'chefops-sw-refreshed-native-viewport-mobile-shell-v4'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -16,6 +16,16 @@ function isNativeAndroid() {
     || window.location.origin === 'https://localhost'
     || window.location.origin === 'capacitor://localhost'
   )
+}
+
+function configureNativeViewport() {
+  if (!isNativeAndroid()) return
+  const viewport = document.querySelector('meta[name="viewport"]')
+  viewport?.setAttribute(
+    'content',
+    'width=430, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content',
+  )
+  document.documentElement.dataset.chefopsNative = 'android'
 }
 
 function configureNativeSystemBars() {
@@ -34,6 +44,14 @@ function installViewportMetrics() {
     root.style.setProperty('--chefops-viewport-height', `${height}px`)
     root.style.setProperty('--chefops-viewport-offset-top', `${Math.max(0, Math.round(window.visualViewport?.offsetTop || 0))}px`)
     root.dataset.chefopsNative = isNativeAndroid() ? 'android' : 'web'
+    window.__chefopsViewport = {
+      native: isNativeAndroid(),
+      innerWidth: window.innerWidth,
+      innerHeight: window.innerHeight,
+      visualWidth: window.visualViewport?.width || 0,
+      visualHeight: window.visualViewport?.height || 0,
+      devicePixelRatio: window.devicePixelRatio || 1,
+    }
   }
 
   update()
@@ -43,6 +61,7 @@ function installViewportMetrics() {
   window.visualViewport?.addEventListener('scroll', update, { passive: true })
 }
 
+configureNativeViewport()
 installNativeSessionFetch()
 applyTheme()
 installViewportMetrics()
