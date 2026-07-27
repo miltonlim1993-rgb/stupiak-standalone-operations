@@ -31,6 +31,10 @@ function bool(value) {
   return value === true || ['true', 'yes', '1'].includes(clean(value).toLowerCase())
 }
 
+function boolDefault(value, fallback) {
+  return value === undefined || value === null || value === '' ? fallback : bool(value)
+}
+
 function safeJson(value) {
   try {
     const parsed = JSON.parse(String(value || ''))
@@ -76,17 +80,32 @@ export function normalizePrinterProfile(profile = {}, outletId = '') {
   const meta = parsePrinterProfileNotes(profile.notes)
   return {
     ...profile,
+    id: clean(profile.id),
     outlet_id: clean(profile.outlet_id || outletId),
     purpose: clean(profile.purpose || 'food_label'),
     profile_name: clean(profile.profile_name || 'Food Label Printer'),
+    brand: clean(profile.brand),
+    model: clean(profile.model),
+    connection_type: clean(profile.connection_type || 'system_print').toLowerCase(),
+    command_language: clean(profile.command_language || 'browser').toLowerCase(),
+    ip_address: clean(profile.ip_address),
+    port: numberValue(profile.port, 9100, 1, 65535),
+    bluetooth_mode: clean(profile.bluetooth_mode || 'classic').toLowerCase(),
+    bluetooth_device_name: clean(profile.bluetooth_device_name),
+    bluetooth_device_id: clean(profile.bluetooth_device_id),
     label_width_mm: numberValue(profile.label_width_mm, 40, 1, 500),
     label_height_mm: numberValue(profile.label_height_mm, 30, 1, 500),
     dpi: numberValue(profile.dpi, 203, 72, 1200),
     default_copies: numberValue(profile.default_copies, 1, 1, 100),
-    port: numberValue(profile.port, 9100, 1, 65535),
     retry_limit: numberValue(profile.retry_limit, 3, 0, 20),
-    enabled: profile.enabled === undefined ? true : bool(profile.enabled),
-    is_default: bool(profile.is_default),
+    auto_print: boolDefault(profile.auto_print, false),
+    standby_enabled: boolDefault(profile.standby_enabled, false),
+    auto_reconnect: boolDefault(profile.auto_reconnect, true),
+    queue_when_offline: boolDefault(profile.queue_when_offline, true),
+    enabled: boolDefault(profile.enabled, true),
+    is_default: boolDefault(profile.is_default, false),
+    station_mode: clean(profile.station_mode || 'this_device'),
+    station_device_name: clean(profile.station_device_name),
     orientation: meta.layout.orientation,
     padding_top_mm: meta.layout.padding_top_mm,
     padding_right_mm: meta.layout.padding_right_mm,
@@ -98,8 +117,15 @@ export function normalizePrinterProfile(profile = {}, outletId = '') {
 
 export function encodePrinterProfileNotes(profile = {}) {
   const existing = parsePrinterProfileNotes(profile.notes)
+  const {
+    layout: _legacyLayout,
+    print_layout: _existingPrintLayout,
+    notes: _legacyNotes,
+    ...preserved
+  } = existing
+
   return JSON.stringify({
-    ...existing,
+    ...preserved,
     schema: PROFILE_SCHEMA,
     user_notes: clean(profile.user_notes),
     print_layout: {
@@ -131,7 +157,7 @@ export function getOrCreatePrinterDeviceId() {
   const existing = clean(storage.getItem(DEVICE_ID_KEY))
   if (existing) return existing
   const id = randomDeviceId()
-  storage.setItem(DEVICE_ID_KEY, id)
+  try { storage.setItem(DEVICE_ID_KEY, id) } catch {}
   return id
 }
 
@@ -157,13 +183,13 @@ export function savePrinterDeviceBinding(outletId, profileId, stationName = '') 
     station_name: clean(stationName),
     updated_at: new Date().toISOString(),
   }
-  if (storage) storage.setItem(deviceBindingKey(outletId), JSON.stringify(binding))
+  try { storage?.setItem(deviceBindingKey(outletId), JSON.stringify(binding)) } catch {}
   return binding
 }
 
 export function clearPrinterDeviceBinding(outletId) {
   const storage = localStorageSafe()
-  storage?.removeItem(deviceBindingKey(outletId))
+  try { storage?.removeItem(deviceBindingKey(outletId)) } catch {}
   return readPrinterDeviceBinding(outletId)
 }
 
@@ -171,10 +197,12 @@ export function savePrinterProfilesSnapshot(outletId, profiles = []) {
   const storage = localStorageSafe()
   if (!storage || !clean(outletId)) return
   const normalized = (profiles || []).map((profile) => normalizePrinterProfile(profile, outletId))
-  storage.setItem(profilesSnapshotKey(outletId), JSON.stringify({
-    saved_at: new Date().toISOString(),
-    profiles: normalized,
-  }))
+  try {
+    storage.setItem(profilesSnapshotKey(outletId), JSON.stringify({
+      saved_at: new Date().toISOString(),
+      profiles: normalized,
+    }))
+  } catch {}
 }
 
 export function readPrinterProfilesSnapshot(outletId) {
@@ -188,18 +216,25 @@ export function readPrinterProfilesSnapshot(outletId) {
 
 export function clearLegacyPrinterDraft(outletId) {
   const storage = localStorageSafe()
-  storage?.removeItem(`stupiaks_ops.label_printer_draft.${clean(outletId) || 'default'}`)
+  try {
+    storage?.removeItem(`stupiaks_ops.label_printer_draft.${clean(outletId) || 'default'}`)
+  } catch {}
 }
 
 export function selectPrinterProfile(profiles = [], outletId = '', selectedProfileId = '') {
+  const targetOutletId = clean(outletId)
   const enabled = (profiles || [])
-    .map((profile) => normalizePrinterProfile(profile, outletId))
-    .filter((profile) => profile.enabled && !profile.deleted_at)
+    .map((profile) => normalizePrinterProfile(profile, targetOutletId))
+    .filter((profile) => (
+      profile.enabled
+      && !profile.deleted_at
+      && (!targetOutletId || profile.outlet_id === targetOutletId)
+    ))
 
   if (!enabled.length) return null
 
-  const requestedId = clean(selectedProfileId || readPrinterDeviceBinding(outletId).selected_profile_id)
-  return enabled.find((profile) => clean(profile.id) === requestedId)
+  const requestedId = clean(selectedProfileId || readPrinterDeviceBinding(targetOutletId).selected_profile_id)
+  return enabled.find((profile) => profile.id === requestedId)
     || enabled.find((profile) => profile.is_default)
     || enabled[0]
 }
