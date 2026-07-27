@@ -1,12 +1,15 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 
+REPOSITORY="miltonlim1993-rgb/stupiak-standalone-operations"
 EXPECTED_BRANCH="feature/task-workflow-v3-apk"
 EXPECTED_ACCOUNT_ID="bb2ac1970975a5018a17c878e61cb88f"
 OPS_KV_ID="f62696e1a2f14b8a9e0b84a540c7e997"
 RECRUITMENT_KV_ID="ccf52a9b0bb94a4a90889f30a0e623d5"
 WORKER_URL="https://stupiaks-ops.sporkburger19.workers.dev"
 LOGIN_CLIENT_ID="460544373229-06mv64nt3e78mtse5sc375cobv13i1ii.apps.googleusercontent.com"
+ANDROID_WORKFLOW="android-apk.yml"
+ANDROID_RELEASE_TAG="android-release-latest"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$ROOT" ]]; then
@@ -38,11 +41,13 @@ echo "Commit: $COMMIT"
 
 echo
 echo "=================================================="
-echo "2. Verify local Wrangler OAuth login"
+echo "2. Verify Cloudflare and GitHub authentication"
 echo "=================================================="
 WHOAMI_OUTPUT="$(npx wrangler whoami 2>&1)"
 printf '%s\n' "$WHOAMI_OUTPUT"
 printf '%s\n' "$WHOAMI_OUTPUT" | grep -q "$EXPECTED_ACCOUNT_ID"
+gh auth status
+gh repo view "$REPOSITORY" --json nameWithOwner --jq '.nameWithOwner' | grep -qx "$REPOSITORY"
 
 echo
 echo "=================================================="
@@ -107,7 +112,64 @@ curl -fsS "$WORKER_URL/api/health" | python3 -m json.tool
 
 echo
 echo "=================================================="
-echo "SUCCESS: Web 4.6.4 acceptance deployment completed"
+echo "6. Trigger production-signed Android 4.6.4 build"
+echo "=================================================="
+PREVIOUS_RUN_ID="$(gh run list \
+  --repo "$REPOSITORY" \
+  --workflow "$ANDROID_WORKFLOW" \
+  --branch "$EXPECTED_BRANCH" \
+  --event workflow_dispatch \
+  --limit 1 \
+  --json databaseId \
+  --jq '.[0].databaseId // empty')"
+
+gh workflow run "$ANDROID_WORKFLOW" \
+  --repo "$REPOSITORY" \
+  --ref "$EXPECTED_BRANCH"
+
+ANDROID_RUN_ID=""
+for attempt in $(seq 1 30); do
+  CANDIDATE_RUN_ID="$(gh run list \
+    --repo "$REPOSITORY" \
+    --workflow "$ANDROID_WORKFLOW" \
+    --branch "$EXPECTED_BRANCH" \
+    --event workflow_dispatch \
+    --limit 1 \
+    --json databaseId \
+    --jq '.[0].databaseId // empty')"
+  if [[ -n "$CANDIDATE_RUN_ID" && "$CANDIDATE_RUN_ID" != "$PREVIOUS_RUN_ID" ]]; then
+    ANDROID_RUN_ID="$CANDIDATE_RUN_ID"
+    break
+  fi
+  sleep 2
+done
+
+if [[ -z "$ANDROID_RUN_ID" ]]; then
+  echo "ERROR: Android workflow was dispatched but its new run ID could not be resolved."
+  echo "Check: gh run list --repo '$REPOSITORY' --workflow '$ANDROID_WORKFLOW' --limit 5"
+  exit 1
+fi
+
+echo "Android workflow run: $ANDROID_RUN_ID"
+gh run watch "$ANDROID_RUN_ID" --repo "$REPOSITORY" --exit-status
+
+echo
+echo "=================================================="
+echo "7. Verify signed Android release assets"
+echo "=================================================="
+RELEASE_ASSETS="$(gh release view "$ANDROID_RELEASE_TAG" \
+  --repo "$REPOSITORY" \
+  --json assets \
+  --jq '.assets[].name')"
+printf '%s\n' "$RELEASE_ASSETS"
+printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-release.apk'
+printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-direct-print-flow-v10.apk'
+printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-release.aab'
+printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'SHA256SUMS.txt'
+
+echo
+echo "=================================================="
+echo "SUCCESS: Web 4.6.4 and signed Android release completed"
 echo "=================================================="
 echo "URL: $WORKER_URL"
 echo "Commit: $COMMIT"
@@ -115,4 +177,6 @@ echo "Worker revision: printer-profiles-v4.6.4"
 echo "Ops KV binding: $OPS_KV_ID"
 echo "Recruitment KV unchanged: $RECRUITMENT_KV_ID"
 echo "R2 remains disabled; existing Google Drive media flow is unchanged."
+echo "Android workflow run: $ANDROID_RUN_ID"
+echo "Release tag: $ANDROID_RELEASE_TAG"
 echo "No Sheet upgrade, task template apply, Data Package publish, or Ops Control publication command was run."
