@@ -1,6 +1,7 @@
 import { opsClient } from '@/api/opsClient'
 import {
   applyPrinterLayoutToHtml,
+  clearLegacyPrinterDraft,
   formatPrinterLayoutOutcome,
   readPrinterDeviceBinding,
   readPrinterProfilesSnapshot,
@@ -20,7 +21,11 @@ function isNativeAndroid() {
 }
 
 function currentOutletId() {
-  return String(localStorage.getItem('chefops.data-pack.outlet') || '').trim()
+  try {
+    return String(localStorage.getItem('chefops.data-pack.outlet') || '').trim()
+  } catch {
+    return ''
+  }
 }
 
 function extractJobName(html) {
@@ -47,40 +52,51 @@ function sanitizeLabelHtml(html) {
     : `${directStyle}${withoutScripts}`
 }
 
-async function loadServerProfiles(outletId, { force = false } = {}) {
-  const key = String(outletId || '')
-  const cached = serverProfilesCache.get(key)
-  if (!force && cached && Date.now() - cached.loadedAt < 15000) return cached.profiles
+async function resolveOutletAndProfiles(requestedOutletId, { force = false } = {}) {
+  let outletId = String(requestedOutletId || '').trim()
+
+  if (!outletId) {
+    const fallback = await opsClient.labels.printerProfile({ outletId: '' }).catch(() => null)
+    outletId = String(fallback?.outlet_id || '').trim()
+    if (!outletId) return { outletId: '', profiles: fallback?.id ? [fallback] : [] }
+  }
+
+  const cached = serverProfilesCache.get(outletId)
+  if (!force && cached && Date.now() - cached.loadedAt < 15000) {
+    return { outletId, profiles: cached.profiles }
+  }
 
   let profiles = await opsClient.entities.PrinterProfile.filter(
-    { outlet_id: key, purpose: 'food_label' },
+    { outlet_id: outletId, purpose: 'food_label' },
     '-is_default,-updated_date',
     200,
   )
 
   if (!profiles?.length) {
-    const fallback = await opsClient.labels.printerProfile({ outletId: key }).catch(() => null)
+    const fallback = await opsClient.labels.printerProfile({ outletId }).catch(() => null)
     profiles = fallback?.id ? [fallback] : []
   }
 
-  serverProfilesCache.set(key, { loadedAt: Date.now(), profiles: profiles || [] })
-  savePrinterProfilesSnapshot(key, profiles || [])
-  return profiles || []
+  serverProfilesCache.set(outletId, { loadedAt: Date.now(), profiles: profiles || [] })
+  savePrinterProfilesSnapshot(outletId, profiles || [])
+  clearLegacyPrinterDraft(outletId)
+  return { outletId, profiles: profiles || [] }
 }
 
 async function resolvePrinterProfile() {
-  const outletId = currentOutletId()
-  const binding = readPrinterDeviceBinding(outletId)
+  const requestedOutletId = currentOutletId()
 
   try {
-    const serverProfiles = await loadServerProfiles(outletId, { force: true })
-    return selectPrinterProfile(serverProfiles, outletId, binding.selected_profile_id)
-      || { outlet_id: outletId }
+    const resolved = await resolveOutletAndProfiles(requestedOutletId, { force: true })
+    const binding = readPrinterDeviceBinding(resolved.outletId)
+    return selectPrinterProfile(resolved.profiles, resolved.outletId, binding.selected_profile_id)
+      || { outlet_id: resolved.outletId }
   } catch (error) {
     console.debug('Server printer profiles could not be refreshed; using the device snapshot', error)
-    const snapshots = readPrinterProfilesSnapshot(outletId)
-    return selectPrinterProfile(snapshots, outletId, binding.selected_profile_id)
-      || { outlet_id: outletId }
+    const binding = readPrinterDeviceBinding(requestedOutletId)
+    const snapshots = readPrinterProfilesSnapshot(requestedOutletId)
+    return selectPrinterProfile(snapshots, requestedOutletId, binding.selected_profile_id)
+      || { outlet_id: requestedOutletId }
   }
 }
 
@@ -237,6 +253,10 @@ function installSystemLabelLayoutBridge() {
         }
         window.__chefopsLastLabelPrintOutcome = detail
         window.dispatchEvent(new CustomEvent('chefops:label-print-layout', { detail }))
+        showPrintMessage(
+          `Print sheet prepared · ${profile.profile_name || 'Label printer'} · ${formatPrinterLayoutOutcome(transformed.layout)}.`,
+          'success',
+        )
         return originalWrite(transformed.html)
       }
     }
@@ -253,6 +273,7 @@ function installSystemLabelLayoutBridge() {
 }
 
 export function installNativeLabelPrintBridge() {
+  clearLegacyPrinterDraft(currentOutletId())
   installSystemLabelLayoutBridge()
   if (!isNativeAndroid() || window.__chefopsNativePrintInstalled) return
   window.__chefopsNativePrintInstalled = true
