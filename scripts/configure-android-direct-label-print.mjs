@@ -12,11 +12,87 @@ const manifestPath = path.join(androidRoot, 'app', 'src', 'main', 'AndroidManife
 await fs.mkdir(javaRoot, { recursive: true })
 
 let mainActivity = await fs.readFile(mainActivityPath, 'utf8')
-if (!mainActivity.includes('registerPlugin(DirectLabelPrintPlugin.class);')) {
-  const anchor = '        registerPlugin(NativeLabelPrintPlugin.class);\n'
-  if (!mainActivity.includes(anchor)) throw new Error('Unable to find native plugin registration anchor')
-  mainActivity = mainActivity.replace(anchor, `${anchor}        registerPlugin(DirectLabelPrintPlugin.class);\n`)
-  await fs.writeFile(mainActivityPath, mainActivity)
+const registration =
+  'registerPlugin(DirectLabelPrintPlugin.class);'
+
+if (!mainActivity.includes(registration)) {
+  if (!mainActivity.includes('import android.os.Bundle;')) {
+    const packagePattern = /package\\s+[^;]+;/
+
+    if (!packagePattern.test(mainActivity)) {
+      throw new Error(
+        'Unable to find MainActivity package declaration',
+      )
+    }
+
+    mainActivity = mainActivity.replace(
+      packagePattern,
+      (declaration) =>
+        `${declaration}\\n\\nimport android.os.Bundle;`,
+    )
+  }
+
+  const onCreatePattern =
+    /((?:public|protected)\\s+void\\s+onCreate\\s*\\(\\s*Bundle\\s+savedInstanceState\\s*\\)\\s*\\{)/
+
+  if (onCreatePattern.test(mainActivity)) {
+    mainActivity = mainActivity.replace(
+      onCreatePattern,
+      (match) =>
+        `${match}\\n        ${registration}`,
+    )
+  } else {
+    const classPattern =
+      /(public\\s+class\\s+MainActivity\\s+extends\\s+BridgeActivity\\s*\\{)/
+
+    if (!classPattern.test(mainActivity)) {
+      throw new Error(
+        'Unable to find Capacitor MainActivity class',
+      )
+    }
+
+    mainActivity = mainActivity.replace(
+      classPattern,
+      `$1
+    @Override
+    public void onCreate(Bundle savedInstanceState) {
+        ${registration}
+        super.onCreate(savedInstanceState);
+    }
+`,
+    )
+  }
+
+  const registrationCount =
+    mainActivity.split(registration).length - 1
+
+  if (registrationCount !== 1) {
+    throw new Error(
+      `Expected one DirectLabelPrint registration, found ${registrationCount}`,
+    )
+  }
+
+  const registrationIndex =
+    mainActivity.indexOf(registration)
+
+  const superIndex =
+    mainActivity.indexOf(
+      'super.onCreate(savedInstanceState);',
+    )
+
+  if (
+    superIndex < 0
+    || registrationIndex > superIndex
+  ) {
+    throw new Error(
+      'DirectLabelPrint must register before super.onCreate',
+    )
+  }
+
+  await fs.writeFile(
+    mainActivityPath,
+    mainActivity,
+  )
 }
 
 let manifest = await fs.readFile(manifestPath, 'utf8')
