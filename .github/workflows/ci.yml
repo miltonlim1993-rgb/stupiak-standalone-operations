@@ -16,5 +16,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run build
+      - name: Install dependencies
+        run: npm ci
+      - name: Build and test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee source-validation-build.log
+      - name: Upload source validation log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-validation-build-log
+          path: source-validation-build.log
+          if-no-files-found: warn
+          retention-days: 7
