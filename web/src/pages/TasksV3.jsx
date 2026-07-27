@@ -38,7 +38,7 @@ import { outletLabel, parseOutletIds } from '@/lib/outlets'
 import { resolveMediaRule } from '@/lib/media-rules'
 import { watermarkTaskPhoto } from '@/lib/watermark-image'
 
-const LANGUAGE_KEY = 'chefops.task.language.v3'
+const LANGUAGE_KEY = 'chefops.task.content-language.v1'
 const ISSUE_TYPES = [
   { value: 'insufficient_stock', cn: '库存不足', en: 'Insufficient Stock' },
   { value: 'equipment_problem', cn: '设备损坏', en: 'Equipment Problem' },
@@ -88,6 +88,20 @@ function taskInstruction(task) {
     cn: task?.display?.instruction_cn || '',
     en: task?.display?.instruction_en || task?.description || '',
   }
+}
+
+function contentPrimary(pair, mode) {
+  const chinese = String(pair?.cn || '').trim()
+  const english = String(pair?.en || '').trim()
+  return mode === 'en' ? english || chinese : chinese || english
+}
+
+function contentSecondary(pair, mode) {
+  if (mode !== 'bilingual') return ''
+  const chinese = String(pair?.cn || '').trim()
+  const english = String(pair?.en || '').trim()
+  if (!chinese || !english || chinese.toLowerCase() === english.toLowerCase()) return ''
+  return english
 }
 
 function timeText(iso, timeZone = 'Asia/Kuching') {
@@ -235,7 +249,7 @@ export default function TasksV3() {
     <div className="chefops-page mx-auto w-full max-w-xl space-y-4 p-4 pb-28">
       <header className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl font-heading font-bold">任务 Tasks</h1>
+          <h1 className="text-xl font-heading font-bold">Tasks</h1>
           <p className="truncate text-xs text-muted-foreground">{outletLabel(selectedOutlet, outletId)} · Server-time controlled</p>
         </div>
         <div className="flex gap-2">
@@ -278,16 +292,16 @@ export default function TasksV3() {
       ) : (
         <div className="rounded-2xl border border-dashed p-10 text-center">
           <ClipboardCheck className="mx-auto h-10 w-10 text-muted-foreground" />
-          <p className="mt-3 text-sm font-semibold">这个班次没有任务</p>
-          <p className="mt-1 text-xs text-muted-foreground">No tasks are configured for this shift.</p>
+          <p className="mt-3 text-sm font-semibold">No tasks are configured for this shift.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Select another shift or refresh the task list.</p>
         </div>
       )}
 
       <AppDrawer
         open={Boolean(selectedTask)}
         onOpenChange={(open) => !open && setSelectedTaskId('')}
-        title={selectedTask ? (taskTitle(selectedTask).cn || taskTitle(selectedTask).en) : 'Task'}
-        subtitle={selectedTask ? (taskTitle(selectedTask).en || selectedTask.title) : ''}
+        title={selectedTask ? contentPrimary(taskTitle(selectedTask), language) : 'Task'}
+        subtitle={selectedTask ? contentSecondary(taskTitle(selectedTask), language) : ''}
         heightClass="h-[96dvh]"
       >
         {selectedTask ? (
@@ -311,9 +325,15 @@ export default function TasksV3() {
 
 function LanguageButton({ language, setLanguage }) {
   const next = language === 'bilingual' ? 'cn' : language === 'cn' ? 'en' : 'bilingual'
-  const label = language === 'bilingual' ? '中/EN' : language === 'cn' ? '中文' : 'EN'
+  const label = language === 'bilingual' ? 'Content: 中+EN' : language === 'cn' ? 'Content: 中文' : 'Content: EN'
   return (
-    <Button size="sm" variant="outline" className="h-10 rounded-xl" onClick={() => setLanguage(next)}>
+    <Button
+      size="sm"
+      variant="outline"
+      className="h-10 rounded-xl px-3 text-xs"
+      title="Task content language"
+      onClick={() => setLanguage(next)}
+    >
       <Languages className="mr-1.5 h-4 w-4" /> {label}
     </Button>
   )
@@ -327,7 +347,7 @@ function ShiftTabs({ shift, language, onChange, data }) {
         const count = progressFor(data, id).total
         return (
           <button key={id} type="button" onClick={() => onChange(id)} className={`rounded-xl px-2 py-2 text-xs font-semibold ${shift === id ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'}`}>
-            <TextPair cn={meta.cn} en={meta.en} mode={language} />
+            <TextPair cn={meta.cn} en={meta.en} mode="en" />
             <span className="mt-0.5 block text-[10px] opacity-70">{count}</span>
           </button>
         )
@@ -345,7 +365,7 @@ function ShiftProgress({ progress, shift, language }) {
     <section className="rounded-2xl border bg-card p-4">
       <div className="flex items-center justify-between gap-3">
         <div>
-          <TextPair cn={`${meta.cn}进度`} en={`${meta.en} Shift`} mode={language} className="font-semibold" />
+          <span className="font-semibold">{meta.en} Tasks Progress</span>
           <p className="mt-1 text-xs text-muted-foreground">{done} / {total} completed</p>
         </div>
         <span className="text-2xl font-bold">{percent}%</span>
@@ -362,7 +382,7 @@ function ShiftProgress({ progress, shift, language }) {
 }
 
 function ProgressMetric({ cn, en, value, language, warning = false }) {
-  return <div className={`rounded-xl px-2 py-2 ${warning && value ? 'bg-rose-50 text-rose-800' : 'bg-muted/60'}`}><p className="text-lg font-bold">{value}</p><TextPair cn={cn} en={en} mode={language} className="text-[10px]" /></div>
+  return <div className={`rounded-xl px-2 py-2 ${warning && value ? 'bg-rose-50 text-rose-800' : 'bg-muted/60'}`}><p className="text-lg font-bold">{value}</p><TextPair cn={cn} en={en} mode="en" className="text-[10px]" /></div>
 }
 
 function TaskCard({ task, language, onOpen, onStart }) {
@@ -379,18 +399,18 @@ function TaskCard({ task, language, onOpen, onStart }) {
           <TextPair cn={title.cn} en={title.en} mode={language} className="text-sm font-semibold leading-5" />
           <TextPair cn={instruction.cn} en={instruction.en} mode={language} className="mt-1 line-clamp-2 text-xs leading-5 text-muted-foreground" />
           <div className="mt-2 flex flex-wrap items-center gap-1.5">
-            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}><TextPair cn={meta.cn} en={meta.en} mode={language} /></span>
+            <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${meta.className}`}><TextPair cn={meta.cn} en={meta.en} mode="en" /></span>
             <span className="text-[10px] text-muted-foreground">{task.shift_name_en || task.shift_id}</span>
             <span className="inline-flex items-center gap-1 text-[10px] text-muted-foreground"><Clock3 className="h-3 w-3" /> {timeText(task.opens_at, task.timezone)}–{timeText(task.due_at, task.timezone)}</span>
             {task.required_photo_count > 0 ? <span className="inline-flex items-center gap-1 text-[10px] text-violet-700"><Camera className="h-3 w-3" /> {task.submitted_photo_count || 0}/{task.required_photo_count}</span> : null}
           </div>
-          {task.status_key === 'locked' ? <TextPair cn={task.lock_reason_cn} en={task.lock_reason_en} mode={language} className="mt-2 text-xs font-medium text-amber-700" /> : null}
+          {task.status_key === 'locked' ? <TextPair cn={task.lock_reason_cn} en={task.lock_reason_en} mode="en" className="mt-2 text-xs font-medium text-amber-700" /> : null}
         </div>
         <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground" />
       </button>
       <div className="flex gap-2 border-t px-3 py-2">
-        {canStart ? <Button size="sm" variant="outline" onClick={onStart}><Play className="mr-1 h-4 w-4" /> <TextPair cn="开始任务" en="Start Task" mode={language} /></Button> : null}
-        <Button size="sm" variant={canStart ? 'outline' : 'default'} onClick={onOpen}><ClipboardCheck className="mr-1 h-4 w-4" /> <TextPair cn="查看任务" en="Open Task" mode={language} /></Button>
+        {canStart ? <Button size="sm" variant="outline" onClick={onStart}><Play className="mr-1 h-4 w-4" /> <span>Start Task</span></Button> : null}
+        <Button size="sm" variant={canStart ? 'outline' : 'default'} onClick={onOpen}><ClipboardCheck className="mr-1 h-4 w-4" /> <span>Open Task</span></Button>
       </div>
     </article>
   )
@@ -507,7 +527,7 @@ function TaskDetail({ task, taskPhotos, samples, outletId, outletName, language,
               <TextPair cn={title.cn} en={title.en} mode={language} className="text-base font-bold" />
               <p className="mt-2 text-xs text-muted-foreground">{task.shift_name_en} · {timeText(task.opens_at, task.timezone)}–{timeText(task.due_at, task.timezone)} · {task.timezone}</p>
             </div>
-            <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${status.className}`}><TextPair cn={status.cn} en={status.en} mode={language} /></span>
+            <span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${status.className}`}><TextPair cn={status.cn} en={status.en} mode="en" /></span>
           </div>
           <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted"><div className="h-full rounded-full bg-primary" style={{ width: `${items.length ? Math.round((answered / items.length) * 100) : 0}%` }} /></div>
           <p className="mt-1 text-right text-[10px] text-muted-foreground">{answered}/{items.length}</p>
@@ -517,11 +537,11 @@ function TaskDetail({ task, taskPhotos, samples, outletId, outletName, language,
         {(task.display?.completion_standard_cn || task.display?.completion_standard_en) ? <DetailBlock titleCn="完成标准" titleEn="Completion Standard" language={language} cn={task.display?.completion_standard_cn} en={task.display?.completion_standard_en} /> : null}
 
         <section className="rounded-2xl border p-4">
-          <h3 className="text-sm font-semibold"><TextPair cn="照片要求" en="Photo Requirement" mode={language} /></h3>
+          <h3 className="text-sm font-semibold"><span>Photo Requirement</span></h3>
           <p className="mt-2 text-sm"><TextPair
             cn={task.photo_requirement === 'required' ? '必须上传照片' : task.photo_requirement === 'issue_only' ? '出现异常时需要照片' : '不需要照片'}
             en={task.photo_requirement === 'required' ? 'Photo Required' : task.photo_requirement === 'issue_only' ? 'Photo Required for Issues' : 'No Photo Required'}
-            mode={language}
+            mode="en"
           /></p>
           {samples.length ? (
             <div className="mt-3 grid grid-cols-2 gap-2">
@@ -530,7 +550,7 @@ function TaskDetail({ task, taskPhotos, samples, outletId, outletName, language,
           ) : null}
         </section>
 
-        {task.status_key === 'locked' ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><TextPair cn={task.lock_reason_cn} en={task.lock_reason_en} mode={language} /></div> : null}
+        {task.status_key === 'locked' ? <div className="rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900"><TextPair cn={task.lock_reason_cn} en={task.lock_reason_en} mode="en" /></div> : null}
         {task.status_key === 'issue' ? <OutcomeSummary task={task} language={language} /> : null}
 
         {sections.map((section) => (
@@ -544,7 +564,7 @@ function TaskDetail({ task, taskPhotos, samples, outletId, outletName, language,
 
         {groups.length ? (
           <section className="space-y-3">
-            <h3 className="border-b pb-2 text-sm font-semibold"><TextPair cn="任务照片" en="Task Photos" mode={language} /></h3>
+            <h3 className="border-b pb-2 text-sm font-semibold"><span>Task Photos</span></h3>
             {groups.map((group, index) => {
               const type = `checklist:${group.id}`
               const rows = taskPhotos.filter((row) => row.photo_type === type)
@@ -558,18 +578,18 @@ function TaskDetail({ task, taskPhotos, samples, outletId, outletName, language,
 
         {!readonly ? (
           <section className="space-y-2 rounded-2xl border border-rose-200 bg-rose-50/40 p-4">
-            <h3 className="text-sm font-semibold text-rose-900"><TextPair cn="异常照片" en="Issue Photo" mode={language} /></h3>
-            <p className="text-xs leading-5 text-rose-800"><TextPair cn="报告异常时至少上传一张现场照片。" en="At least one on-site photo is required when reporting an issue." mode={language} /></p>
+            <h3 className="text-sm font-semibold text-rose-900"><span>Issue Photo</span></h3>
+            <p className="text-xs leading-5 text-rose-800"><span>At least one on-site photo is required when reporting an issue.</span></p>
             {issuePhotos.length ? <div className="grid grid-cols-2 gap-2">{issuePhotos.map((row) => <PhotoTile key={row.id} row={row} onRemove={() => removePhoto(row)} />)}</div> : null}
             <Button type="button" size="sm" variant="outline" onClick={() => inputs.current.issue?.click()} disabled={busy === 'photo:issue'}>
-              {busy === 'photo:issue' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Camera className="mr-1 h-4 w-4" />} <TextPair cn="拍摄异常照片" en="Take Issue Photo" mode={language} />
+              {busy === 'photo:issue' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Camera className="mr-1 h-4 w-4" />} <span>Take Issue Photo</span>
             </Button>
             <input ref={(node) => { inputs.current.issue = node }} className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => capture(`issue:${issueType || 'general'}`, event.target.files?.[0], 'Task issue evidence')} />
           </section>
         ) : null}
 
         {!readonly ? (
-          <div className="space-y-1.5"><Label><TextPair cn="交接备注" en="Completion Notes" mode={language} /></Label><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} /></div>
+          <div className="space-y-1.5"><Label><span>Completion Notes</span></Label><Textarea value={notes} onChange={(event) => setNotes(event.target.value)} rows={3} /></div>
         ) : null}
 
         {outcomeMode ? (
@@ -580,12 +600,12 @@ function TaskDetail({ task, taskPhotos, samples, outletId, outletName, language,
       {!readonly && !outcomeMode ? (
         <div className="space-y-2 border-t bg-background p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" disabled={Boolean(busy)} onClick={() => save('save')}>{busy === 'save' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} <TextPair cn="保存进度" en="Save Progress" mode={language} /></Button>
-            <Button disabled={Boolean(busy)} onClick={() => save('complete')}>{busy === 'complete' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />} <TextPair cn="完成" en="Complete" mode={language} /></Button>
+            <Button variant="outline" disabled={Boolean(busy)} onClick={() => save('save')}>{busy === 'save' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Save className="mr-1 h-4 w-4" />} <span>Save Progress</span></Button>
+            <Button disabled={Boolean(busy)} onClick={() => save('complete')}>{busy === 'complete' ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Check className="mr-1 h-4 w-4" />} <span>Complete</span></Button>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button variant="outline" className="border-rose-300 text-rose-700" disabled={Boolean(busy)} onClick={() => setOutcomeMode('issue')}><AlertTriangle className="mr-1 h-4 w-4" /> <TextPair cn="报告异常" en="Report Issue" mode={language} /></Button>
-            <Button variant="outline" disabled={Boolean(busy)} onClick={() => setOutcomeMode('unable')}><XCircle className="mr-1 h-4 w-4" /> <TextPair cn="无法完成" en="Unable" mode={language} /></Button>
+            <Button variant="outline" className="border-rose-300 text-rose-700" disabled={Boolean(busy)} onClick={() => setOutcomeMode('issue')}><AlertTriangle className="mr-1 h-4 w-4" /> <span>Report Issue</span></Button>
+            <Button variant="outline" disabled={Boolean(busy)} onClick={() => setOutcomeMode('unable')}><XCircle className="mr-1 h-4 w-4" /> <span>Unable</span></Button>
           </div>
         </div>
       ) : null}
@@ -597,12 +617,12 @@ function TaskDetail({ task, taskPhotos, samples, outletId, outletName, language,
 
 function DetailBlock({ titleCn, titleEn, language, cn, en }) {
   if (!cn && !en) return null
-  return <section className="rounded-2xl border p-4"><h3 className="text-sm font-semibold"><TextPair cn={titleCn} en={titleEn} mode={language} /></h3><TextPair cn={cn} en={en} mode={language} className="mt-2 whitespace-pre-line text-sm leading-6" /></section>
+  return <section className="rounded-2xl border p-4"><h3 className="text-sm font-semibold"><TextPair cn={titleCn} en={titleEn} mode="en" /></h3><TextPair cn={cn} en={en} mode={language} className="mt-2 whitespace-pre-line text-sm leading-6" /></section>
 }
 
 function OutcomeSummary({ task, language }) {
   const type = ISSUE_TYPES.find((row) => row.value === task.issue_type)
-  return <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-900"><p className="font-semibold"><TextPair cn={task.outcome === 'unable' ? '无法完成' : '已报告异常'} en={task.outcome === 'unable' ? 'Unable to Complete' : 'Issue Reported'} mode={language} /></p>{type ? <TextPair cn={type.cn} en={type.en} mode={language} className="mt-2 text-sm" /> : null}<p className="mt-2 whitespace-pre-line text-sm">{task.issue_reason}</p></div>
+  return <div className="rounded-2xl border border-rose-300 bg-rose-50 p-4 text-rose-900"><p className="font-semibold">{task.outcome === 'unable' ? 'Unable to Complete' : 'Issue Reported'}</p>{type ? <p className="mt-2 text-sm">{type.en}</p> : null}<p className="mt-2 whitespace-pre-line text-sm">{task.issue_reason}</p></div>
 }
 
 function TaskItem({ item, response, readonly, language, onChange }) {
@@ -616,7 +636,7 @@ function TaskItem({ item, response, readonly, language, onChange }) {
 
       <div className="mt-3">
         {['CHECKBOX', 'STEP', 'BOOLEAN'].includes(type) ? (
-          <button type="button" disabled={readonly} onClick={() => onChange({ value: response.value ? '' : 'Done' })} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${response.value ? 'border-emerald-400 bg-emerald-50' : 'bg-background'}`}><span className={`flex h-6 w-6 items-center justify-center rounded-md border ${response.value ? 'border-emerald-600 bg-emerald-600 text-white' : ''}`}>{response.value ? <Check className="h-4 w-4" /> : null}</span><TextPair cn="已完成步骤" en="Step completed" mode={language} /></button>
+          <button type="button" disabled={readonly} onClick={() => onChange({ value: response.value ? '' : 'Done' })} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${response.value ? 'border-emerald-400 bg-emerald-50' : 'bg-background'}`}><span className={`flex h-6 w-6 items-center justify-center rounded-md border ${response.value ? 'border-emerald-600 bg-emerald-600 text-white' : ''}`}>{response.value ? <Check className="h-4 w-4" /> : null}</span><span>Step completed</span></button>
         ) : type === 'TEMPERATURE' || type === 'QUANTITY' ? (
           <div className="space-y-2"><div className="flex items-center gap-2"><Input type="number" step={type === 'TEMPERATURE' ? '0.1' : 'any'} value={response.value ?? ''} disabled={readonly} onChange={(event) => onChange({ value: event.target.value })} placeholder={type === 'TEMPERATURE' ? 'Actual temperature' : 'Actual quantity'} /><span className="text-sm text-muted-foreground">{item.unit || ''}</span></div>{(item.options || []).length ? <OptionGrid options={item.options} value={response.remark} readonly={readonly} onSelect={(value) => onChange({ remark: value })} /> : null}</div>
         ) : (
@@ -624,8 +644,8 @@ function TaskItem({ item, response, readonly, language, onChange }) {
         )}
       </div>
 
-      {!['QUANTITY'].includes(type) ? <Input className="mt-2" value={response.remark || ''} disabled={readonly} onChange={(event) => onChange({ remark: event.target.value })} placeholder="Remark / 备注" /> : null}
-      {isFail ? <Textarea className="mt-2" value={response.corrective_action || ''} disabled={readonly} onChange={(event) => onChange({ corrective_action: event.target.value })} placeholder="Corrective action / 处理方式" rows={2} /> : null}
+      {!['QUANTITY'].includes(type) ? <Input className="mt-2" value={response.remark || ''} disabled={readonly} onChange={(event) => onChange({ remark: event.target.value })} placeholder="Remark" /> : null}
+      {isFail ? <Textarea className="mt-2" value={response.corrective_action || ''} disabled={readonly} onChange={(event) => onChange({ corrective_action: event.target.value })} placeholder="Corrective action" rows={2} /> : null}
     </div>
   )
 }
@@ -640,7 +660,7 @@ function PhotoGroup({ number, group, rows, required, minPhotos, readonly, langua
     <div className="rounded-2xl border p-3">
       <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold"><span className="mr-1 text-muted-foreground">{number}</span><TextPair cn={group.name_cn} en={group.name_en || group.name} mode={language} /></p><TextPair cn={group.sample_caption_cn} en={group.sample_caption_en || group.sample_caption} mode={language} className="mt-1 text-xs leading-5 text-muted-foreground" /></div><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${required ? 'bg-violet-100 text-violet-800' : 'bg-muted text-muted-foreground'}`}>{required ? `${rows.length}/${minPhotos} Required` : `${rows.length}`}</span></div>
       {rows.length ? <div className="mt-3 grid grid-cols-2 gap-2">{rows.map((row) => <PhotoTile key={row.id} row={row} onRemove={!readonly ? () => onRemove(row) : null} />)}</div> : null}
-      {!readonly ? <><Button type="button" size="sm" variant="outline" className="mt-3" disabled={busy} onClick={() => inputsClick(inputRef)}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Camera className="mr-1 h-4 w-4" />} <TextPair cn={rows.length ? '重拍／加拍' : '拍照'} en={rows.length ? 'Retake / Add Photo' : 'Take Photo'} mode={language} /></Button><input ref={inputRef} className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => onCapture(event.target.files?.[0])} /></> : null}
+      {!readonly ? <><Button type="button" size="sm" variant="outline" className="mt-3" disabled={busy} onClick={() => inputsClick(inputRef)}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Camera className="mr-1 h-4 w-4" />} <span>{rows.length ? 'Retake / Add Photo' : 'Take Photo'}</span></Button><input ref={inputRef} className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => onCapture(event.target.files?.[0])} /></> : null}
     </div>
   )
 }
@@ -664,5 +684,5 @@ function PhotoTile({ row, onRemove }) {
 function OutcomeForm({ mode, issueType, setIssueType, reason, setReason, language, issuePhotoCount, busy, onCancel, onSubmit }) {
   const issue = mode === 'issue'
   const disabled = Boolean(busy) || reason.trim().length < 3 || (issue && (!issueType || issuePhotoCount < 1))
-  return <section className="space-y-3 rounded-2xl border border-rose-300 bg-rose-50 p-4"><h3 className="font-semibold text-rose-900"><TextPair cn={issue ? '报告异常' : '无法完成'} en={issue ? 'Report Issue' : 'Unable to Complete'} mode={language} /></h3>{issue ? <div><Label><TextPair cn="异常类型" en="Issue Type" mode={language} /></Label><select value={issueType} onChange={(event) => setIssueType(event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"><option value="">Select</option>{ISSUE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.cn} / {type.en}</option>)}</select></div> : null}<div><Label><TextPair cn="原因" en="Reason" mode={language} /></Label><Textarea className="mt-1 bg-background" value={reason} onChange={(event) => setReason(event.target.value)} rows={4} placeholder="Required / 必填" /></div>{issue ? <p className={`text-xs ${issuePhotoCount ? 'text-emerald-700' : 'text-rose-700'}`}>{issuePhotoCount ? `✓ ${issuePhotoCount} issue photo uploaded` : 'Issue photo required / 必须上传异常照片'}</p> : <p className="text-xs text-rose-800">Leader or Manager will be notified automatically. This task will not count as completed.</p>}<div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={onCancel} disabled={Boolean(busy)}>Cancel</Button><Button onClick={onSubmit} disabled={disabled}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-1 h-4 w-4" />} Submit</Button></div></section>
+  return <section className="space-y-3 rounded-2xl border border-rose-300 bg-rose-50 p-4"><h3 className="font-semibold text-rose-900">{issue ? 'Report Issue' : 'Unable to Complete'}</h3>{issue ? <div><Label>Issue Type</Label><select value={issueType} onChange={(event) => setIssueType(event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-input bg-background px-3 text-sm"><option value="">Select</option>{ISSUE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.en}</option>)}</select></div> : null}<div><Label>Reason</Label><Textarea className="mt-1 bg-background" value={reason} onChange={(event) => setReason(event.target.value)} rows={4} placeholder="Required" /></div>{issue ? <p className={`text-xs ${issuePhotoCount ? 'text-emerald-700' : 'text-rose-700'}`}>{issuePhotoCount ? `✓ ${issuePhotoCount} issue photo uploaded` : 'Issue photo required'}</p> : <p className="text-xs text-rose-800">Leader or Manager will be notified automatically. This task will not count as completed.</p>}<div className="grid grid-cols-2 gap-2"><Button variant="outline" onClick={onCancel} disabled={Boolean(busy)}>Cancel</Button><Button onClick={onSubmit} disabled={disabled}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <AlertTriangle className="mr-1 h-4 w-4" />} Submit</Button></div></section>
 }
