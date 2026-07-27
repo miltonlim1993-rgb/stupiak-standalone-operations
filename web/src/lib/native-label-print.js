@@ -1,6 +1,14 @@
 import { opsClient } from '@/api/opsClient'
+import {
+  applyPrinterLayoutToHtml,
+  formatPrinterLayoutOutcome,
+  readPrinterDeviceBinding,
+  readPrinterProfilesSnapshot,
+  savePrinterProfilesSnapshot,
+  selectPrinterProfile,
+} from '@/lib/label-printer-profile'
 
-let serverProfileCache = null
+const serverProfilesCache = new Map()
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -11,15 +19,8 @@ function isNativeAndroid() {
   )
 }
 
-function extractMillimetres(html) {
-  const match = String(html || '').match(/@page\s*\{[^}]*size\s*:\s*([0-9.]+)mm\s+([0-9.]+)mm/i)
-  if (!match) return { widthMm: 40, heightMm: 30 }
-  const widthMm = Number(match[1])
-  const heightMm = Number(match[2])
-  return {
-    widthMm: Number.isFinite(widthMm) ? widthMm : 40,
-    heightMm: Number.isFinite(heightMm) ? heightMm : 30,
-  }
+function currentOutletId() {
+  return String(localStorage.getItem('chefops.data-pack.outlet') || '').trim()
 }
 
 function extractJobName(html) {
@@ -46,45 +47,51 @@ function sanitizeLabelHtml(html) {
     : `${directStyle}${withoutScripts}`
 }
 
-function cacheKey(outletId) {
-  return `stupiaks_ops.label_printer_draft.${outletId || 'default'}`
-}
+async function loadServerProfiles(outletId, { force = false } = {}) {
+  const key = String(outletId || '')
+  const cached = serverProfilesCache.get(key)
+  if (!force && cached && Date.now() - cached.loadedAt < 15000) return cached.profiles
 
-function readCachedProfile(outletId) {
-  try {
-    const raw = localStorage.getItem(cacheKey(outletId))
-    const parsed = raw ? JSON.parse(raw) : null
-    return parsed?.form && typeof parsed.form === 'object' ? parsed.form : null
-  } catch {
-    return null
+  let profiles = await opsClient.entities.PrinterProfile.filter(
+    { outlet_id: key, purpose: 'food_label' },
+    '-is_default,-updated_date',
+    200,
+  )
+
+  if (!profiles?.length) {
+    const fallback = await opsClient.labels.printerProfile({ outletId: key }).catch(() => null)
+    profiles = fallback?.id ? [fallback] : []
   }
-}
 
-function saveResolvedProfile(outletId, profile) {
-  if (!outletId || !profile) return
-  try {
-    localStorage.setItem(cacheKey(outletId), JSON.stringify({
-      saved_at: new Date().toISOString(),
-      form: profile,
-    }))
-  } catch {}
+  serverProfilesCache.set(key, { loadedAt: Date.now(), profiles: profiles || [] })
+  savePrinterProfilesSnapshot(key, profiles || [])
+  return profiles || []
 }
 
 async function resolvePrinterProfile() {
-  const outletId = String(localStorage.getItem('chefops.data-pack.outlet') || '').trim()
-  const cached = readCachedProfile(outletId)
-  if (cached) return { ...cached, outlet_id: cached.outlet_id || outletId }
-  if (serverProfileCache?.outlet_id === outletId) return serverProfileCache
+  const outletId = currentOutletId()
+  const binding = readPrinterDeviceBinding(outletId)
 
   try {
-    const server = await opsClient.labels.printerProfile({ outletId })
-    serverProfileCache = { ...(server || {}), outlet_id: server?.outlet_id || outletId }
-    saveResolvedProfile(outletId, serverProfileCache)
-    return serverProfileCache
+    const serverProfiles = await loadServerProfiles(outletId, { force: true })
+    return selectPrinterProfile(serverProfiles, outletId, binding.selected_profile_id)
+      || { outlet_id: outletId }
   } catch (error) {
-    console.debug('Direct printer profile could not be refreshed', error)
-    return { outlet_id: outletId }
+    console.debug('Server printer profiles could not be refreshed; using the device snapshot', error)
+    const snapshots = readPrinterProfilesSnapshot(outletId)
+    return selectPrinterProfile(snapshots, outletId, binding.selected_profile_id)
+      || { outlet_id: outletId }
   }
+}
+
+function resolveCachedPrinterProfile() {
+  const outletId = currentOutletId()
+  const binding = readPrinterDeviceBinding(outletId)
+  return selectPrinterProfile(
+    readPrinterProfilesSnapshot(outletId),
+    outletId,
+    binding.selected_profile_id,
+  )
 }
 
 function directPrinter() {
@@ -102,7 +109,7 @@ function showPrintMessage(message, tone = 'error') {
     'left:50%',
     'transform:translateX(-50%)',
     'z-index:9999',
-    'width:min(calc(100vw - 1.5rem),410px)',
+    'width:min(calc(100vw - 1.5rem),430px)',
     'padding:.8rem 1rem',
     'border-radius:.85rem',
     'font:600 13px/1.4 system-ui,sans-serif',
@@ -112,7 +119,7 @@ function showPrintMessage(message, tone = 'error') {
       : 'background:#fef2f2;color:#b91c1c;border:1px solid #fecaca',
   ].join(';')
   document.body.appendChild(item)
-  window.setTimeout(() => item.remove(), tone === 'success' ? 2200 : 5200)
+  window.setTimeout(() => item.remove(), tone === 'success' ? 4200 : 5200)
 }
 
 function validateDirectProfile(profile) {
@@ -120,7 +127,7 @@ function validateDirectProfile(profile) {
   const commandLanguage = String(profile?.command_language || '').toLowerCase()
 
   if (!profile?.enabled && profile?.enabled !== undefined) {
-    throw new Error('The outlet label printer profile is disabled.')
+    throw new Error('The selected label printer profile is disabled.')
   }
 
   if (connectionType === 'network') {
@@ -151,15 +158,15 @@ async function sendDirectLabel(html) {
 
   const profile = await resolvePrinterProfile()
   const { connectionType, commandLanguage } = validateDirectProfile(profile)
-  const { widthMm, heightMm } = extractMillimetres(html)
-  const jobName = extractJobName(html)
-  const copies = countCopies(html)
+  const transformed = applyPrinterLayoutToHtml(html, profile)
+  const jobName = extractJobName(transformed.html)
+  const copies = countCopies(transformed.html)
 
   const result = await plugin.printDirect({
-    html: sanitizeLabelHtml(html),
+    html: sanitizeLabelHtml(transformed.html),
     jobName,
-    widthMm,
-    heightMm,
+    widthMm: transformed.layout.width_mm,
+    heightMm: transformed.layout.height_mm,
     dpi: Math.max(72, Number(profile.dpi || 203)),
     copies,
     connectionType,
@@ -172,26 +179,88 @@ async function sendDirectLabel(html) {
     retryLimit: Math.max(0, Math.min(20, Number(profile.retry_limit || 0))),
   })
 
-  showPrintMessage(`Printed directly${result?.printer ? ` to ${result.printer}` : ''}.`, 'success')
-  window.dispatchEvent(new CustomEvent('chefops:native-print-started', {
-    detail: { jobName, widthMm, heightMm, copies, direct: true, result },
-  }))
+  const profileName = String(profile.profile_name || 'Label printer').trim()
+  const outcome = formatPrinterLayoutOutcome(transformed.layout)
+  showPrintMessage(
+    `Printed to ${result?.printer || profileName} · ${outcome} · ${copies} cop${copies === 1 ? 'y' : 'ies'}.`,
+    'success',
+  )
+
+  const detail = {
+    jobName,
+    copies,
+    direct: true,
+    result,
+    profile_id: profile.id || '',
+    profile_name: profileName,
+    layout: transformed.layout,
+  }
+  window.__chefopsLastLabelPrintOutcome = detail
+  window.dispatchEvent(new CustomEvent('chefops:native-print-started', { detail }))
+}
+
+function isLabelPopup(url, target, features) {
+  const featureText = String(features || '').toLowerCase()
+  return String(target || '') === '_blank'
+    && (!url || String(url) === 'about:blank')
+    && featureText.includes('width=480')
+    && featureText.includes('height=640')
+}
+
+function installSystemLabelLayoutBridge() {
+  if (window.__chefopsSystemLabelLayoutInstalled) return
+  window.__chefopsSystemLabelLayoutInstalled = true
+
+  const browserOpen = window.open.bind(window)
+  window.open = function chefopsLabelLayoutWindowOpen(url = '', target = '', features = '') {
+    const opened = browserOpen(url, target, features)
+    if (!opened || !isLabelPopup(url, target, features)) return opened
+
+    const installWriter = () => {
+      const originalWrite = opened.document.write.bind(opened.document)
+      opened.document.write = (value) => {
+        const source = String(value ?? '')
+        if (!isPrintableLabel(source) || source.includes('id="chefops-printer-layout"')) {
+          return originalWrite(source)
+        }
+
+        const profile = resolveCachedPrinterProfile()
+        if (!profile) return originalWrite(source)
+
+        const transformed = applyPrinterLayoutToHtml(source, profile)
+        const detail = {
+          direct: false,
+          prepared: true,
+          profile_id: profile.id || '',
+          profile_name: profile.profile_name || '',
+          layout: transformed.layout,
+        }
+        window.__chefopsLastLabelPrintOutcome = detail
+        window.dispatchEvent(new CustomEvent('chefops:label-print-layout', { detail }))
+        return originalWrite(transformed.html)
+      }
+    }
+
+    const originalDocumentOpen = opened.document.open.bind(opened.document)
+    opened.document.open = (...args) => {
+      const result = originalDocumentOpen(...args)
+      installWriter()
+      return result
+    }
+    installWriter()
+    return opened
+  }
 }
 
 export function installNativeLabelPrintBridge() {
+  installSystemLabelLayoutBridge()
   if (!isNativeAndroid() || window.__chefopsNativePrintInstalled) return
   window.__chefopsNativePrintInstalled = true
 
   const browserOpen = window.open.bind(window)
 
   window.open = function chefopsNativeWindowOpen(url = '', target = '', features = '') {
-    const featureText = String(features || '').toLowerCase()
-    const isLabelPopup = String(target || '') === '_blank'
-      && (!url || String(url) === 'about:blank')
-      && featureText.includes('width=480')
-      && featureText.includes('height=640')
-
-    if (!isLabelPopup) return browserOpen(url, target, features)
+    if (!isLabelPopup(url, target, features)) return browserOpen(url, target, features)
 
     let buffer = ''
     let closed = false
