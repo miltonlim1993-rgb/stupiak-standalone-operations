@@ -20,6 +20,7 @@ import { ROLE_LEVEL } from "@/lib/ops-helpers";
 const commonOperations = [
   { to: "/inventory", label: "Outlet Stock List", desc: "View this outlet's enabled list and minimums", icon: Boxes },
   { to: "/training", label: "SOP & Training", desc: "Read SOPs, complete courses and track progress", icon: GraduationCap },
+  { to: "/labels/settings", label: "Label Printer Settings", desc: "Choose and tune the printer used by this device and outlet", icon: Printer },
 ];
 
 const mobileOnlyOperations = [
@@ -30,7 +31,7 @@ const mobileOnlyOperations = [
 
 const systemItems = [
   { to: "/notifications", label: "Notifications", desc: "Updates sent to your user ID", icon: Bell },
-  { to: "/install", label: "Install App", desc: "PWA, operational patch and Android status", icon: Download },
+  { to: "/install", label: "Install App", desc: "Install or update Android/PWA and refresh outlet data", icon: Download },
   { to: "/settings", label: "Settings", desc: "Profile and standalone connection", icon: Settings },
 ];
 
@@ -41,7 +42,6 @@ export default function More() {
     ...(canUseControl ? [
       { to: "/ops-control", label: "Ops Control", desc: "Approve access, assign outlets and send updates", icon: ShieldCheck },
       { to: "/data-packages", label: "Data Packages", desc: "Preview, publish, install and roll back offline Task, SOP, Stock and Label releases", icon: Database },
-      { to: "/labels/settings", label: "Label Printer Settings", desc: "Direct Wi-Fi/LAN or paired Bluetooth printing, printer language and label size", icon: Printer },
     ] : []),
     { to: "/reports", label: "Reports", desc: "Export operations, stock, photo and training reports", icon: BarChart3 },
   ];
@@ -50,7 +50,7 @@ export default function More() {
     <div className="chefops-page more-page mx-auto w-full max-w-5xl space-y-5 p-4">
       <div>
         <h1 className="text-xl font-heading font-bold">More</h1>
-        <p className="mt-0.5 text-xs text-muted-foreground">Tools that are not already shown in the current navigation mode.</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Operations, device and system tools.</p>
       </div>
 
       <MenuSection title="Operations" items={commonOperations} />
