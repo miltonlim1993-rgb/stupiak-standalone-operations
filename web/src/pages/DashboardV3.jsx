@@ -35,9 +35,7 @@ export default function DashboardV3() {
       refresh: false,
     })
       .then((result) => {
-        if (!cancelled) {
-          setTaskData(normalizeTaskWorkflowShiftView(result))
-        }
+        if (!cancelled) setTaskData(normalizeTaskWorkflowShiftView(result))
       })
       .catch(() => {
         if (!cancelled) setTaskData(null)
@@ -65,43 +63,43 @@ export default function DashboardV3() {
     metric(summary.locked, 'Locked', Lock),
     metric(
       Number(summary.issue || 0) + Number(summary.overdue || 0),
-      'Issues / Overdue',
+      'Issues',
       AlertTriangle,
       true,
     ),
   ] : [], [summary])
 
   return (
-    <>
+    <div className="dashboard-v3-shell w-full">
       {summary ? (
-        <section className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6">
+        <section className="mx-auto w-full max-w-[1180px] px-3 pt-3 sm:px-6 sm:pt-4">
           <Link
             to="/tasks"
-            className="block rounded-2xl border border-primary/20 bg-card p-4 shadow-sm transition hover:border-primary/40"
+            className="block rounded-3xl border border-primary/20 bg-card p-4 shadow-sm transition active:scale-[0.995] hover:border-primary/40"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/15 text-primary">
+                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-primary/15 text-primary">
                   <meta.Icon className="h-5 w-5" />
                 </span>
 
                 <div className="min-w-0">
-                  <p className="font-semibold">{meta.label}</p>
-                  <p className="mt-0.5 text-xs text-muted-foreground">
-                    Completed {summary.completed || 0} / {summary.total || 0}
+                  <p className="font-semibold leading-tight">{meta.label}</p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {summary.completed || 0} of {summary.total || 0} completed
                   </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <span className="text-xl font-bold">{progress}%</span>
+              <div className="flex shrink-0 items-center gap-2">
+                <span className="text-xl font-bold tabular-nums">{progress}%</span>
                 <ChevronRight className="h-4 w-4 text-muted-foreground" />
               </div>
             </div>
 
             <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
               <div
-                className="h-full rounded-full bg-primary"
+                className="h-full rounded-full bg-primary transition-all"
                 style={{ width: `${progress}%` }}
               />
             </div>
@@ -110,15 +108,16 @@ export default function DashboardV3() {
               {metrics.map((item) => (
                 <div
                   key={item.label}
-                  className={`rounded-xl p-2 text-center ${
+                  className={`flex min-h-[72px] min-w-0 flex-col items-center justify-center rounded-2xl px-1.5 py-2 text-center ${
                     item.warning && item.value
-                      ? 'bg-rose-50 text-rose-800'
+                      ? 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200'
                       : 'bg-muted/60'
                   }`}
+                  title={item.label === 'Issues' ? 'Issues and overdue tasks' : item.label}
                 >
-                  <item.Icon className="mx-auto h-3.5 w-3.5" />
-                  <p className="mt-1 text-base font-bold">{item.value}</p>
-                  <p className="truncate text-[9px]">{item.label}</p>
+                  <item.Icon className="h-3.5 w-3.5 shrink-0" />
+                  <p className="mt-1 text-base font-bold tabular-nums">{item.value}</p>
+                  <p className="text-[9px] leading-tight sm:text-[10px]">{item.label}</p>
                 </div>
               ))}
             </div>
@@ -127,6 +126,6 @@ export default function DashboardV3() {
       ) : null}
 
       <Dashboard />
-    </>
+    </div>
   )
 }
