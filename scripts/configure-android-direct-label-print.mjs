@@ -17,7 +17,7 @@ const registration =
 
 if (!mainActivity.includes(registration)) {
   if (!mainActivity.includes('import android.os.Bundle;')) {
-    const packagePattern = /package\\s+[^;]+;/
+    const packagePattern = /package\s+[^;]+;/
 
     if (!packagePattern.test(mainActivity)) {
       throw new Error(
@@ -28,22 +28,22 @@ if (!mainActivity.includes(registration)) {
     mainActivity = mainActivity.replace(
       packagePattern,
       (declaration) =>
-        `${declaration}\\n\\nimport android.os.Bundle;`,
+        `${declaration}\n\nimport android.os.Bundle;`,
     )
   }
 
   const onCreatePattern =
-    /((?:public|protected)\\s+void\\s+onCreate\\s*\\(\\s*Bundle\\s+savedInstanceState\\s*\\)\\s*\\{)/
+    /((?:public|protected)\s+void\s+onCreate\s*\(\s*Bundle\s+savedInstanceState\s*\)\s*\{)/
 
   if (onCreatePattern.test(mainActivity)) {
     mainActivity = mainActivity.replace(
       onCreatePattern,
       (match) =>
-        `${match}\\n        ${registration}`,
+        `${match}\n        ${registration}`,
     )
   } else {
     const classPattern =
-      /(public\\s+class\\s+MainActivity\\s+extends\\s+BridgeActivity\\s*\\{)/
+      /(public\s+class\s+MainActivity\s+extends\s+BridgeActivity\s*\{)/
 
     if (!classPattern.test(mainActivity)) {
       throw new Error(
