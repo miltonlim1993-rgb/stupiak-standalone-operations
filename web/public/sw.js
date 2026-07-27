@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-4-printer-profiles-direct-print-flow-shell-v10'
+const VERSION = 'chefops-v4-6-5-layout-public-label-settings-direct-print-flow-shell-v10'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
