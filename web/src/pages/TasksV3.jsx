@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   Clock3,
   FileImage,
-  Languages,
   Loader2,
   Lock,
   Moon,
@@ -38,7 +37,6 @@ import { outletLabel, parseOutletIds } from '@/lib/outlets'
 import { resolveMediaRule } from '@/lib/media-rules'
 import { watermarkTaskPhoto } from '@/lib/watermark-image'
 
-const LANGUAGE_KEY = 'chefops.task.content-language.v1'
 const ISSUE_TYPES = [
   { value: 'insufficient_stock', cn: '库存不足', en: 'Insufficient Stock' },
   { value: 'equipment_problem', cn: '设备损坏', en: 'Equipment Problem' },
@@ -56,10 +54,6 @@ const STATUS = {
   overdue: { cn: '逾期', en: 'Overdue', className: 'bg-orange-100 text-orange-800', Icon: TriangleAlert },
 }
 
-function languageInitial() {
-  const saved = String(localStorage.getItem(LANGUAGE_KEY) || 'bilingual')
-  return ['cn', 'en', 'bilingual'].includes(saved) ? saved : 'bilingual'
-}
 
 function TextPair({ cn = '', en = '', mode = 'bilingual', className = '', enClassName = '' }) {
   const chinese = String(cn || '').trim()
@@ -171,7 +165,7 @@ export default function TasksV3() {
   const [outlets, setOutlets] = useState([])
   const [outletId, setOutletId] = useState(() => assigned.includes(String(user?.outlet_id || '')) ? String(user.outlet_id) : assigned[0] || '')
   const [date, setDate] = useState(todayStr())
-  const [language, setLanguage] = useState(languageInitial)
+  const language = 'bilingual'
   const [shift, setShift] = useState('ALL')
   const [shiftChosen, setShiftChosen] = useState(false)
   const [data, setData] = useState({ tasks: [], task_photos: [], template_photos: [], progress: {}, current_shift_id: 'ALL' })
@@ -190,10 +184,6 @@ export default function TasksV3() {
       })
       .catch(() => setOutlets([]))
   }, [user?.outlet_id, user?.outlet_ids])
-
-  useEffect(() => {
-    localStorage.setItem(LANGUAGE_KEY, language)
-  }, [language])
 
   useEffect(() => {
     if (!outletId) return
@@ -253,7 +243,6 @@ export default function TasksV3() {
           <p className="truncate text-xs text-muted-foreground">{outletLabel(selectedOutlet, outletId)} · Server-time controlled</p>
         </div>
         <div className="flex gap-2">
-          <LanguageButton language={language} setLanguage={setLanguage} />
           <Button size="icon" variant="outline" onClick={() => load({ force: true })} disabled={refreshing}>
             <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
           </Button>
@@ -320,22 +309,6 @@ export default function TasksV3() {
         ) : null}
       </AppDrawer>
     </div>
-  )
-}
-
-function LanguageButton({ language, setLanguage }) {
-  const next = language === 'bilingual' ? 'cn' : language === 'cn' ? 'en' : 'bilingual'
-  const label = language === 'bilingual' ? 'Content: 中+EN' : language === 'cn' ? 'Content: 中文' : 'Content: EN'
-  return (
-    <Button
-      size="sm"
-      variant="outline"
-      className="h-10 rounded-xl px-3 text-xs"
-      title="Task content language"
-      onClick={() => setLanguage(next)}
-    >
-      <Languages className="mr-1.5 h-4 w-4" /> {label}
-    </Button>
   )
 }
 
