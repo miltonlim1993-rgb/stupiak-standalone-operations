@@ -15,7 +15,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.4-printer-profiles.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.5-layout-public-label-settings.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -59,6 +59,9 @@ jobs:
           grep -q 'refetchInterval: false' web/src/lib/query-client.js
           grep -q 'App shell: Direct Print Flow v10' web/src/pages/More.jsx
           grep -q 'purgeNativeServiceWorkers' web/src/main.jsx
+          grep -q 'dashboard-v3-shell' web/src/pages/DashboardV3.jsx
+          grep -q 'LabelPrinterSettingsPublic' web/src/App.jsx
+          grep -q 'PrinterProfile: LEVEL.staff' worker/src/permissions.js
           ! grep -q 'installShellGuard' web/src/main.jsx
       - name: Generate and sync Capacitor Android project
         run: npm run mobile:init
@@ -114,8 +117,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Direct Print Flow v10 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Direct Print Flow v10 keeps Close Up submit controls in normal mobile document flow and sends labels directly to configured Wi-Fi/LAN or paired Bluetooth Classic printers using TSPL, ZPL, CPCL or ESC/POS without leaving the app or opening Android print preview. Printer Profiles v4.6.4 adds multiple outlet profiles, device-and-outlet selection, orientation, four-side padding, and accurate print outcomes."
+            --title "Stupiak's Ops 4.6.5 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.5 repairs the mobile Home layout gap, opens outlet-scoped Label Printer Settings to every signed-in team member, and reorganizes Install & Update into clear Android, PWA, offline-data and device-setup sections. Direct Print Flow v10 continues to send labels directly to configured Wi-Fi/LAN or paired Bluetooth Classic printers using TSPL, ZPL, CPCL or ESC/POS. Printer selection remains bound to Device + Outlet rather than the employee account."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
