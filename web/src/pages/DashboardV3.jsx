@@ -63,7 +63,7 @@ export default function DashboardV3() {
     metric(summary.locked, 'Locked', Lock),
     metric(
       Number(summary.issue || 0) + Number(summary.overdue || 0),
-      'Issues',
+      'Issues / Overdue',
       AlertTriangle,
       true,
     ),
@@ -113,11 +113,11 @@ export default function DashboardV3() {
                       ? 'bg-rose-50 text-rose-800 dark:bg-rose-950/40 dark:text-rose-200'
                       : 'bg-muted/60'
                   }`}
-                  title={item.label === 'Issues' ? 'Issues and overdue tasks' : item.label}
+                  title={item.label}
                 >
                   <item.Icon className="h-3.5 w-3.5 shrink-0" />
                   <p className="mt-1 text-base font-bold tabular-nums">{item.value}</p>
-                  <p className="text-[9px] leading-tight sm:text-[10px]">{item.label}</p>
+                  <p className="whitespace-normal text-[9px] leading-[1.15] sm:text-[10px]">{item.label}</p>
                 </div>
               ))}
             </div>
