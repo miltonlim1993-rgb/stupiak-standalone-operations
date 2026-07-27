@@ -106,12 +106,12 @@ export function normalizePrinterProfile(profile = {}, outletId = '') {
     is_default: boolDefault(profile.is_default, false),
     station_mode: clean(profile.station_mode || 'this_device'),
     station_device_name: clean(profile.station_device_name),
-    orientation: meta.layout.orientation,
-    padding_top_mm: meta.layout.padding_top_mm,
-    padding_right_mm: meta.layout.padding_right_mm,
-    padding_bottom_mm: meta.layout.padding_bottom_mm,
-    padding_left_mm: meta.layout.padding_left_mm,
-    user_notes: meta.user_notes,
+    orientation: orientationValue(profile.orientation ?? meta.layout.orientation),
+    padding_top_mm: numberValue(profile.padding_top_mm, meta.layout.padding_top_mm, 0, 20),
+    padding_right_mm: numberValue(profile.padding_right_mm, meta.layout.padding_right_mm, 0, 20),
+    padding_bottom_mm: numberValue(profile.padding_bottom_mm, meta.layout.padding_bottom_mm, 0, 20),
+    padding_left_mm: numberValue(profile.padding_left_mm, meta.layout.padding_left_mm, 0, 20),
+    user_notes: clean(profile.user_notes ?? meta.user_notes),
   }
 }
 
