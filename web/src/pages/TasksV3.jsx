@@ -570,7 +570,27 @@ function TaskDetail({ task, taskPhotos, samples, outletId, outletName, language,
               const rows = taskPhotos.filter((row) => row.photo_type === type)
               const requirement = task.photo_requirements?.find((row) => String(row.id) === String(group.id))
               return (
-                <PhotoGroup key={group.id} number={`${index + 1}/${groups.length}`} group={group} rows={rows} required={Boolean(requirement?.required)} minPhotos={Number(group.min_photos || 1)} readonly={readonly} language={language} busy={busy === `photo:${type}`} inputRef={(node) => { inputs.current[type] = node }} onCapture={(file) => capture(type, file, group.name_en || group.name)} onRemove={removePhoto} />
+                <PhotoGroup
+                  key={group.id}
+                  number={`${index + 1}/${groups.length}`}
+                  group={group}
+                  rows={rows}
+                  required={Boolean(requirement?.required)}
+                  minPhotos={Number(group.min_photos || 1)}
+                  readonly={readonly}
+                  language={language}
+                  busy={busy === `photo:${type}`}
+                  inputRef={(node) => {
+                    inputs.current[type] = node
+                  }}
+                  onOpenCamera={() => inputs.current[type]?.click()}
+                  onCapture={(file) => capture(
+                    type,
+                    file,
+                    group.name_en || group.name,
+                  )}
+                  onRemove={removePhoto}
+                />
               )
             })}
           </section>
@@ -655,19 +675,96 @@ function OptionGrid({ options, value, readonly, onSelect }) {
   return <div className={`grid gap-2 ${columns === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>{(options || []).map((option) => <button key={option} type="button" disabled={readonly} onClick={() => onSelect(option)} className={`rounded-xl border px-2 py-2 text-xs font-medium ${String(value) === String(option) ? 'border-primary bg-primary/15' : 'bg-background text-muted-foreground'} disabled:opacity-60`}>{option}</button>)}</div>
 }
 
-function PhotoGroup({ number, group, rows, required, minPhotos, readonly, language, busy, inputRef, onCapture, onRemove }) {
+function PhotoGroup({
+  number,
+  group,
+  rows,
+  required,
+  minPhotos,
+  readonly,
+  language,
+  busy,
+  inputRef,
+  onOpenCamera,
+  onCapture,
+  onRemove,
+}) {
   return (
     <div className="rounded-2xl border p-3">
-      <div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold"><span className="mr-1 text-muted-foreground">{number}</span><TextPair cn={group.name_cn} en={group.name_en || group.name} mode={language} /></p><TextPair cn={group.sample_caption_cn} en={group.sample_caption_en || group.sample_caption} mode={language} className="mt-1 text-xs leading-5 text-muted-foreground" /></div><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${required ? 'bg-violet-100 text-violet-800' : 'bg-muted text-muted-foreground'}`}>{required ? `${rows.length}/${minPhotos} Required` : `${rows.length}`}</span></div>
-      {rows.length ? <div className="mt-3 grid grid-cols-2 gap-2">{rows.map((row) => <PhotoTile key={row.id} row={row} onRemove={!readonly ? () => onRemove(row) : null} />)}</div> : null}
-      {!readonly ? <><Button type="button" size="sm" variant="outline" className="mt-3" disabled={busy} onClick={() => inputsClick(inputRef)}>{busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Camera className="mr-1 h-4 w-4" />} <span>{rows.length ? 'Retake / Add Photo' : 'Take Photo'}</span></Button><input ref={inputRef} className="hidden" type="file" accept="image/*" capture="environment" onChange={(event) => onCapture(event.target.files?.[0])} /></> : null}
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold">
+            <span className="mr-1 text-muted-foreground">{number}</span>
+            <TextPair
+              cn={group.name_cn}
+              en={group.name_en || group.name}
+              mode={language}
+            />
+          </p>
+
+          <TextPair
+            cn={group.sample_caption_cn}
+            en={group.sample_caption_en || group.sample_caption}
+            mode={language}
+            className="mt-1 text-xs leading-5 text-muted-foreground"
+          />
+        </div>
+
+        <span
+          className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold ${
+            required
+              ? 'bg-violet-100 text-violet-800'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          {required ? `${rows.length}/${minPhotos} Required` : `${rows.length}`}
+        </span>
+      </div>
+
+      {rows.length ? (
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          {rows.map((row) => (
+            <PhotoTile
+              key={row.id}
+              row={row}
+              onRemove={!readonly ? () => onRemove(row) : null}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {!readonly ? (
+        <>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            className="mt-3"
+            disabled={busy}
+            onClick={onOpenCamera}
+          >
+            {busy ? (
+              <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+            ) : (
+              <Camera className="mr-1 h-4 w-4" />
+            )}
+            <span>
+              {rows.length ? 'Retake / Add Photo' : 'Take Photo'}
+            </span>
+          </Button>
+
+          <input
+            ref={inputRef}
+            className="hidden"
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={(event) => onCapture(event.target.files?.[0])}
+          />
+        </>
+      ) : null}
     </div>
   )
-}
-
-function inputsClick(refCallback) {
-  const node = typeof refCallback === 'object' ? refCallback?.current : null
-  if (node) node.click()
 }
 
 function SampleButton({ sample, language, onOpen }) {
