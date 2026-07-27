@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-5-1-direct-print-flow-shell-v10'
+const VERSION = 'chefops-v4-6-4-printer-profiles-direct-print-flow-shell-v10'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -78,35 +78,4 @@ self.addEventListener('fetch', (event) => {
   if (url.origin === self.location.origin) {
     event.respondWith(staleWhileRevalidate(request, SHELL_CACHE))
   }
-})
-
-self.addEventListener('message', (event) => {
-  const data = event.data || {}
-  if (data.type === 'SKIP_WAITING') self.skipWaiting()
-  if (data.type === 'CLEAR_DATA_CACHE') event.waitUntil(caches.delete(DATA_CACHE))
-  if (data.type === 'SHOW_NOTIFICATION' && data.notification) {
-    const item = data.notification
-    event.waitUntil(self.registration.showNotification(item.title || 'Stupiak’s Ops', {
-      body: item.message || '',
-      icon: '/stupiaks-ops-192.png',
-      badge: '/favicon-32.png',
-      tag: item.id || undefined,
-      data: { url: item.target_page || '/', id: item.id || '' },
-    }))
-  }
-})
-
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close()
-  const target = event.notification.data?.url || '/'
-  event.waitUntil(
-    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => {
-      const existing = clients.find((client) => 'focus' in client)
-      if (existing) {
-        existing.navigate(target)
-        return existing.focus()
-      }
-      return self.clients.openWindow(target)
-    }),
-  )
 })
