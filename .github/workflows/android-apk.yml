@@ -15,7 +15,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.7-printer-hardware-profiles.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.8-printer-settings-responsive-workspace.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -39,11 +39,14 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate printer hardware profile source
+      - name: Validate printer hardware profile and responsive layout source
         run: |
-          grep -q "printer-hardware-profiles-shell-v10" web/public/sw.js
-          grep -q "printer-hardware-profiles-shell-v10" web/src/main.jsx
-          grep -q "@/direct-print-v10.css" web/src/main.jsx
+          grep -q "printer-settings-responsive-workspace-shell-v10" web/public/sw.js
+          grep -q "printer-settings-responsive-workspace-shell-v10" web/src/main.jsx
+          grep -q "@/label-printer-settings-v2.css" web/src/main.jsx
+          grep -q "grid-template-columns: repeat(4, minmax(0, 1fr))" web/src/label-printer-settings-v2.css
+          grep -q "position: sticky !important" web/src/label-printer-settings-v2.css
+          grep -q "grid-auto-flow: column" web/src/label-printer-settings-v2.css
           grep -q "stupiaks-label-printer-profile-v4" web/src/lib/label-printer-profile.js
           grep -q "PRINTER_PRESETS" web/src/lib/label-printer-profile.js
           grep -q "printer_hardware" web/src/lib/label-printer-profile.js
@@ -127,8 +130,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.7 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.7 completes Printer Profiles for future hardware changes: Raw TCP and LPR network transport, paired Bluetooth Classic, Android System Print fallback, TSPL/ZPL/CPCL/ESC-POS presets, Gap/Black mark/Continuous media, connection testing, media calibration, print speed, darkness, X/Y origin offsets, timeout and a redesigned outlet-scoped Label Printer Settings workflow. Physical media width and feed length remain fixed and device selection remains bound to Device + Outlet."
+            --title "Stupiak's Ops 4.6.8 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.8 polishes the Label Printer Settings workspace for desktop and mobile: a true 2×2 mobile status grid, compact horizontal profile and preset rails, a non-overlapping sticky action toolbar, denser section cards, desktop side-by-side Profiles and Presets, and a more focused connection/media/live-output workbench. Printer hardware support from 4.6.7 remains unchanged, including Raw TCP, LPR, Bluetooth Classic, System Print, media calibration and Device + Outlet profile binding."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
