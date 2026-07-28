@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-9-native-tspl-food-label-shell-v10'
+const VERSION = 'chefops-v4-6-10-practical-bilingual-tasks-native-tspl-shell-v10'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -40,42 +40,25 @@ async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
   const network = fetch(request).then((response) => {
-    if (response.ok || response.type === 'opaque') cache.put(request, response.clone()).catch(() => undefined)
+    if (response.ok) cache.put(request, response.clone())
     return response
   }).catch(() => cached)
   return cached || network
-}
-
-async function networkFirst(request, cacheName) {
-  const cache = await caches.open(cacheName)
-  try {
-    const response = await fetch(request)
-    if (response.ok) cache.put(request, response.clone()).catch(() => undefined)
-    return response
-  } catch {
-    return (await cache.match(request)) || (request.mode === 'navigate' ? cache.match('/') : Response.error())
-  }
 }
 
 self.addEventListener('fetch', (event) => {
   const request = event.request
   if (request.method !== 'GET') return
   const url = new URL(request.url)
-
-  if (request.mode === 'navigate') {
-    event.respondWith(networkFirst(request, SHELL_CACHE))
+  if (url.origin !== self.location.origin) return
+  if (isPackManifest(url)) {
+    event.respondWith(fetch(request).catch(() => caches.match(request)))
     return
   }
-  if (url.hostname === 'cdn.jsdelivr.net' || url.hostname === 'esm.sh' || url.hostname === 'tessdata.projectnaptha.com') {
-    event.respondWith(staleWhileRevalidate(request, OCR_CACHE))
+  if (isStaticApi(url)) {
+    event.respondWith(staleWhileRevalidate(request, DATA_CACHE))
     return
   }
-  if (url.pathname.includes('/api/')) {
-    if (isPackManifest(url)) event.respondWith(networkFirst(request, DATA_CACHE))
-    else event.respondWith(isStaticApi(url) ? staleWhileRevalidate(request, DATA_CACHE) : networkFirst(request, DATA_CACHE))
-    return
-  }
-  if (url.origin === self.location.origin) {
-    event.respondWith(staleWhileRevalidate(request, SHELL_CACHE))
-  }
+  if (url.pathname.startsWith('/api/')) return
+  event.respondWith(fetch(request).catch(() => caches.match(request).then((cached) => cached || caches.match('/'))))
 })
