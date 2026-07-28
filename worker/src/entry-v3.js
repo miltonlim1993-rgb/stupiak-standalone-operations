@@ -36,7 +36,7 @@ export default {
         const response = await handleTaskWorkflowV3(request, env, url, ctx, app)
         if (response) return taskApiHeaders(request, response)
       } catch (taskError) {
-        return taskApiHeaders(request, env, errorResponse(request, env, taskError))
+        return taskApiHeaders(request, errorResponse(request, env, taskError))
       }
     }
     const response = await app.fetch(request, env, ctx)
