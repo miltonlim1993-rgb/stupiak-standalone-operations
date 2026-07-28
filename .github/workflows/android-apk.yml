@@ -15,7 +15,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.5-layout-public-label-settings.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.6-direct-print-media-size-fix.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -41,8 +41,8 @@ jobs:
         run: npm ci
       - name: Validate direct print flow v10 source
         run: |
-          grep -q "direct-print-flow-shell-v10" web/public/sw.js
-          grep -q "direct-print-flow-shell-v10" web/src/main.jsx
+          grep -q "direct-print-media-size-fix-shell-v10" web/public/sw.js
+          grep -q "direct-print-media-size-fix-shell-v10" web/src/main.jsx
           grep -q "@/direct-print-v10.css" web/src/main.jsx
           grep -q "DirectLabelPrint" web/src/lib/native-label-print.js
           grep -q "printDirect" web/src/lib/native-label-print.js
@@ -53,6 +53,7 @@ jobs:
           grep -q "buildEscPos" scripts/configure-android-direct-label-print.mjs
           grep -q "sendNetwork" scripts/configure-android-direct-label-print.mjs
           grep -q "sendBluetooth" scripts/configure-android-direct-label-print.mjs
+          grep -q "must never swap these physical values" web/src/lib/label-printer-profile.js
           grep -q "position: static !important" web/src/direct-print-v10.css
           grep -q 'id="chefops-mobile-main"' web/src/components/Layout.jsx
           grep -q 'id="chefops-mobile-nav"' web/src/components/Layout.jsx
@@ -117,8 +118,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.5 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.5 repairs the mobile Home layout gap, opens outlet-scoped Label Printer Settings to every signed-in team member, and reorganizes Install & Update into clear Android, PWA, offline-data and device-setup sections. Direct Print Flow v10 continues to send labels directly to configured Wi-Fi/LAN or paired Bluetooth Classic printers using TSPL, ZPL, CPCL or ESC/POS. Printer selection remains bound to Device + Outlet rather than the employee account."
+            --title "Stupiak's Ops 4.6.6 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.6 fixes direct label media sizing: physical width stays the roll width across the print head and physical height stays the feed length of one label. Portrait or landscape preferences no longer swap 40×30 into 30×40, preventing content from crossing labels and preventing extra blank-label advancement. Direct Print Flow v10 continues to use the outlet-and-device printer profile over Wi-Fi/LAN or paired Bluetooth Classic."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
