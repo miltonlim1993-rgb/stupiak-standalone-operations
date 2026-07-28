@@ -1,8 +1,8 @@
 import app from './entry.js'
 import { errorResponse } from './http.js'
-import { handleTaskWorkflowV3 } from './task-workflow-v3.js'
+import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'native-tspl-food-label-v4.6.9'
+const WORKER_REVISION = 'practical-chain-tasks-v5-native-tspl-v4.6.9'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
@@ -33,7 +33,7 @@ export default {
     if (url.pathname.startsWith('/api/tasks/v3/')) {
       if (request.method === 'OPTIONS') return taskApiHeaders(request, new Response(null, { status: 204 }))
       try {
-        const response = await handleTaskWorkflowV3(request, env, url, ctx, app)
+        const response = await handleTaskWorkflowV5(request, env, url, ctx, app)
         if (response) return taskApiHeaders(request, response)
       } catch (taskError) {
         return taskApiHeaders(request, errorResponse(request, env, taskError))
