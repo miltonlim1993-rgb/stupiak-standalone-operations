@@ -10,7 +10,7 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = '4.6.5-layout-public-label-settings-direct-print-flow-shell-v10'
+const SHELL_VERSION = '4.6.6-direct-print-media-size-fix-shell-v10'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
