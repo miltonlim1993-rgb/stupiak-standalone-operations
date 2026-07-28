@@ -12,7 +12,7 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = '4.6.8-printer-settings-responsive-workspace-shell-v10'
+const SHELL_VERSION = '4.6.9-native-tspl-food-label-shell-v10'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
