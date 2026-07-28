@@ -1,5 +1,7 @@
 /* Forced mobile preview runs inside a wide desktop viewport. Override the
- * desktop media-query branch so the 430px shell matches a real phone. */
+ * desktop media-query branch so the 430px shell matches a real phone.
+ * This file loads after the normal responsive workspace stylesheet.
+ */
 
 .chefops-force-mobile .chefops-page.max-w-6xl.pb-36 {
   grid-template-columns: minmax(0, 1fr) !important;
