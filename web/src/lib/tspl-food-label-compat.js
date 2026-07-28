@@ -24,7 +24,7 @@ function classText(html, className) {
 }
 
 function contextValues(html) {
-  const body = classBody(html, 'context')
+  const body = /<div\s+class=["'][^"']*\bcontext\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/i.exec(String(html || ''))?.[1] || ''
   return [...body.matchAll(/<span(?:\s+[^>]*)?>([\s\S]*?)<\/span>/gi)]
     .map((match) => cleanText(match[1]))
     .filter((value) => value && value !== '•')
@@ -32,7 +32,7 @@ function contextValues(html) {
 
 function timeValues(html) {
   const result = []
-  const pattern = /<div\s+class=["']time-box["'][^>]*>[\s\S]*?<span>([\s\S]*?)<\/span>[\s\S]*?(?:<strong>([\s\S]*?)<\/strong>)?[\s\S]*?<div\s+class=["']time-date["'][^>]*>([\s\S]*?)<\/div>[\s\S]*?<\/div>/gi
+  const pattern = /<div\s+class=["'][^"']*\btime-head\b[^"']*["'][^>]*>[\s\S]*?<span>([\s\S]*?)<\/span>\s*(?:<strong>([\s\S]*?)<\/strong>)?\s*<\/div>\s*<div\s+class=["'][^"']*\btime-date\b[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi
   for (const match of String(html || '').matchAll(pattern)) {
     result.push({
       label: cleanText(match[1]),
@@ -64,6 +64,10 @@ function numberValue(value, fallback, minimum, maximum) {
 
 function mmToDots(mm, dpi) {
   return Math.max(1, Math.round((Number(mm) / 25.4) * Number(dpi)))
+}
+
+function offsetMmToDots(mm, dpi) {
+  return Math.round((Number(mm) / 25.4) * Number(dpi))
 }
 
 function splitTitle(value, maxChars, maxLines = 2) {
@@ -153,8 +157,8 @@ export function buildTsplFoodLabelCommand(html, options = {}) {
   const copies = Math.round(numberValue(options.copies, 1, 1, 100))
   const widthDots = mmToDots(widthMm, dpi)
   const heightDots = mmToDots(heightMm, dpi)
-  const xOffset = mmToDots(numberValue(options.xOffsetMm, 0, -20, 20), dpi) - mmToDots(0, dpi)
-  const yOffset = mmToDots(numberValue(options.yOffsetMm, 0, -20, 20), dpi) - mmToDots(0, dpi)
+  const xOffset = offsetMmToDots(numberValue(options.xOffsetMm, 0, -20, 20), dpi)
+  const yOffset = offsetMmToDots(numberValue(options.yOffsetMm, 0, -20, 20), dpi)
   const left = Math.max(6, 12 + xOffset)
   const right = Math.min(widthDots - 6, widthDots - 12 + xOffset)
   const top = Math.max(4, 7 + yOffset)
@@ -186,8 +190,9 @@ export function buildTsplFoodLabelCommand(html, options = {}) {
     const gap = String(options.mediaSensor || 'gap') === 'continuous' ? 0 : numberValue(options.gapMm, 2, 0, 20)
     lines.push(`GAP ${gap.toFixed(1)} mm,${numberValue(options.gapOffsetMm, 0, -20, 20).toFixed(1)} mm`)
   }
-  lines.push(`DENSITY ${Math.round(numberValue(options.darkness, 8, 0, 15))}`)
-  lines.push(`SPEED ${Math.round(numberValue(options.printSpeedMmS, 102, 25, 305) / 25.4)}`)
+  // Match the proven old SP Label Printing defaults for this printer.
+  lines.push('DENSITY 8')
+  lines.push('SPEED 4')
   lines.push('DIRECTION 1')
   lines.push('REFERENCE 0,0')
   lines.push('CLS')
