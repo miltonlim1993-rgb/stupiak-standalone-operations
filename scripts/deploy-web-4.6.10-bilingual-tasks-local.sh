@@ -162,10 +162,18 @@ gh run watch "$ANDROID_RUN_ID" --repo "$REPOSITORY" --exit-status
 printf '\n==================================================\n'
 echo "7. Verify signed Android 4.6.10 release assets"
 echo "=================================================="
-RELEASE_JSON="$(gh release view "$ANDROID_RELEASE_TAG" --repo "$REPOSITORY" --json name,tagName,assets)"
-printf '%s\n' "$RELEASE_JSON" | jq .
-printf '%s\n' "$RELEASE_JSON" | jq -r '.name' | grep -q '4.6.10'
-RELEASE_ASSETS="$(printf '%s\n' "$RELEASE_JSON" | jq -r '.assets[].name')"
+RELEASE_NAME="$(gh release view "$ANDROID_RELEASE_TAG" \
+  --repo "$REPOSITORY" \
+  --json name \
+  --jq '.name')"
+echo "Release: $RELEASE_NAME"
+printf '%s\n' "$RELEASE_NAME" | grep -q '4.6.10'
+
+RELEASE_ASSETS="$(gh release view "$ANDROID_RELEASE_TAG" \
+  --repo "$REPOSITORY" \
+  --json assets \
+  --jq '.assets[].name')"
+printf '%s\n' "$RELEASE_ASSETS"
 printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-release.apk'
 printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-direct-print-flow-v10.apk'
 printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-release.aab'
