@@ -1,4 +1,4 @@
-const PROFILE_SCHEMA = 'stupiaks-label-printer-profile-v2'
+const PROFILE_SCHEMA = 'stupiaks-label-printer-profile-v3'
 const DEVICE_ID_KEY = 'stupiaks_ops.label_printer.device_id'
 
 export const DEFAULT_PRINTER_LAYOUT = Object.freeze({
@@ -251,20 +251,20 @@ export function extractLabelDimensions(html) {
 
 export function resolvePrinterLayout(profile = {}, sourceDimensions = {}) {
   const normalized = normalizePrinterProfile(profile)
-  let widthMm = numberValue(normalized.label_width_mm, sourceDimensions.widthMm || 40, 1, 500)
-  let heightMm = numberValue(normalized.label_height_mm, sourceDimensions.heightMm || 30, 1, 500)
+  const widthMm = numberValue(normalized.label_width_mm, sourceDimensions.widthMm || 40, 1, 500)
+  const heightMm = numberValue(normalized.label_height_mm, sourceDimensions.heightMm || 30, 1, 500)
   const orientationMode = orientationValue(normalized.orientation)
+  const mediaOrientation = widthMm >= heightMm ? 'landscape' : 'portrait'
 
-  if (orientationMode === 'portrait' && widthMm > heightMm) {
-    ;[widthMm, heightMm] = [heightMm, widthMm]
-  }
-  if (orientationMode === 'landscape' && widthMm < heightMm) {
-    ;[widthMm, heightMm] = [heightMm, widthMm]
-  }
-
+  // Direct LAN/Bluetooth printing bypasses the operating-system printer driver.
+  // Width is always the physical media width across the print head and height is
+  // always the feed length of one label. A content-orientation preference must
+  // never swap these physical values, otherwise a 40×30 label becomes 30×40 and
+  // the printer advances across more than one physical label.
   return {
     orientation_mode: orientationMode,
-    orientation: widthMm > heightMm ? 'landscape' : 'portrait',
+    orientation: mediaOrientation,
+    media_orientation: mediaOrientation,
     width_mm: widthMm,
     height_mm: heightMm,
     padding_top_mm: numberValue(normalized.padding_top_mm, DEFAULT_PRINTER_LAYOUT.padding_top_mm, 0, 20),
@@ -306,12 +306,12 @@ export function applyPrinterLayoutToHtml(html, profile = {}) {
 }
 
 export function formatPrinterLayoutOutcome(layout = {}) {
-  const orientation = clean(layout.orientation || 'portrait')
+  const orientation = clean(layout.media_orientation || layout.orientation || 'portrait')
   const padding = [
     layout.padding_top_mm,
     layout.padding_right_mm,
     layout.padding_bottom_mm,
     layout.padding_left_mm,
   ].join('/')
-  return `${orientation[0]?.toUpperCase() || ''}${orientation.slice(1)} · ${layout.width_mm}×${layout.height_mm} mm · padding ${padding} mm`
+  return `${orientation[0]?.toUpperCase() || ''}${orientation.slice(1)} media · ${layout.width_mm}×${layout.height_mm} mm · padding ${padding} mm`
 }
