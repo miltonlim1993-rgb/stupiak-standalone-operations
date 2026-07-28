@@ -12,8 +12,9 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
+import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.10-practical-bilingual-tasks-native-tspl-shell-v10'
+const SHELL_VERSION = '4.6.11-master-task-refresh-bilingual-native-tspl-shell-v10'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -90,6 +91,7 @@ function publishShellHealth() {
 markRuntime()
 installNativeSessionFetch()
 installNativeLabelPrintBridge()
+installTaskTemplateRefreshV6()
 installTaskBilingualShell()
 applyTheme()
 configureNativeSystemBars()
