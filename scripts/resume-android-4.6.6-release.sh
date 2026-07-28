@@ -2,12 +2,40 @@
 set -Eeuo pipefail
 
 REPOSITORY="miltonlim1993-rgb/stupiak-standalone-operations"
+EXPECTED_GITHUB_LOGIN="miltonlim1993-rgb"
 EXPECTED_BRANCH="feature/task-workflow-v3-apk"
 WORKER_URL="https://stupiaks-ops.sporkburger19.workers.dev"
 EXPECTED_WORKER_REVISION="direct-print-media-size-fix-v4.6.6"
 EXPECTED_SHELL_VERSION="chefops-v4-6-6-direct-print-media-size-fix-shell-v10"
 ANDROID_WORKFLOW="android-apk.yml"
 ANDROID_RELEASE_TAG="android-release-latest"
+export GH_HTTP_TIMEOUT="${GH_HTTP_TIMEOUT:-60}"
+
+# GitHub occasionally returns a transient timeout even though the stored login is
+# still valid. Retry read, dispatch and watch commands without asking the operator
+# to re-authenticate or re-deploy Cloudflare.
+gh_retry() {
+  local attempt=1
+  local maximum=6
+  local output=""
+  local status=0
+
+  while true; do
+    if output="$("$@" 2>&1)"; then
+      printf '%s' "$output"
+      return 0
+    fi
+    status=$?
+    if (( attempt >= maximum )); then
+      printf '%s\n' "$output" >&2
+      return "$status"
+    fi
+    printf 'GitHub request timed out or failed (attempt %d/%d). Retrying in %d seconds...\n' \
+      "$attempt" "$maximum" "$((attempt * 3))" >&2
+    sleep "$((attempt * 3))"
+    attempt=$((attempt + 1))
+  done
+}
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$ROOT" ]]; then
@@ -50,16 +78,27 @@ curl -fsS "$WORKER_URL/api/health" | python3 -m json.tool
 
 echo
 echo "=================================================="
-echo "3. Verify GitHub authentication"
+echo "3. Verify GitHub authentication with retry"
 echo "=================================================="
-gh auth status
-gh repo view "$REPOSITORY" --json nameWithOwner --jq '.nameWithOwner' | grep -qx "$REPOSITORY"
+LOGIN="$(gh_retry gh api user --jq '.login')"
+if [[ "$LOGIN" != "$EXPECTED_GITHUB_LOGIN" ]]; then
+  echo "ERROR: GitHub CLI returned account '$LOGIN'; expected '$EXPECTED_GITHUB_LOGIN'."
+  exit 1
+fi
+echo "GitHub account: $LOGIN"
+
+REPO_NAME="$(gh_retry gh repo view "$REPOSITORY" --json nameWithOwner --jq '.nameWithOwner')"
+if [[ "$REPO_NAME" != "$REPOSITORY" ]]; then
+  echo "ERROR: GitHub repository access verification failed."
+  exit 1
+fi
+echo "Repository access: $REPO_NAME"
 
 echo
 echo "=================================================="
 echo "4. Trigger the corrected signed Android 4.6.6 build"
 echo "=================================================="
-PREVIOUS_RUN_ID="$(gh run list \
+PREVIOUS_RUN_ID="$(gh_retry gh run list \
   --repo "$REPOSITORY" \
   --workflow "$ANDROID_WORKFLOW" \
   --branch "$EXPECTED_BRANCH" \
@@ -68,13 +107,14 @@ PREVIOUS_RUN_ID="$(gh run list \
   --json databaseId \
   --jq '.[0].databaseId // empty')"
 
-gh workflow run "$ANDROID_WORKFLOW" \
+gh_retry gh workflow run "$ANDROID_WORKFLOW" \
   --repo "$REPOSITORY" \
   --ref "$EXPECTED_BRANCH"
+echo
 
 ANDROID_RUN_ID=""
 for attempt in $(seq 1 30); do
-  CANDIDATE_RUN_ID="$(gh run list \
+  CANDIDATE_RUN_ID="$(gh_retry gh run list \
     --repo "$REPOSITORY" \
     --workflow "$ANDROID_WORKFLOW" \
     --branch "$EXPECTED_BRANCH" \
@@ -95,13 +135,14 @@ if [[ -z "$ANDROID_RUN_ID" ]]; then
 fi
 
 echo "Android workflow run: $ANDROID_RUN_ID"
-gh run watch "$ANDROID_RUN_ID" --repo "$REPOSITORY" --exit-status
+gh_retry gh run watch "$ANDROID_RUN_ID" --repo "$REPOSITORY" --exit-status
+echo
 
 echo
 echo "=================================================="
 echo "5. Verify signed release files"
 echo "=================================================="
-RELEASE_ASSETS="$(gh release view "$ANDROID_RELEASE_TAG" \
+RELEASE_ASSETS="$(gh_retry gh release view "$ANDROID_RELEASE_TAG" \
   --repo "$REPOSITORY" \
   --json assets \
   --jq '.assets[].name')"
