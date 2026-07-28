@@ -3,6 +3,12 @@ const TEXT = new Map([
   ['Morning', '早班 / Morning'],
   ['Evening', '晚班 / Evening'],
   ['All', '全部 / All'],
+  ['Morning Shift', '早班 / Morning Shift'],
+  ['Evening Shift', '晚班 / Evening Shift'],
+  ['Night Shift', '晚班 / Night Shift'],
+  ['Current Shift', '当前班次 / Current Shift'],
+  ['Daily Operations', '日常营业 / Daily Operations'],
+  ['Server-time controlled', '服务器时间控制 / Server-time controlled'],
   ['Morning Tasks Progress', '早班任务进度 / Morning Tasks Progress'],
   ['Evening Tasks Progress', '晚班任务进度 / Evening Tasks Progress'],
   ['All Tasks Progress', '全部任务进度 / All Tasks Progress'],
@@ -66,34 +72,38 @@ function onTaskPage() {
   return window.location.pathname === '/tasks'
 }
 
+function translatedDynamic(source) {
+  const trimmed = String(source || '').trim()
+  const exact = TEXT.get(trimmed)
+  if (exact) return exact
+
+  const completed = trimmed.match(/^(\d+)\s*\/\s*(\d+)\s+completed$/i)
+  if (completed) return `已完成 ${completed[1]} / ${completed[2]} · Completed ${completed[1]} / ${completed[2]}`
+
+  const required = trimmed.match(/^(\d+)\s*\/\s*(\d+)\s+Required$/i)
+  if (required) return `${required[1]}/${required[2]} 必拍 / Required`
+
+  const available = trimmed.match(/^Available after\s+(\d{1,2}:\d{2})$/i)
+  if (available) return `${available[1]} 后开放 / Available after ${available[1]}`
+
+  return ''
+}
+
 function replaceTextNode(node) {
   if (!node || node.nodeType !== Node.TEXT_NODE) return
   const source = String(node.nodeValue || '')
-  const trimmed = source.trim()
-  if (!trimmed) return
+  const translated = translatedDynamic(source)
+  if (!translated) return
+  const leading = source.match(/^\s*/)?.[0] || ''
+  const trailing = source.match(/\s*$/)?.[0] || ''
+  node.nodeValue = `${leading}${translated}${trailing}`
+}
 
-  const exact = TEXT.get(trimmed)
-  if (exact) {
-    const leading = source.match(/^\s*/)?.[0] || ''
-    const trailing = source.match(/\s*$/)?.[0] || ''
-    node.nodeValue = `${leading}${exact}${trailing}`
-    return
-  }
-
-  const completed = trimmed.match(/^(\d+)\s*\/\s*(\d+)\s+completed$/i)
-  if (completed) {
-    const leading = source.match(/^\s*/)?.[0] || ''
-    const trailing = source.match(/\s*$/)?.[0] || ''
-    node.nodeValue = `${leading}已完成 ${completed[1]} / ${completed[2]} · Completed ${completed[1]} / ${completed[2]}${trailing}`
-    return
-  }
-
-  const required = trimmed.match(/^(\d+)\s*\/\s*(\d+)\s+Required$/i)
-  if (required) {
-    const leading = source.match(/^\s*/)?.[0] || ''
-    const trailing = source.match(/\s*$/)?.[0] || ''
-    node.nodeValue = `${leading}${required[1]}/${required[2]} 必拍 / Required${trailing}`
-  }
+function replaceLeafElement(element) {
+  if (!(element instanceof Element) || element.children.length) return
+  const source = String(element.textContent || '')
+  const translated = translatedDynamic(source)
+  if (translated && source.trim() !== translated) element.textContent = translated
 }
 
 function normalizeElement(element) {
@@ -102,6 +112,9 @@ function normalizeElement(element) {
     const translated = PLACEHOLDERS.get(String(input.getAttribute('placeholder') || '').trim())
     if (translated) input.setAttribute('placeholder', translated)
   }
+
+  replaceLeafElement(element)
+  for (const leaf of element.querySelectorAll('*')) replaceLeafElement(leaf)
 
   const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
   let node = walker.nextNode()
