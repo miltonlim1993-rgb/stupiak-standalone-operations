@@ -15,7 +15,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.10-practical-bilingual-tasks.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.11-master-task-refresh-bilingual.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -39,14 +39,17 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate bilingual tasks, printer hardware, responsive layout and native TSPL source
+      - name: Validate Master Sheet task refresh, bilingual tasks, printer hardware and native TSPL source
         run: |
-          grep -q "chefops-v4-6-10-practical-bilingual-tasks-native-tspl-shell-v10" web/public/sw.js
-          grep -q "4.6.10-practical-bilingual-tasks-native-tspl-shell-v10" web/src/main.jsx
+          grep -q "chefops-v4-6-11-master-task-refresh-bilingual-native-tspl-shell-v10" web/public/sw.js
+          grep -q "4.6.11-master-task-refresh-bilingual-native-tspl-shell-v10" web/src/main.jsx
+          grep -q "installTaskTemplateRefreshV6" web/src/main.jsx
+          grep -q "firstLoadForOutlet" web/src/lib/task-template-refresh-v6.js
           grep -q "installTaskBilingualShell" web/src/main.jsx
           grep -q "已准备 / Ready" web/src/lib/task-bilingual-shell.js
+          grep -q "已完成" web/src/lib/task-bilingual-shell.js
           grep -q "normalizeTaskBilingual" worker/src/task-bilingual-v5.js
-          grep -q "practical-bilingual-chain-tasks-v5-native-tspl-v4.6.10" worker/src/entry-v3.js
+          grep -q "master-task-refresh-bilingual-v6-native-tspl-v4.6.11" worker/src/entry-v3.js
           grep -q "@/label-printer-settings-v2.css" web/src/main.jsx
           grep -q "@/label-printer-settings-force-mobile.css" web/src/main.jsx
           grep -q "grid-template-columns: repeat(4, minmax(0, 1fr))" web/src/label-printer-settings-v2.css
@@ -150,8 +153,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.10 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.10 fixes Task content to display Chinese and English together across active titles, instructions, completion standards, checklist items, photo instructions, statuses, controls and response labels. It also retains the practical daily readiness and monthly weekday cold-storage cleaning workflow, Duty Roster-only assignment, native TSPL 40×30 mm food-label printing, responsive Printer Profiles and all existing direct-print fallbacks."
+            --title "Stupiak's Ops 4.6.11 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.11 forces one Master Sheet TaskTemplate refresh per outlet session before displaying tasks, preventing an older cached task pack from showing legacy Richmond Daily Checklist or Night Toilet Cleaning cards after Sheet edits. It also completes dynamic Chinese and English task progress, shift, availability and server-time labels. Practical daily readiness, monthly cold-storage rotation, Duty Roster-only assignment, native TSPL 40×30 mm food-label printing and Printer Profiles remain included."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
