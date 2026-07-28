@@ -31,3 +31,44 @@ jobs:
           path: source-validation-build.log
           if-no-files-found: warn
           retention-days: 7
+
+  android-native-compile:
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
+      VITE_GOOGLE_LOGIN_CLIENT_ID: 460544373229-06mv64nt3e78mtse5sc375cobv13i1ii.apps.googleusercontent.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Android project
+        run: npm run mobile:init
+      - name: Apply Android branding
+        run: node scripts/configure-android-branding.mjs
+      - name: Configure native authentication and system print
+        run: node scripts/configure-android-native-google-auth.mjs
+      - name: Configure printer hardware profiles
+        run: node scripts/configure-android-direct-label-print.mjs
+      - name: Compile unsigned debug APK
+        shell: bash
+        run: |
+          set -o pipefail
+          chmod +x web/android/gradlew
+          cd web/android
+          ./gradlew clean assembleDebug 2>&1 | tee ../../android-native-compile.log
+      - name: Upload Android compile log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-compile-log
+          path: android-native-compile.log
+          if-no-files-found: warn
+          retention-days: 7
