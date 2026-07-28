@@ -15,7 +15,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.9-native-tspl-food-label.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.10-practical-bilingual-tasks.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -39,10 +39,14 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate printer hardware, responsive layout and native TSPL source
+      - name: Validate bilingual tasks, printer hardware, responsive layout and native TSPL source
         run: |
-          grep -q "printer-settings-responsive-workspace-shell-v10" web/public/sw.js
-          grep -q "printer-settings-responsive-workspace-shell-v10" web/src/main.jsx
+          grep -q "chefops-v4-6-10-practical-bilingual-tasks-native-tspl-shell-v10" web/public/sw.js
+          grep -q "4.6.10-practical-bilingual-tasks-native-tspl-shell-v10" web/src/main.jsx
+          grep -q "installTaskBilingualShell" web/src/main.jsx
+          grep -q "已准备 / Ready" web/src/lib/task-bilingual-shell.js
+          grep -q "normalizeTaskBilingual" worker/src/task-bilingual-v5.js
+          grep -q "practical-bilingual-chain-tasks-v5-native-tspl-v4.6.10" worker/src/entry-v3.js
           grep -q "@/label-printer-settings-v2.css" web/src/main.jsx
           grep -q "@/label-printer-settings-force-mobile.css" web/src/main.jsx
           grep -q "grid-template-columns: repeat(4, minmax(0, 1fr))" web/src/label-printer-settings-v2.css
@@ -146,8 +150,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.9 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.9 adds the old-app-compatible native TSPL food-label path. Structured food labels use printer-native SIZE, GAP, TEXT, BOX and BARCODE commands with the proven 40×30 mm, density 8, speed 4, direction 1 and reference 0,0 setup instead of a full-page BITMAP. Unsupported characters and non-TSPL printers retain the existing raster or system-print fallback. The 4.6.8 responsive Label Printer Settings workspace and all 4.6.7 hardware profile features remain included."
+            --title "Stupiak's Ops 4.6.10 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.10 fixes Task content to display Chinese and English together across active titles, instructions, completion standards, checklist items, photo instructions, statuses, controls and response labels. It also retains the practical daily readiness and monthly weekday cold-storage cleaning workflow, Duty Roster-only assignment, native TSPL 40×30 mm food-label printing, responsive Printer Profiles and all existing direct-print fallbacks."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
