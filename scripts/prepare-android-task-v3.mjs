@@ -13,7 +13,7 @@ const buildCandidates = [
   path.join(appRoot, 'build.gradle.kts'),
 ]
 const versionCode = Number(process.env.CHEFOPS_ANDROID_VERSION_CODE || 11)
-const versionName = String(process.env.CHEFOPS_ANDROID_VERSION_NAME || '4.6.0-task-v3').trim()
+const versionName = String(process.env.CHEFOPS_ANDROID_VERSION_NAME || '4.6.9-native-tspl-food-label').trim()
 
 function run(command, args, cwd = root) {
   console.log(`\n$ ${command} ${args.join(' ')}`)
@@ -41,6 +41,7 @@ gradle = gradle.replace(namePattern, isKotlin ? `versionName = "${versionName}"`
 await fs.writeFile(buildPath, gradle)
 
 run('node', ['scripts/configure-android-direct-label-print.mjs'])
+run('node', ['scripts/configure-android-tspl-food-label-compat.mjs'])
 
 const metadata = {
   schema: 'stupiaks-ops-android-build-v1',
@@ -52,6 +53,7 @@ const metadata = {
   task_workflow: 'v3',
   data_package: 'v2',
   direct_label_print: true,
+  native_tspl_food_label: true,
 }
 await fs.writeFile(path.join(androidRoot, 'stupiaks-build-metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`)
 
@@ -60,4 +62,5 @@ console.log(`Version code: ${versionCode}`)
 console.log(`Version name: ${versionName}`)
 console.log(`Gradle: ${buildPath}`)
 console.log('Direct label print plugin: configured')
+console.log('Native TSPL food-label compatibility: configured')
 console.log('Build debug APK: cd web/android && ./gradlew assembleDebug')
