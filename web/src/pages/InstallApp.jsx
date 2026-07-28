@@ -20,7 +20,7 @@ import { getAppPackStatus, syncAppPack } from '@/lib/app-pack'
 import { useAuth } from '@/lib/AuthContext'
 
 const MODE_KEY = 'chefops.display.mode'
-const RELEASE_FALLBACK = '4.6.5-layout-public-label-settings'
+const RELEASE_FALLBACK = '4.6.8-printer-settings-responsive-workspace'
 const RELEASE_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-release.apk'
 
 function bytes(value) {
@@ -238,26 +238,25 @@ export default function InstallApp() {
           <VersionRow label="App" value={release.app_version || RELEASE_FALLBACK} />
           <VersionRow label="Android" value={release.apk_version || 'Signed release'} />
           <VersionRow label="Data" value={release.data_version || pack.version || '—'} />
-          <VersionRow label="Generated" value={dateTime(pack.generated_at)} />
+          <VersionRow label="Last sync" value={dateTime(pack.saved_at || pack.last_checked_at)} />
         </div>
-        {release.release_notes ? <p className="mt-3 whitespace-pre-line text-sm leading-6 text-muted-foreground">{release.release_notes}</p> : null}
       </section>
     </div>
   )
 }
 
-function StatusPill({ children, good = false }) {
-  return <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${good ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>{children}</span>
-}
-
 function PackStat({ label, value, good = false }) {
-  return <div className="min-w-0 rounded-xl bg-muted/55 p-3"><p className="text-[10px] uppercase tracking-wide text-muted-foreground">{label}</p><p className={`mt-1 break-words text-sm font-semibold ${good ? 'text-emerald-700' : ''}`}>{value}</p></div>
+  return <div className="rounded-2xl bg-muted/55 p-3"><p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">{label}</p><p className={`mt-1 truncate text-xs font-semibold ${good ? 'text-emerald-700' : ''}`}>{value}</p></div>
 }
 
 function SetupStep({ number, title, text }) {
-  return <div className="rounded-2xl border border-border bg-card p-4"><span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/15 text-sm font-bold text-primary">{number}</span><h3 className="mt-3 text-sm font-semibold">{title}</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p></div>
+  return <div className="rounded-2xl border border-border bg-card p-4"><div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">{number}</div><h2 className="mt-3 text-sm font-semibold">{title}</h2><p className="mt-1 text-xs leading-5 text-muted-foreground">{text}</p></div>
 }
 
 function VersionRow({ label, value }) {
-  return <div className="flex min-w-0 items-start justify-between gap-3 rounded-xl bg-muted/50 px-3 py-2.5"><span className="text-muted-foreground">{label}</span><span className="min-w-0 break-all text-right font-medium">{value}</span></div>
+  return <div className="flex items-start justify-between gap-3 rounded-xl bg-muted/50 px-3 py-2.5"><span className="text-muted-foreground">{label}</span><span className="max-w-[68%] break-all text-right font-medium">{value}</span></div>
+}
+
+function StatusPill({ good, children }) {
+  return <span className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${good ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>{children}</span>
 }
