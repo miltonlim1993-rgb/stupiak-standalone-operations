@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-6-direct-print-media-size-fix-shell-v10'
+const VERSION = 'chefops-v4-6-7-printer-hardware-profiles-shell-v10'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
