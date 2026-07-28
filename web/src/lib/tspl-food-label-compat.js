@@ -43,8 +43,16 @@ function timeValues(html) {
   return result
 }
 
+function normalizePrinterPunctuation(value = '') {
+  return String(value || '')
+    .replace(/[•·]/g, '-')
+    .replace(/[–—]/g, '-')
+    .replace(/[“”]/g, '"')
+    .replace(/[‘’]/g, "'")
+}
+
 function tsplText(value = '', maximum = 96) {
-  return cleanText(value)
+  return cleanText(normalizePrinterPunctuation(value))
     .replace(/[^\x20-\x7E]/g, '?')
     .replace(/["\\]/g, ' ')
     .replace(/\s+/g, ' ')
@@ -52,8 +60,8 @@ function tsplText(value = '', maximum = 96) {
     .slice(0, maximum)
 }
 
-function isAsciiPrintable(value = '') {
-  return !/[^\x20-\x7E]/.test(String(value || ''))
+function isPrinterAscii(value = '') {
+  return !/[^\x20-\x7E]/.test(normalizePrinterPunctuation(value))
 }
 
 function numberValue(value, fallback, minimum, maximum) {
@@ -130,8 +138,8 @@ export function extractFoodLabelForTspl(html) {
 
   if (!title || !barcode || times.length < 2) return null
 
-  const values = [title, action, storage, operator, quantity, batch, barcode, ...times.flatMap((item) => [item.label, item.time, item.date])]
-  if (!values.every(isAsciiPrintable)) return null
+  const printerFontValues = [title, action, storage, batch, barcode, ...times.flatMap((item) => [item.label, item.time, item.date])]
+  if (!printerFontValues.every(isPrinterAscii)) return null
 
   return {
     title,
