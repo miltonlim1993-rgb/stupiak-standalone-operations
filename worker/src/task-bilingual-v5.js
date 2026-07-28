@@ -69,15 +69,28 @@ function pair(target, key, cn, en) {
   return target
 }
 
+function setPair(target, key, cn, en) {
+  const chinese = clean(cn)
+  const english = clean(en)
+  if (chinese) target[`${key}_cn`] = chinese
+  if (english) {
+    target[`${key}_en`] = english
+    target[key] = english
+  }
+  return target
+}
+
 function enrichOpening(config) {
   for (const section of config.sections || []) {
     const translatedSection = OPENING_SECTIONS[section.id]
-    pair(section, 'name', translatedSection?.cn, translatedSection?.en || section.name)
+    if (translatedSection) setPair(section, 'name', translatedSection.cn, translatedSection.en)
+    else pair(section, 'name', section.name_cn, section.name_en || section.name)
+
     for (const item of section.items || []) {
       const translated = OPENING_ITEMS[item.id]
       if (translated) {
-        pair(item, 'name', translated[0], translated[1])
-        pair(item, 'instruction', translated[2], translated[3])
+        setPair(item, 'name', translated[0], translated[1])
+        setPair(item, 'instruction', translated[2], translated[3])
       } else {
         pair(item, 'name', item.name_cn, item.name_en || item.name)
         pair(item, 'instruction', item.instruction_cn, item.instruction_en || item.instruction)
@@ -94,8 +107,8 @@ function enrichOpening(config) {
   for (const group of config.photo_groups || []) {
     const translated = OPENING_PHOTOS[group.id]
     if (translated) {
-      pair(group, 'name', translated[0], translated[1])
-      pair(group, 'sample_caption', translated[2], translated[3])
+      setPair(group, 'name', translated[0], translated[1])
+      setPair(group, 'sample_caption', translated[2], translated[3])
     } else {
       pair(group, 'name', group.name_cn, group.name_en || group.name)
       pair(group, 'sample_caption', group.sample_caption_cn, group.sample_caption_en || group.sample_caption)
