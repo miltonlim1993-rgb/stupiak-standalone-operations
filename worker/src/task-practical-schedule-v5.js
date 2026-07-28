@@ -40,6 +40,12 @@ export function practicalTaskAppliesOnDate(config = {}, dateText = '') {
   if (!parts) return false
 
   const recurrence = config.recurrence || config.schedule?.recurrence || {}
+  const dateValue = clean(dateText)
+  const effectiveFrom = clean(recurrence.effective_from || config.effective_from)
+  const effectiveTo = clean(recurrence.effective_to || config.effective_to)
+  if (effectiveFrom && dateValue < effectiveFrom) return false
+  if (effectiveTo && dateValue > effectiveTo) return false
+
   const frequency = upper(recurrence.frequency || recurrence.freq || 'DAILY')
   if (!frequency || frequency === 'DAILY') return true
 
