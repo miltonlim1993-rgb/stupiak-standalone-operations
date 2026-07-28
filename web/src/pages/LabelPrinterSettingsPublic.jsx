@@ -102,7 +102,7 @@ function escapeHtml(value) {
 }
 
 function summaryText(layout) {
-  const orientation = layout.orientation === 'landscape' ? 'Landscape' : 'Portrait'
+  const orientation = layout.media_orientation === 'landscape' ? 'Landscape media' : 'Portrait media'
   return `${orientation} · ${layout.width_mm} × ${layout.height_mm} mm · Padding ${layout.padding_top_mm}/${layout.padding_right_mm}/${layout.padding_bottom_mm}/${layout.padding_left_mm} mm`
 }
 
@@ -529,21 +529,26 @@ export default function LabelPrinterSettingsPublic() {
               </div>
             </Section>
 
-            <Section icon={Settings2} title="3. Label layout">
-              <Field label="Orientation">
-                <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.orientation} onChange={(event) => update('orientation', event.target.value)}>
-                  <option value="auto">Auto from width and height</option>
-                  <option value="portrait">Portrait</option>
-                  <option value="landscape">Landscape</option>
-                </select>
-              </Field>
+            <Section icon={Settings2} title="3. Physical label media">
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                <p className="font-semibold">Direct Wi-Fi / Bluetooth printing does not use the Android printer driver paper size.</p>
+                <p className="mt-1">Width is the label width across the print head. Feed length is one label from gap to gap. For this roll use 40 mm × 30 mm. Orientation never swaps these physical values.</p>
+              </div>
 
               <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
-                <Field label="Width (mm)"><Input type="number" min="1" step="0.1" value={form.label_width_mm} onChange={(event) => update('label_width_mm', event.target.value)} /></Field>
-                <Field label="Height (mm)"><Input type="number" min="1" step="0.1" value={form.label_height_mm} onChange={(event) => update('label_height_mm', event.target.value)} /></Field>
+                <Field label="Media width (mm)"><Input type="number" min="1" step="0.1" value={form.label_width_mm} onChange={(event) => update('label_width_mm', event.target.value)} /></Field>
+                <Field label="Feed length (mm)"><Input type="number" min="1" step="0.1" value={form.label_height_mm} onChange={(event) => update('label_height_mm', event.target.value)} /></Field>
                 <Field label="DPI"><Input type="number" min="72" value={form.dpi} onChange={(event) => update('dpi', event.target.value)} /></Field>
                 <Field label="Copies"><Input type="number" min="1" max="100" value={form.default_copies} onChange={(event) => update('default_copies', event.target.value)} /></Field>
               </div>
+
+              <Field label="Content preference" className="mt-3">
+                <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={form.orientation} onChange={(event) => update('orientation', event.target.value)}>
+                  <option value="auto">Auto — keep physical media size</option>
+                  <option value="portrait">Portrait content — media stays fixed</option>
+                  <option value="landscape">Landscape content — media stays fixed</option>
+                </select>
+              </Field>
 
               <p className="mt-4 text-xs font-semibold">Four-side padding (mm)</p>
               <div className="mt-2 grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-2">
