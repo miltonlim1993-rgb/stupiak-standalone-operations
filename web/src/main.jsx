@@ -11,8 +11,9 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
+import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 
-const SHELL_VERSION = '4.6.9-native-tspl-food-label-shell-v10'
+const SHELL_VERSION = '4.6.10-practical-bilingual-tasks-native-tspl-shell-v10'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -89,6 +90,7 @@ function publishShellHealth() {
 markRuntime()
 installNativeSessionFetch()
 installNativeLabelPrintBridge()
+installTaskBilingualShell()
 applyTheme()
 configureNativeSystemBars()
 
