@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-10-practical-bilingual-tasks-native-tspl-shell-v10'
+const VERSION = 'chefops-v4-6-11-master-task-refresh-bilingual-native-tspl-shell-v10'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
