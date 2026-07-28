@@ -9,6 +9,10 @@ import {
   savePrinterProfilesSnapshot,
   selectPrinterProfile,
 } from '@/lib/label-printer-profile'
+import {
+  asciiBase64,
+  buildTsplFoodLabelCommand,
+} from '@/lib/tspl-food-label-compat'
 
 const serverProfilesCache = new Map()
 
@@ -230,20 +234,32 @@ async function sendDirectLabel(html) {
   const transformed = applyPrinterLayoutToHtml(html, options.profile)
   const jobName = extractJobName(transformed.html)
   const copies = countCopies(transformed.html)
+  const dpi = Math.max(72, Number(options.profile.dpi || 203))
+  const nativeTspl = buildTsplFoodLabelCommand(transformed.html, {
+    ...options,
+    widthMm: transformed.layout.width_mm,
+    heightMm: transformed.layout.height_mm,
+    dpi,
+    copies,
+  })
 
   const result = await plugin.printDirect({
     ...options,
     profile: undefined,
     html: sanitizeLabelHtml(transformed.html),
+    rawCommandBase64: nativeTspl ? asciiBase64(nativeTspl.command) : '',
+    renderMode: nativeTspl?.mode || 'html-raster',
     jobName,
     widthMm: transformed.layout.width_mm,
     heightMm: transformed.layout.height_mm,
-    dpi: Math.max(72, Number(options.profile.dpi || 203)),
+    dpi,
     copies,
   })
 
   const profileName = String(options.profile.profile_name || 'Label printer').trim()
-  const outcome = formatPrinterLayoutOutcome(transformed.layout)
+  const outcome = nativeTspl
+    ? `Native TSPL · fixed ${nativeTspl.widthMm}×${nativeTspl.heightMm} mm`
+    : formatPrinterLayoutOutcome(transformed.layout)
   showPrintMessage(
     `Printed to ${result?.printer || profileName} · ${outcome} · ${copies} cop${copies === 1 ? 'y' : 'ies'}.`,
     'success',
@@ -253,6 +269,7 @@ async function sendDirectLabel(html) {
     jobName,
     copies,
     direct: true,
+    render_mode: nativeTspl?.mode || 'html-raster',
     result,
     profile_id: options.profile.id || '',
     profile_name: profileName,
