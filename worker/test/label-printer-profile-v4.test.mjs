@@ -21,27 +21,29 @@ const baseProfile = {
   label_height_mm: 30,
 }
 
-test('portrait and landscape modes resolve physical label dimensions', () => {
-  const portrait = resolvePrinterLayout({
+test('content orientation never swaps physical direct-print media dimensions', () => {
+  const portraitPreference = resolvePrinterLayout({
     ...baseProfile,
     orientation: 'portrait',
   })
-  assert.equal(portrait.orientation, 'portrait')
-  assert.equal(portrait.width_mm, 30)
-  assert.equal(portrait.height_mm, 40)
+  assert.equal(portraitPreference.orientation_mode, 'portrait')
+  assert.equal(portraitPreference.media_orientation, 'landscape')
+  assert.equal(portraitPreference.width_mm, 40)
+  assert.equal(portraitPreference.height_mm, 30)
 
-  const landscape = resolvePrinterLayout({
+  const landscapePreference = resolvePrinterLayout({
     ...baseProfile,
     label_width_mm: 30,
     label_height_mm: 40,
     orientation: 'landscape',
   })
-  assert.equal(landscape.orientation, 'landscape')
-  assert.equal(landscape.width_mm, 40)
-  assert.equal(landscape.height_mm, 30)
+  assert.equal(landscapePreference.orientation_mode, 'landscape')
+  assert.equal(landscapePreference.media_orientation, 'portrait')
+  assert.equal(landscapePreference.width_mm, 30)
+  assert.equal(landscapePreference.height_mm, 40)
 })
 
-test('four-side padding and orientation are injected into label HTML', () => {
+test('four-side padding is injected without changing the physical media size', () => {
   const source = '<html><head><style>@page{size:40mm 30mm;margin:0}.label{padding:9mm}</style></head><body><div class="label">TEST LABEL</div></body></html>'
   const transformed = applyPrinterLayoutToHtml(source, {
     ...baseProfile,
@@ -52,8 +54,9 @@ test('four-side padding and orientation are injected into label HTML', () => {
     padding_left_mm: 4,
   })
 
-  assert.equal(transformed.layout.orientation, 'portrait')
-  assert.match(transformed.html, /@page\{size:30mm 40mm!important;margin:0!important\}/)
+  assert.equal(transformed.layout.orientation_mode, 'portrait')
+  assert.equal(transformed.layout.media_orientation, 'landscape')
+  assert.match(transformed.html, /@page\{size:40mm 30mm!important;margin:0!important\}/)
   assert.match(transformed.html, /padding:1mm 2mm 3mm 4mm!important/)
   assert.equal((transformed.html.match(/id="chefops-printer-layout"/g) || []).length, 1)
 })
@@ -142,9 +145,10 @@ test('server boolean strings are normalized safely', () => {
   assert.equal(normalized.queue_when_offline, true)
 })
 
-test('print outcome reports orientation, dimensions and padding', () => {
+test('print outcome reports physical media dimensions and padding', () => {
   const text = formatPrinterLayoutOutcome({
     orientation: 'landscape',
+    media_orientation: 'landscape',
     width_mm: 40,
     height_mm: 30,
     padding_top_mm: 1,
@@ -153,5 +157,5 @@ test('print outcome reports orientation, dimensions and padding', () => {
     padding_left_mm: 4,
   })
 
-  assert.equal(text, 'Landscape · 40×30 mm · padding 1/2/3/4 mm')
+  assert.equal(text, 'Landscape media · 40×30 mm · padding 1/2/3/4 mm')
 })
