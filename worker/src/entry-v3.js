@@ -2,7 +2,7 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV3 } from './task-workflow-v3.js'
 
-const WORKER_REVISION = 'printer-settings-responsive-workspace-v4.6.8'
+const WORKER_REVISION = 'native-tspl-food-label-v4.6.9'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
