@@ -5,12 +5,13 @@ import '@/index.css'
 import '@/viewport.css'
 import '@/panels-v8.css'
 import '@/direct-print-v10.css'
+import '@/label-printer-settings-v2.css'
 import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = '4.6.7-printer-hardware-profiles-shell-v10'
+const SHELL_VERSION = '4.6.8-printer-settings-responsive-workspace-shell-v10'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
