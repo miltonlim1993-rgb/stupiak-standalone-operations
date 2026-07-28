@@ -1,4 +1,5 @@
 import { listRecords } from './sheets.js'
+import { normalizeTaskBilingual } from './task-bilingual-v5.js'
 import { handleTaskWorkflowV3, taskProgressSummary } from './task-workflow-v3.js'
 import {
   attachScheduledTaskAssignees,
@@ -67,16 +68,19 @@ async function practicalBootstrap(request, env, url, ctx, legacyApp) {
         year,
       }).catch(() => [])
     : []
-  const tasks = attachScheduledTaskAssignees(applicable, rosterRows, date).map(withAssignmentLabel)
+  const tasks = attachScheduledTaskAssignees(applicable, rosterRows, date)
+    .map(withAssignmentLabel)
+    .map(normalizeTaskBilingual)
   const serverTime = payload.server_time || timestamp()
 
   return Response.json({
     ...payload,
-    schema: 'task-workflow-v5-practical-chain',
+    schema: 'task-workflow-v5-practical-chain-bilingual',
     tasks,
     current_shift_id: chooseVisibleShift(tasks, serverTime, payload.current_shift_id),
     progress: taskProgressSummary(tasks),
     assignment_source: 'DUTY_ROSTER_SCHEDULE_ONLY',
+    content_language: 'zh-en-together',
   }, {
     status: response.status,
     headers: response.headers,
