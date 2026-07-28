@@ -1,4 +1,4 @@
-/* Label Printer Settings v2
+/* Label Printer Settings v2 / 4.6.8
  * Purpose-built responsive layout for the shared printer hardware workspace.
  * These selectors intentionally outrank the legacy forced-mobile wildcard rules
  * that collapse any element containing sm:grid-cols-4 into one column.
