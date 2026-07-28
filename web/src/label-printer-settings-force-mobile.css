@@ -1,0 +1,72 @@
+/* Forced mobile preview runs inside a wide desktop viewport. Override the
+ * desktop media-query branch so the 430px shell matches a real phone. */
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 {
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
+  max-width: 100% !important;
+  padding-top: 0.65rem !important;
+  padding-bottom: 1.25rem !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > header {
+  display: block !important;
+  border-radius: 1.25rem !important;
+  padding: 0.875rem !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > header > div:last-child {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  margin-top: 1rem !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > .fixed.z-30 > .grid {
+  width: 100% !important;
+  min-width: 0 !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  margin-left: 0 !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > .fixed.z-30 button {
+  height: 3.25rem !important;
+  flex-direction: column !important;
+  gap: 0.15rem !important;
+  padding: 0.25rem !important;
+  font-size: 0.625rem !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > .fixed.z-30 button svg {
+  margin-right: 0 !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > section:first-of-type,
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > section:nth-of-type(2),
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > div.grid.items-start.gap-4 {
+  grid-column: 1 / -1 !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > section:first-of-type > div:nth-child(2) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > section:first-of-type > div:nth-child(2) > div:last-child {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > section:first-of-type > div:nth-child(3),
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > section:nth-of-type(2) > div:nth-child(2) {
+  grid-template-columns: none !important;
+  grid-auto-flow: column !important;
+  grid-auto-columns: minmax(15.5rem, 84vw) !important;
+  overflow-x: auto !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > div.grid.items-start.gap-4 {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr) !important;
+  gap: 0.75rem !important;
+}
+
+.chefops-force-mobile .chefops-page.max-w-6xl.pb-36 > div.grid.items-start.gap-4 > div:last-child {
+  position: static !important;
+}
