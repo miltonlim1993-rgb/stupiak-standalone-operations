@@ -2,7 +2,7 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV3 } from './task-workflow-v3.js'
 
-const WORKER_REVISION = 'direct-print-media-size-fix-v4.6.6'
+const WORKER_REVISION = 'printer-hardware-profiles-v4.6.7'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
