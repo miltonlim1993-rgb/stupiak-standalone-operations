@@ -57,6 +57,13 @@ jobs:
         run: node scripts/configure-android-native-google-auth.mjs
       - name: Configure printer hardware profiles
         run: node scripts/configure-android-direct-label-print.mjs
+      - name: Configure native TSPL food labels
+        run: node scripts/configure-android-tspl-food-label-compat.mjs
+      - name: Validate native TSPL path
+        run: |
+          grep -q 'rawCommandBase64' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          grep -q 'chefops-native-tspl-food-label' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          grep -q 'result.put("renderMode", renderMode)' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
       - name: Compile unsigned debug APK
         shell: bash
         run: |
