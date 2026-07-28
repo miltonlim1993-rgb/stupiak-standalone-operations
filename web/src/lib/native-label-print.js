@@ -3,6 +3,7 @@ import {
   applyPrinterLayoutToHtml,
   clearLegacyPrinterDraft,
   formatPrinterLayoutOutcome,
+  normalizePrinterProfile,
   readPrinterDeviceBinding,
   readPrinterProfilesSnapshot,
   savePrinterProfilesSnapshot,
@@ -139,33 +140,85 @@ function showPrintMessage(message, tone = 'error') {
 }
 
 function validateDirectProfile(profile) {
-  const connectionType = String(profile?.connection_type || '').toLowerCase()
-  const commandLanguage = String(profile?.command_language || '').toLowerCase()
+  const normalized = normalizePrinterProfile(profile)
+  const connectionType = String(normalized.connection_type || '').toLowerCase()
+  const commandLanguage = String(normalized.command_language || '').toLowerCase()
 
-  if (!profile?.enabled && profile?.enabled !== undefined) {
+  if (!normalized.enabled && normalized.enabled !== undefined) {
     throw new Error('The selected label printer profile is disabled.')
   }
 
   if (connectionType === 'network') {
-    if (!String(profile?.ip_address || '').trim()) {
+    if (!String(normalized.ip_address || '').trim()) {
       throw new Error('Direct printing needs the printer IP address in Label Printer Settings.')
     }
   } else if (connectionType === 'bluetooth') {
-    if (!String(profile?.bluetooth_device_id || profile?.bluetooth_device_name || '').trim()) {
+    if (!String(normalized.bluetooth_device_id || normalized.bluetooth_device_name || '').trim()) {
       throw new Error('Direct printing needs a paired Bluetooth printer name or MAC address.')
     }
-    if (String(profile?.bluetooth_mode || '').toLowerCase() === 'ble') {
-      throw new Error('Direct BLE printing is not enabled. Select Bluetooth Classic / paired printer, or Wi-Fi / LAN.')
+    if (String(normalized.bluetooth_mode || '').toLowerCase() !== 'classic') {
+      throw new Error('Direct printing supports Bluetooth Classic / paired printers. Use Android System Print for BLE or vendor-driver printers.')
     }
   } else {
-    throw new Error('Direct print is not configured. Open More → Label Printer Settings and choose Wi-Fi / LAN or Bluetooth.')
+    throw new Error('Direct print is not configured. Choose Wi-Fi / LAN or Bluetooth Classic, or use Android System Print.')
   }
 
   if (!['tspl', 'zpl', 'cpcl', 'escpos'].includes(commandLanguage)) {
-    throw new Error('Choose the printer command language in Label Printer Settings: TSPL, ZPL, CPCL or ESC/POS.')
+    throw new Error('Choose the printer command language: TSPL, ZPL, CPCL or ESC/POS.')
   }
 
-  return { connectionType, commandLanguage }
+  return { normalized, connectionType, commandLanguage }
+}
+
+function directPrinterOptions(profile) {
+  const { normalized, connectionType, commandLanguage } = validateDirectProfile(profile)
+  return {
+    connectionType,
+    commandLanguage,
+    ipAddress: String(normalized.ip_address || '').trim(),
+    port: Math.max(1, Math.min(65535, Number(normalized.port || (normalized.network_protocol === 'lpr' ? 515 : 9100)))),
+    networkProtocol: String(normalized.network_protocol || 'raw_tcp'),
+    lprQueue: String(normalized.lpr_queue || 'lp').trim(),
+    bluetoothMode: 'classic',
+    bluetoothDeviceName: String(normalized.bluetooth_device_name || '').trim(),
+    bluetoothDeviceId: String(normalized.bluetooth_device_id || '').trim(),
+    retryLimit: Math.max(0, Math.min(20, Number(normalized.retry_limit || 0))),
+    connectionTimeoutMs: Math.max(1000, Math.min(30000, Number(normalized.connection_timeout_ms || 4000))),
+    mediaSensor: String(normalized.media_sensor || 'gap'),
+    gapMm: Math.max(0, Math.min(20, Number(normalized.gap_mm || 0))),
+    gapOffsetMm: Math.max(-20, Math.min(20, Number(normalized.gap_offset_mm || 0))),
+    blackMarkMm: Math.max(0, Math.min(20, Number(normalized.black_mark_mm || 0))),
+    blackMarkOffsetMm: Math.max(-20, Math.min(20, Number(normalized.black_mark_offset_mm || 0))),
+    printSpeedMmS: Math.max(10, Math.min(305, Number(normalized.print_speed_mm_s || 76))),
+    darkness: Math.max(0, Math.min(15, Number(normalized.darkness || 8))),
+    xOffsetMm: Math.max(-20, Math.min(20, Number(normalized.x_offset_mm || 0))),
+    yOffsetMm: Math.max(-20, Math.min(20, Number(normalized.y_offset_mm || 0))),
+    profile: normalized,
+  }
+}
+
+export async function testDirectPrinterProfile(profile) {
+  if (!isNativeAndroid()) throw new Error('Connection testing is available inside the Android app.')
+  const plugin = directPrinter()
+  if (!plugin?.testConnection) throw new Error('Install the latest Android APK to test printer connections.')
+  const options = directPrinterOptions(profile)
+  const result = await plugin.testConnection(options)
+  return { ...result, profile: options.profile }
+}
+
+export async function calibrateDirectPrinterProfile(profile) {
+  if (!isNativeAndroid()) throw new Error('Media calibration is available inside the Android app.')
+  const plugin = directPrinter()
+  if (!plugin?.calibrateMedia) throw new Error('Install the latest Android APK to calibrate printer media.')
+  const options = directPrinterOptions(profile)
+  if (options.commandLanguage === 'escpos') {
+    throw new Error('ESC/POS does not provide a standard gap or black-mark calibration command. Use the printer driver or hardware feed/calibrate button.')
+  }
+  if (options.mediaSensor === 'continuous') {
+    throw new Error('Continuous media does not use gap or black-mark calibration.')
+  }
+  const result = await plugin.calibrateMedia(options)
+  return { ...result, profile: options.profile }
 }
 
 async function sendDirectLabel(html) {
@@ -173,29 +226,23 @@ async function sendDirectLabel(html) {
   if (!plugin?.printDirect) throw new Error('The Android direct-print service is unavailable in this APK.')
 
   const profile = await resolvePrinterProfile()
-  const { connectionType, commandLanguage } = validateDirectProfile(profile)
-  const transformed = applyPrinterLayoutToHtml(html, profile)
+  const options = directPrinterOptions(profile)
+  const transformed = applyPrinterLayoutToHtml(html, options.profile)
   const jobName = extractJobName(transformed.html)
   const copies = countCopies(transformed.html)
 
   const result = await plugin.printDirect({
+    ...options,
+    profile: undefined,
     html: sanitizeLabelHtml(transformed.html),
     jobName,
     widthMm: transformed.layout.width_mm,
     heightMm: transformed.layout.height_mm,
-    dpi: Math.max(72, Number(profile.dpi || 203)),
+    dpi: Math.max(72, Number(options.profile.dpi || 203)),
     copies,
-    connectionType,
-    commandLanguage,
-    ipAddress: String(profile.ip_address || '').trim(),
-    port: Math.max(1, Math.min(65535, Number(profile.port || 9100))),
-    bluetoothMode: String(profile.bluetooth_mode || 'classic'),
-    bluetoothDeviceName: String(profile.bluetooth_device_name || '').trim(),
-    bluetoothDeviceId: String(profile.bluetooth_device_id || '').trim(),
-    retryLimit: Math.max(0, Math.min(20, Number(profile.retry_limit || 0))),
   })
 
-  const profileName = String(profile.profile_name || 'Label printer').trim()
+  const profileName = String(options.profile.profile_name || 'Label printer').trim()
   const outcome = formatPrinterLayoutOutcome(transformed.layout)
   showPrintMessage(
     `Printed to ${result?.printer || profileName} · ${outcome} · ${copies} cop${copies === 1 ? 'y' : 'ies'}.`,
@@ -207,7 +254,7 @@ async function sendDirectLabel(html) {
     copies,
     direct: true,
     result,
-    profile_id: profile.id || '',
+    profile_id: options.profile.id || '',
     profile_name: profileName,
     layout: transformed.layout,
   }
