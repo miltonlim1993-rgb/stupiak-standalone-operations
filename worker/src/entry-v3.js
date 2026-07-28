@@ -2,7 +2,7 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'practical-chain-tasks-v5-native-tspl-v4.6.9'
+const WORKER_REVISION = 'practical-bilingual-chain-tasks-v5-native-tspl-v4.6.10'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
