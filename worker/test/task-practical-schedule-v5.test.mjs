@@ -31,6 +31,21 @@ test('monthly tasks do not appear on unrelated dates', () => {
   assert.equal(practicalTaskAppliesOnDate({}, '2026-07-23'), true)
 })
 
+test('effective dates prevent historical or expired weekly work from appearing', () => {
+  const config = {
+    recurrence: {
+      frequency: 'MONTHLY_NTH_WEEKDAY',
+      weekday: 'WE',
+      week_of_month: 1,
+      effective_from: '2026-07-28',
+      effective_to: '2026-09-30',
+    },
+  }
+  assert.equal(practicalTaskAppliesOnDate(config, '2026-07-01'), false)
+  assert.equal(practicalTaskAppliesOnDate(config, '2026-08-05'), true)
+  assert.equal(practicalTaskAppliesOnDate(config, '2026-10-07'), false)
+})
+
 test('assignee comes only from the duty roster schedule', () => {
   const task = {
     id: 'task-week-1',
