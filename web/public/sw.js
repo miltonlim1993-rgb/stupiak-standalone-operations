@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-8-printer-settings-responsive-workspace-shell-v10'
+const VERSION = 'chefops-v4-6-9-native-tspl-food-label-shell-v10'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
