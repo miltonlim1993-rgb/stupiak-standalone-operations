@@ -2,7 +2,7 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV3 } from './task-workflow-v3.js'
 
-const WORKER_REVISION = 'printer-hardware-profiles-v4.6.7'
+const WORKER_REVISION = 'printer-settings-responsive-workspace-v4.6.8'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
@@ -36,7 +36,7 @@ export default {
         const response = await handleTaskWorkflowV3(request, env, url, ctx, app)
         if (response) return taskApiHeaders(request, response)
       } catch (taskError) {
-        return taskApiHeaders(request, errorResponse(request, env, taskError))
+        return taskApiHeaders(request, env, errorResponse(request, env, taskError))
       }
     }
     const response = await app.fetch(request, env, ctx)
