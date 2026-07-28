@@ -1,4 +1,4 @@
-const PROFILE_SCHEMA = 'stupiaks-label-printer-profile-v3'
+const PROFILE_SCHEMA = 'stupiaks-label-printer-profile-v4'
 const DEVICE_ID_KEY = 'stupiaks_ops.label_printer.device_id'
 
 export const DEFAULT_PRINTER_LAYOUT = Object.freeze({
@@ -8,6 +8,81 @@ export const DEFAULT_PRINTER_LAYOUT = Object.freeze({
   padding_bottom_mm: 0.75,
   padding_left_mm: 1.7,
 })
+
+export const DEFAULT_PRINTER_HARDWARE = Object.freeze({
+  preset_id: 'generic-tspl-203',
+  network_protocol: 'raw_tcp',
+  lpr_queue: 'lp',
+  media_sensor: 'gap',
+  gap_mm: 2,
+  gap_offset_mm: 0,
+  black_mark_mm: 2,
+  black_mark_offset_mm: 0,
+  print_speed_mm_s: 76,
+  darkness: 8,
+  x_offset_mm: 0,
+  y_offset_mm: 0,
+  connection_timeout_ms: 4000,
+})
+
+export const PRINTER_PRESETS = Object.freeze([
+  Object.freeze({
+    id: 'generic-tspl-203',
+    label: 'Generic TSPL · 203 dpi',
+    description: 'Common TSC/Xprinter-compatible desktop label printers.',
+    values: Object.freeze({
+      command_language: 'tspl',
+      dpi: 203,
+      media_sensor: 'gap',
+      gap_mm: 2,
+      gap_offset_mm: 0,
+      print_speed_mm_s: 76,
+      darkness: 8,
+    }),
+  }),
+  Object.freeze({
+    id: 'generic-zpl-203',
+    label: 'Generic ZPL · 203 dpi',
+    description: 'Common Zebra-compatible desktop label printers.',
+    values: Object.freeze({
+      command_language: 'zpl',
+      dpi: 203,
+      media_sensor: 'gap',
+      gap_mm: 2,
+      gap_offset_mm: 0,
+      print_speed_mm_s: 76,
+      darkness: 8,
+    }),
+  }),
+  Object.freeze({
+    id: 'generic-cpcl-203',
+    label: 'Mobile CPCL · 203 dpi',
+    description: 'Portable CPCL-compatible Bluetooth label printers.',
+    values: Object.freeze({
+      command_language: 'cpcl',
+      dpi: 203,
+      media_sensor: 'gap',
+      gap_mm: 2,
+      gap_offset_mm: 0,
+      print_speed_mm_s: 51,
+      darkness: 7,
+    }),
+  }),
+  Object.freeze({
+    id: 'generic-escpos-203',
+    label: 'ESC/POS raster · 203 dpi',
+    description: 'Receipt-style raster output without label calibration commands.',
+    values: Object.freeze({
+      command_language: 'escpos',
+      dpi: 203,
+      media_sensor: 'continuous',
+      gap_mm: 0,
+      gap_offset_mm: 0,
+      print_speed_mm_s: 51,
+      darkness: 8,
+    }),
+  }),
+])
 
 function localStorageSafe() {
   try {
@@ -44,9 +119,35 @@ function safeJson(value) {
   }
 }
 
+function enumValue(value, allowed, fallback) {
+  const normalized = clean(value).toLowerCase()
+  return allowed.includes(normalized) ? normalized : fallback
+}
+
 function orientationValue(value) {
-  const orientation = clean(value).toLowerCase()
-  return ['auto', 'portrait', 'landscape'].includes(orientation) ? orientation : 'auto'
+  return enumValue(value, ['auto', 'portrait', 'landscape'], 'auto')
+}
+
+function sensorValue(value) {
+  return enumValue(value, ['gap', 'black_mark', 'continuous'], 'gap')
+}
+
+function protocolValue(value) {
+  return enumValue(value, ['raw_tcp', 'lpr'], 'raw_tcp')
+}
+
+export function printerPresetById(id) {
+  const target = clean(id)
+  return PRINTER_PRESETS.find((preset) => preset.id === target) || PRINTER_PRESETS[0]
+}
+
+export function applyPrinterPreset(profile = {}, presetId = '') {
+  const preset = printerPresetById(presetId)
+  return {
+    ...profile,
+    ...preset.values,
+    preset_id: preset.id,
+  }
 }
 
 export function parsePrinterProfileNotes(value) {
@@ -58,10 +159,12 @@ export function parsePrinterProfileNotes(value) {
       schema: PROFILE_SCHEMA,
       user_notes: raw,
       layout: { ...DEFAULT_PRINTER_LAYOUT },
+      hardware: { ...DEFAULT_PRINTER_HARDWARE },
     }
   }
 
   const layout = parsed.print_layout || parsed.layout || {}
+  const hardware = parsed.printer_hardware || parsed.hardware || {}
   return {
     ...parsed,
     schema: PROFILE_SCHEMA,
@@ -72,6 +175,21 @@ export function parsePrinterProfileNotes(value) {
       padding_right_mm: numberValue(layout.padding_right_mm, DEFAULT_PRINTER_LAYOUT.padding_right_mm, 0, 20),
       padding_bottom_mm: numberValue(layout.padding_bottom_mm, DEFAULT_PRINTER_LAYOUT.padding_bottom_mm, 0, 20),
       padding_left_mm: numberValue(layout.padding_left_mm, DEFAULT_PRINTER_LAYOUT.padding_left_mm, 0, 20),
+    },
+    hardware: {
+      preset_id: clean(hardware.preset_id || DEFAULT_PRINTER_HARDWARE.preset_id),
+      network_protocol: protocolValue(hardware.network_protocol),
+      lpr_queue: clean(hardware.lpr_queue || DEFAULT_PRINTER_HARDWARE.lpr_queue),
+      media_sensor: sensorValue(hardware.media_sensor),
+      gap_mm: numberValue(hardware.gap_mm, DEFAULT_PRINTER_HARDWARE.gap_mm, 0, 20),
+      gap_offset_mm: numberValue(hardware.gap_offset_mm, DEFAULT_PRINTER_HARDWARE.gap_offset_mm, -20, 20),
+      black_mark_mm: numberValue(hardware.black_mark_mm, DEFAULT_PRINTER_HARDWARE.black_mark_mm, 0, 20),
+      black_mark_offset_mm: numberValue(hardware.black_mark_offset_mm, DEFAULT_PRINTER_HARDWARE.black_mark_offset_mm, -20, 20),
+      print_speed_mm_s: numberValue(hardware.print_speed_mm_s, DEFAULT_PRINTER_HARDWARE.print_speed_mm_s, 10, 305),
+      darkness: numberValue(hardware.darkness, DEFAULT_PRINTER_HARDWARE.darkness, 0, 15),
+      x_offset_mm: numberValue(hardware.x_offset_mm, DEFAULT_PRINTER_HARDWARE.x_offset_mm, -20, 20),
+      y_offset_mm: numberValue(hardware.y_offset_mm, DEFAULT_PRINTER_HARDWARE.y_offset_mm, -20, 20),
+      connection_timeout_ms: numberValue(hardware.connection_timeout_ms, DEFAULT_PRINTER_HARDWARE.connection_timeout_ms, 1000, 30000),
     },
   }
 }
@@ -111,6 +229,19 @@ export function normalizePrinterProfile(profile = {}, outletId = '') {
     padding_right_mm: numberValue(profile.padding_right_mm, meta.layout.padding_right_mm, 0, 20),
     padding_bottom_mm: numberValue(profile.padding_bottom_mm, meta.layout.padding_bottom_mm, 0, 20),
     padding_left_mm: numberValue(profile.padding_left_mm, meta.layout.padding_left_mm, 0, 20),
+    preset_id: clean(profile.preset_id ?? meta.hardware.preset_id),
+    network_protocol: protocolValue(profile.network_protocol ?? meta.hardware.network_protocol),
+    lpr_queue: clean(profile.lpr_queue ?? meta.hardware.lpr_queue),
+    media_sensor: sensorValue(profile.media_sensor ?? meta.hardware.media_sensor),
+    gap_mm: numberValue(profile.gap_mm, meta.hardware.gap_mm, 0, 20),
+    gap_offset_mm: numberValue(profile.gap_offset_mm, meta.hardware.gap_offset_mm, -20, 20),
+    black_mark_mm: numberValue(profile.black_mark_mm, meta.hardware.black_mark_mm, 0, 20),
+    black_mark_offset_mm: numberValue(profile.black_mark_offset_mm, meta.hardware.black_mark_offset_mm, -20, 20),
+    print_speed_mm_s: numberValue(profile.print_speed_mm_s, meta.hardware.print_speed_mm_s, 10, 305),
+    darkness: numberValue(profile.darkness, meta.hardware.darkness, 0, 15),
+    x_offset_mm: numberValue(profile.x_offset_mm, meta.hardware.x_offset_mm, -20, 20),
+    y_offset_mm: numberValue(profile.y_offset_mm, meta.hardware.y_offset_mm, -20, 20),
+    connection_timeout_ms: numberValue(profile.connection_timeout_ms, meta.hardware.connection_timeout_ms, 1000, 30000),
     user_notes: clean(profile.user_notes ?? meta.user_notes),
   }
 }
@@ -120,6 +251,8 @@ export function encodePrinterProfileNotes(profile = {}) {
   const {
     layout: _legacyLayout,
     print_layout: _existingPrintLayout,
+    hardware: _legacyHardware,
+    printer_hardware: _existingHardware,
     notes: _legacyNotes,
     ...preserved
   } = existing
@@ -134,6 +267,21 @@ export function encodePrinterProfileNotes(profile = {}) {
       padding_right_mm: numberValue(profile.padding_right_mm, DEFAULT_PRINTER_LAYOUT.padding_right_mm, 0, 20),
       padding_bottom_mm: numberValue(profile.padding_bottom_mm, DEFAULT_PRINTER_LAYOUT.padding_bottom_mm, 0, 20),
       padding_left_mm: numberValue(profile.padding_left_mm, DEFAULT_PRINTER_LAYOUT.padding_left_mm, 0, 20),
+    },
+    printer_hardware: {
+      preset_id: clean(profile.preset_id || DEFAULT_PRINTER_HARDWARE.preset_id),
+      network_protocol: protocolValue(profile.network_protocol),
+      lpr_queue: clean(profile.lpr_queue || DEFAULT_PRINTER_HARDWARE.lpr_queue),
+      media_sensor: sensorValue(profile.media_sensor),
+      gap_mm: numberValue(profile.gap_mm, DEFAULT_PRINTER_HARDWARE.gap_mm, 0, 20),
+      gap_offset_mm: numberValue(profile.gap_offset_mm, DEFAULT_PRINTER_HARDWARE.gap_offset_mm, -20, 20),
+      black_mark_mm: numberValue(profile.black_mark_mm, DEFAULT_PRINTER_HARDWARE.black_mark_mm, 0, 20),
+      black_mark_offset_mm: numberValue(profile.black_mark_offset_mm, DEFAULT_PRINTER_HARDWARE.black_mark_offset_mm, -20, 20),
+      print_speed_mm_s: numberValue(profile.print_speed_mm_s, DEFAULT_PRINTER_HARDWARE.print_speed_mm_s, 10, 305),
+      darkness: numberValue(profile.darkness, DEFAULT_PRINTER_HARDWARE.darkness, 0, 15),
+      x_offset_mm: numberValue(profile.x_offset_mm, DEFAULT_PRINTER_HARDWARE.x_offset_mm, -20, 20),
+      y_offset_mm: numberValue(profile.y_offset_mm, DEFAULT_PRINTER_HARDWARE.y_offset_mm, -20, 20),
+      connection_timeout_ms: numberValue(profile.connection_timeout_ms, DEFAULT_PRINTER_HARDWARE.connection_timeout_ms, 1000, 30000),
     },
   })
 }
@@ -256,11 +404,6 @@ export function resolvePrinterLayout(profile = {}, sourceDimensions = {}) {
   const orientationMode = orientationValue(normalized.orientation)
   const mediaOrientation = widthMm >= heightMm ? 'landscape' : 'portrait'
 
-  // Direct LAN/Bluetooth printing bypasses the operating-system printer driver.
-  // Width is always the physical media width across the print head and height is
-  // always the feed length of one label. A content-orientation preference must
-  // never swap these physical values, otherwise a 40×30 label becomes 30×40 and
-  // the printer advances across more than one physical label.
   return {
     orientation_mode: orientationMode,
     orientation: mediaOrientation,
@@ -314,4 +457,21 @@ export function formatPrinterLayoutOutcome(layout = {}) {
     layout.padding_left_mm,
   ].join('/')
   return `${orientation[0]?.toUpperCase() || ''}${orientation.slice(1)} media · ${layout.width_mm}×${layout.height_mm} mm · padding ${padding} mm`
+}
+
+export function formatPrinterHardwareSummary(profile = {}) {
+  const normalized = normalizePrinterProfile(profile)
+  const sensor = normalized.media_sensor === 'black_mark'
+    ? `Black mark ${normalized.black_mark_mm} mm`
+    : normalized.media_sensor === 'continuous'
+      ? 'Continuous media'
+      : `Gap ${normalized.gap_mm} mm`
+  const protocol = normalized.connection_type === 'network'
+    ? normalized.network_protocol === 'lpr'
+      ? `LPR · ${normalized.lpr_queue || 'lp'}`
+      : 'Raw TCP'
+    : normalized.connection_type === 'bluetooth'
+      ? 'Bluetooth Classic'
+      : 'System driver'
+  return `${protocol} · ${sensor} · ${normalized.print_speed_mm_s} mm/s · darkness ${normalized.darkness}/15 · offset ${normalized.x_offset_mm}/${normalized.y_offset_mm} mm`
 }
