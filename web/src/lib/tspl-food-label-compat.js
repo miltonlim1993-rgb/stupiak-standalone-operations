@@ -15,8 +15,12 @@ function cleanText(value = '') {
 }
 
 function classBody(html, className) {
-  const pattern = new RegExp(`<[^>]+class=["'][^"']*\\b${className}\\b[^"']*["'][^>]*>([\\s\\S]*?)<\\/[^>]+>`, 'i')
-  return pattern.exec(String(html || ''))?.[1] || ''
+  const pattern = /<([a-z0-9]+)\b[^>]*class=["']([^"']*)["'][^>]*>([\s\S]*?)<\/\1>/gi
+  for (const match of String(html || '').matchAll(pattern)) {
+    const classes = String(match[2] || '').split(/\s+/).filter(Boolean)
+    if (classes.includes(className)) return match[3] || ''
+  }
+  return ''
 }
 
 function classText(html, className) {
