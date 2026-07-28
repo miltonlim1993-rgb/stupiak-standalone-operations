@@ -97,9 +97,11 @@ npm run cf:render
 grep -q "$EXPECTED_SHELL_VERSION" web/public/sw.js
 grep -q "4.6.8-printer-settings-responsive-workspace-shell-v10" web/src/main.jsx
 grep -q "@/label-printer-settings-v2.css" web/src/main.jsx
+grep -q "@/label-printer-settings-force-mobile.css" web/src/main.jsx
 grep -q "grid-template-columns: repeat(4, minmax(0, 1fr))" web/src/label-printer-settings-v2.css
 grep -q "position: sticky !important" web/src/label-printer-settings-v2.css
 grep -q "grid-auto-flow: column" web/src/label-printer-settings-v2.css
+grep -q "chefops-force-mobile" web/src/label-printer-settings-force-mobile.css
 
 CONFIG="worker/wrangler.production.jsonc"
 grep -q '"name": "stupiaks-ops"' "$CONFIG"
