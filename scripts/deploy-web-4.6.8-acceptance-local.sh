@@ -96,6 +96,7 @@ npm run cf:render
 
 grep -q "$EXPECTED_SHELL_VERSION" web/public/sw.js
 grep -q "4.6.8-printer-settings-responsive-workspace-shell-v10" web/src/main.jsx
+grep -q "4.6.8-printer-settings-responsive-workspace" web/src/pages/InstallApp.jsx
 grep -q "@/label-printer-settings-v2.css" web/src/main.jsx
 grep -q "@/label-printer-settings-force-mobile.css" web/src/main.jsx
 grep -q "grid-template-columns: repeat(4, minmax(0, 1fr))" web/src/label-printer-settings-v2.css
