@@ -53,6 +53,8 @@ import {
   testDirectPrinterProfile,
 } from '@/lib/native-label-print'
 
+const RESPONSIVE_WORKSPACE_VERSION = '4.6.8'
+
 function emptyProfile(outletId = '') {
   return {
     id: '',
@@ -570,7 +572,7 @@ export default function LabelPrinterSettingsPublic() {
   }
 
   return (
-    <div className="chefops-page mx-auto w-full max-w-6xl space-y-4 p-3 pb-36 sm:p-5 sm:pb-32">
+    <div className="chefops-page mx-auto w-full max-w-6xl space-y-4 p-3 pb-36 sm:p-5 sm:pb-32" data-printer-workspace={RESPONSIVE_WORKSPACE_VERSION}>
       <header className="rounded-3xl border border-border bg-card p-4 shadow-sm sm:p-5">
         <div className="flex items-start gap-3">
           <Button asChild variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-xl">
