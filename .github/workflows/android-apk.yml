@@ -15,7 +15,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.8-printer-settings-responsive-workspace.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.9-native-tspl-food-label.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -39,7 +39,7 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate printer hardware profile and responsive layout source
+      - name: Validate printer hardware, responsive layout and native TSPL source
         run: |
           grep -q "printer-settings-responsive-workspace-shell-v10" web/public/sw.js
           grep -q "printer-settings-responsive-workspace-shell-v10" web/src/main.jsx
@@ -54,6 +54,13 @@ jobs:
           grep -q "printer_hardware" web/src/lib/label-printer-profile.js
           grep -q "testDirectPrinterProfile" web/src/lib/native-label-print.js
           grep -q "calibrateDirectPrinterProfile" web/src/lib/native-label-print.js
+          grep -q "buildTsplFoodLabelCommand" web/src/lib/native-label-print.js
+          grep -q "tspl-native-food-label" web/src/lib/tspl-food-label-compat.js
+          grep -q "REFERENCE 0,0" web/src/lib/tspl-food-label-compat.js
+          grep -q "BARCODE" web/src/lib/tspl-food-label-compat.js
+          ! grep -q "BITMAP" web/src/lib/tspl-food-label-compat.js
+          grep -q "rawCommandBase64" scripts/configure-android-tspl-food-label-compat.mjs
+          grep -q "chefops-native-tspl-food-label" scripts/configure-android-tspl-food-label-compat.mjs
           grep -q "DirectLabelPrintPlugin.class" scripts/configure-android-direct-label-print.mjs
           grep -q "testConnection" scripts/configure-android-direct-label-print.mjs
           grep -q "calibrateMedia" scripts/configure-android-direct-label-print.mjs
@@ -86,6 +93,13 @@ jobs:
         run: node scripts/configure-android-native-google-auth.mjs
       - name: Configure direct printer transport and media controls
         run: node scripts/configure-android-direct-label-print.mjs
+      - name: Configure native TSPL food label compatibility
+        run: node scripts/configure-android-tspl-food-label-compat.mjs
+      - name: Validate generated native TSPL path
+        run: |
+          grep -q 'rawCommandBase64' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          grep -q 'chefops-native-tspl-food-label' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          grep -q 'result.put("renderMode", renderMode)' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
       - name: Restore private release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -132,8 +146,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.8 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.8 polishes the Label Printer Settings workspace for desktop and mobile: a true 2×2 mobile status grid, compact horizontal profile and preset rails, a non-overlapping sticky action toolbar, denser section cards, desktop side-by-side Profiles and Presets, and a more focused connection/media/live-output workbench. Printer hardware support from 4.6.7 remains unchanged, including Raw TCP, LPR, Bluetooth Classic, System Print, media calibration and Device + Outlet profile binding."
+            --title "Stupiak's Ops 4.6.9 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Version 4.6.9 adds the old-app-compatible native TSPL food-label path. Structured food labels use printer-native SIZE, GAP, TEXT, BOX and BARCODE commands with the proven 40×30 mm, density 8, speed 4, direction 1 and reference 0,0 setup instead of a full-page BITMAP. Unsupported characters and non-TSPL printers retain the existing raster or system-print fallback. The 4.6.8 responsive Label Printer Settings workspace and all 4.6.7 hardware profile features remain included."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
