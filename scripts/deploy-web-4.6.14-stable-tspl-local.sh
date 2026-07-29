@@ -69,6 +69,7 @@ grep -q 'PRINTER_TRANSPORT_VERSION' web/src/lib/printer-transport-v12.js
 grep -q 'driver_bridge' web/src/lib/printer-transport-v12.js
 grep -q 'stupiaks-print-bridge-v12' tools/print-bridge/server.mjs
 grep -q '4.6.14-stable-tspl-v16' .github/workflows/android-apk.yml
+grep -q 'stupiaks-ops-stable-tspl-v16.apk' .github/workflows/android-apk.yml
 
 printf '\n==================================================\n'
 echo "2. Verify Cloudflare and GitHub authentication"
@@ -192,6 +193,7 @@ printf '%s\n' "$RELEASE_NAME" | grep -q '4.6.14'
 RELEASE_ASSETS="$(gh release view "$ANDROID_RELEASE_TAG" --repo "$REPOSITORY" --json assets --jq '.assets[].name')"
 printf '%s\n' "$RELEASE_ASSETS"
 printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-release.apk'
+printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-stable-tspl-v16.apk'
 printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-all-device-print-v12.apk'
 printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-direct-print-flow-v10.apk'
 printf '%s\n' "$RELEASE_ASSETS" | grep -qx 'stupiaks-ops-release.aab'
@@ -215,4 +217,5 @@ echo "Recruitment KV unchanged: $RECRUITMENT_KV_ID"
 echo "R2 remains disabled; existing Google Drive media flow is unchanged."
 echo "Android workflow run: $ANDROID_RUN_ID"
 echo "Release tag: $ANDROID_RELEASE_TAG"
+echo "Stable TSPL APK: stupiaks-ops-stable-tspl-v16.apk"
 echo "No Sheet upgrade, task-template apply, Data Package publish, or Ops Control publication command was run."
