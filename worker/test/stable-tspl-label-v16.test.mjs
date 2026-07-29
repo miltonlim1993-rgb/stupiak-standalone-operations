@@ -66,7 +66,11 @@ test('the Settings test label uses the same native TSPL core instead of HTML ras
 })
 
 test('unsupported printer characters are sanitized without switching to raster', () => {
-  const result = buildStableTsplLabelCommand(foodLabelHtml.replace('Blueberry Sauce', '蓝莓酱 Blueberry Sauce'), options)
+  const chineseHtml = foodLabelHtml.replace(
+    '<div class="title">Blueberry Sauce</div>',
+    '<div class="title">蓝莓酱 Blueberry Sauce</div>',
+  )
+  const result = buildStableTsplLabelCommand(chineseHtml, options)
   assert.match(result.command, /\?\?\? Blueberry Sauce/)
   assert.doesNotMatch(result.command, /BITMAP/)
 })
