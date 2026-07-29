@@ -1,7 +1,8 @@
-const VERSION = 'chefops-v4-6-12-all-device-print-v12-label-size-contract-v14-shell-v10'
+const VERSION = 'chefops-v4-6-13-cross-device-storage-scroll-v15-printer-v12-size-v14'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
+const PACKAGE_OBJECT_CACHE_PREFIX = 'stupiaks-ops-data-package-v2-objects-'
 const SHELL = ['/', '/manifest.webmanifest', '/stupiaks-ops-192.png', '/stupiaks-ops-512.png', '/apple-touch-icon.png', '/favicon-32.png']
 
 self.addEventListener('install', (event) => {
@@ -11,7 +12,10 @@ self.addEventListener('install', (event) => {
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) => Promise.all(keys.filter((key) => ![SHELL_CACHE, DATA_CACHE, OCR_CACHE].includes(key)).map((key) => caches.delete(key)))),
+    caches.keys().then((keys) => Promise.all(keys
+      .filter((key) => ![SHELL_CACHE, DATA_CACHE, OCR_CACHE].includes(key))
+      .filter((key) => !key.startsWith(PACKAGE_OBJECT_CACHE_PREFIX))
+      .map((key) => caches.delete(key)))),
   )
   self.clients.claim()
 })
