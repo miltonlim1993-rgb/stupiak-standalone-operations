@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-5-1-direct-print-flow-shell-v10'
+const VERSION = 'chefops-v4-5-1-responsive-sop-learning-v11'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
