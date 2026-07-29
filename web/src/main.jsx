@@ -5,12 +5,13 @@ import '@/index.css'
 import '@/viewport.css'
 import '@/panels-v8.css'
 import '@/direct-print-v10.css'
+import '@/guided-sop-media.css'
 import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = 'direct-print-flow-shell-v10'
+const SHELL_VERSION = 'guided-sop-media-login-v13'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
