@@ -43,9 +43,15 @@ test('extracts the existing Food Label page into a stable print record', () => {
   })
 })
 
-test('matches the stable APK command order and copy semantics', () => {
+test('matches the stable APK command order, physical media and copy semantics', () => {
   const result = buildStableTsplLabelCommand(foodLabelHtml, options)
   assert.equal(result.mode, 'tspl-stable-v16')
+  assert.equal(result.widthMm, 40)
+  assert.equal(result.heightMm, 30)
+  assert.equal(result.dpi, 203)
+  assert.equal(result.report.widthDots, 320)
+  assert.equal(result.report.heightDots, 240)
+  assert.ok(result.report.finalY <= result.report.bottom)
   assert.equal(result.copies, 2)
   assert.equal(result.report.fits, true)
   assert.match(result.command, /^SIZE 40 mm,30 mm\r\nGAP 2 mm,0 mm\r\n/)
