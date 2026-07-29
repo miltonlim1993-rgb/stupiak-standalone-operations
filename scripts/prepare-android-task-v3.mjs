@@ -12,8 +12,8 @@ const buildCandidates = [
   path.join(appRoot, 'build.gradle'),
   path.join(appRoot, 'build.gradle.kts'),
 ]
-const versionCode = Number(process.env.CHEFOPS_ANDROID_VERSION_CODE || 11)
-const versionName = String(process.env.CHEFOPS_ANDROID_VERSION_NAME || '4.6.9-native-tspl-food-label').trim()
+const versionCode = Number(process.env.CHEFOPS_ANDROID_VERSION_CODE || 14)
+const versionName = String(process.env.CHEFOPS_ANDROID_VERSION_NAME || '4.6.12-all-device-print-v12').trim()
 
 function run(command, args, cwd = root) {
   console.log(`\n$ ${command} ${args.join(' ')}`)
@@ -42,6 +42,7 @@ await fs.writeFile(buildPath, gradle)
 
 run('node', ['scripts/configure-android-direct-label-print.mjs'])
 run('node', ['scripts/configure-android-tspl-food-label-compat.mjs'])
+run('node', ['scripts/configure-android-all-device-print-v12.mjs'])
 
 const metadata = {
   schema: 'stupiaks-ops-android-build-v1',
@@ -50,17 +51,30 @@ const metadata = {
   version_name: versionName,
   app_id: 'com.stupiaks.ops',
   web_source: 'bundled-capacitor-dist',
-  task_workflow: 'v3',
+  task_workflow: 'v5-practical-bilingual',
   data_package: 'v2',
   direct_label_print: true,
   native_tspl_food_label: true,
+  all_device_print_transport: 'v12',
+  supported_routes: [
+    'android_system_print',
+    'android_raw_tcp',
+    'android_lpr',
+    'android_bluetooth_classic',
+    'windows_driver_bridge',
+    'macos_cups_bridge',
+    'bridge_raw_tcp',
+    'bridge_lpr',
+  ],
 }
 await fs.writeFile(path.join(androidRoot, 'stupiaks-build-metadata.json'), `${JSON.stringify(metadata, null, 2)}\n`)
 
-console.log('\n✅ Android Task Workflow v3 project prepared')
+console.log('\n✅ Android all-device printer transport project prepared')
 console.log(`Version code: ${versionCode}`)
 console.log(`Version name: ${versionName}`)
 console.log(`Gradle: ${buildPath}`)
-console.log('Direct label print plugin: configured')
+console.log('Android System Print / installed driver: configured')
+console.log('Raw TCP / LPR / Bluetooth Classic: configured')
+console.log('Windows/macOS Print Bridge: configured')
 console.log('Native TSPL food-label compatibility: configured')
 console.log('Build debug APK: cd web/android && ./gradlew assembleDebug')
