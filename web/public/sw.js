@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-5-1-guided-sop-media-login-v13'
+const VERSION = 'chefops-v4-5-1-guided-sop-responsive-v14'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
