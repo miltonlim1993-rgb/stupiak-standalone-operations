@@ -11,6 +11,7 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
+import { installLabelContentOrientationV7 } from '@/lib/label-content-orientation-v7'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
@@ -91,6 +92,7 @@ function publishShellHealth() {
 markRuntime()
 installNativeSessionFetch()
 installNativeLabelPrintBridge()
+installLabelContentOrientationV7()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
 applyTheme()
