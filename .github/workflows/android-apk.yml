@@ -52,7 +52,7 @@ jobs:
           grep -q "installTaskBilingualShell" web/src/main.jsx
           grep -q "已准备 / Ready" web/src/lib/task-bilingual-shell.js
           grep -q "normalizeTaskBilingual" worker/src/task-bilingual-v5.js
-          grep -q "master-task-refresh-bilingual-v6-native-tspl-v4.6.11" worker/src/entry-v3.js
+          grep -q "all-device-print-v12-master-task-refresh-bilingual-v4.6.12" worker/src/entry-v3.js
           grep -q "PRINTER_TRANSPORT_VERSION" web/src/lib/printer-transport-v12.js
           grep -q "driver_bridge" web/src/lib/printer-transport-v12.js
           grep -q "System / Driver" web/src/pages/LabelPrinterSettingsPublic.jsx
