@@ -7,6 +7,7 @@ import {
   Monitor,
   PackageOpen,
   RefreshCw,
+  Share2,
   ShieldCheck,
   Smartphone,
   Tablet,
@@ -16,11 +17,12 @@ import {
 import { opsClient } from '@/api/opsClient'
 import { Button } from '@/components/ui/button'
 import { canPromptInstall, promptInstall } from '@/lib/install-prompt'
+import { currentInstallPlatform, installInstructions } from '@/lib/install-platform-v15'
 import { getAppPackStatus, syncAppPack } from '@/lib/app-pack'
 import { useAuth } from '@/lib/AuthContext'
 
 const MODE_KEY = 'chefops.display.mode'
-const RELEASE_FALLBACK = '4.6.8-printer-settings-responsive-workspace'
+const RELEASE_FALLBACK = '4.6.13-cross-device-storage-scroll-v15'
 const RELEASE_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-release.apk'
 
 function bytes(value) {
@@ -58,6 +60,7 @@ export default function InstallApp() {
   const { user } = useAuth()
   const outletId = String(user?.outlet_id || '')
   const nativeAndroid = isNativeAndroid()
+  const platform = currentInstallPlatform()
   const [release, setRelease] = useState({
     app_version: RELEASE_FALLBACK,
     apk_url: RELEASE_APK_URL,
@@ -100,6 +103,8 @@ export default function InstallApp() {
   const webUrl = release.production_web_url || window.location.origin
   const webQrUrl = useMemo(() => qr(webUrl), [webUrl])
   const apkQrUrl = useMemo(() => qr(release.apk_url), [release.apk_url])
+  const instructions = installInstructions(platform, installed)
+
   const selectMode = (value) => {
     setMode(value)
     localStorage.setItem(MODE_KEY, value)
@@ -118,60 +123,96 @@ export default function InstallApp() {
     }
   }
 
-  const pwaState = installed ? 'Installed' : installReady ? 'Ready' : 'Use browser menu'
+  const pwaState = installed ? 'Installed' : platform === 'ios' ? 'Safari install' : installReady ? 'Ready' : 'Use browser menu'
   const packReady = pack.state === 'ready'
+  const showAndroidDownload = platform !== 'ios'
 
   return (
     <div className="chefops-page install-page mx-auto space-y-5 pb-28">
       <header>
         <h1 className="text-xl font-heading font-bold">Install & update</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Choose the app type, update this device and refresh its outlet data.</p>
+        <p className="mt-1 text-sm text-muted-foreground">This page now shows the correct installation route for the device that opened it.</p>
       </header>
 
-      <section className="overflow-hidden rounded-3xl border border-primary/25 bg-card shadow-sm">
-        <div className="border-b border-primary/15 bg-primary/10 px-4 py-3 sm:px-5">
-          <div className="flex items-center justify-between gap-3">
-            <span className="inline-flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-primary" />Recommended for Android</span>
-            <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Signed release</span>
+      {platform === 'ios' ? (
+        <section className="overflow-hidden rounded-3xl border border-primary/25 bg-card shadow-sm">
+          <div className="border-b border-primary/15 bg-primary/10 px-4 py-3 sm:px-5">
+            <span className="inline-flex items-center gap-2 text-sm font-semibold"><Share2 className="h-4 w-4 text-primary" />iPhone / iPad installation</span>
           </div>
-        </div>
-        <div className="grid gap-5 p-4 sm:p-5 md:grid-cols-[minmax(0,1fr)_132px] md:items-center">
-          <div className="min-w-0">
-            <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary"><Smartphone className="h-6 w-6" /></span>
-            <h2 className="mt-3 text-lg font-semibold">Stupiak’s Ops Android app</h2>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">Best for staff phones and tablets. Includes direct Wi-Fi/LAN and Bluetooth label printing without opening Android print preview.</p>
-            <a href={release.apk_url} className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground sm:w-fit sm:min-w-56">
-              <Download className="mr-2 h-4 w-4" />Download signed APK
-            </a>
-            <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
-              <Info className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>Updating an existing device: install the new APK over the current app. Do not uninstall first, so local device settings and printer selection remain available.</span>
+          <div className="grid gap-5 p-4 sm:p-5 md:grid-cols-[minmax(0,1fr)_116px] md:items-center">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold">{instructions.title}</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">{instructions.detail}</p>
+              <div className="mt-4 rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm leading-6">
+                <p className="font-semibold">1. Open this page in Safari</p>
+                <p>2. Tap the Share button</p>
+                <p>3. Choose “Add to Home Screen”</p>
+                <p>4. Tap “Add”</p>
+              </div>
+              <p className="mt-3 text-xs leading-5 text-muted-foreground">Android APK files cannot be installed on iPhone. The iPhone version is the Home Screen web app.</p>
+            </div>
+            <img src={webQrUrl} alt="Open Stupiak’s Ops on iPhone" className="mx-auto h-28 w-28 rounded-xl border border-border bg-white p-1" />
+          </div>
+        </section>
+      ) : null}
+
+      {showAndroidDownload ? (
+        <section className="overflow-hidden rounded-3xl border border-primary/25 bg-card shadow-sm">
+          <div className="border-b border-primary/15 bg-primary/10 px-4 py-3 sm:px-5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="inline-flex items-center gap-2 text-sm font-semibold"><ShieldCheck className="h-4 w-4 text-primary" />Android signed app</span>
+              <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">Signed release</span>
             </div>
           </div>
-          <div className="flex flex-col items-center gap-2">
-            <img src={apkQrUrl} alt="Download signed Android APK QR code" className="h-32 w-32 rounded-2xl border border-border bg-white p-1.5" />
-            <span className="text-center text-[10px] text-muted-foreground">Scan from another Android device</span>
+          <div className="grid gap-5 p-4 sm:p-5 md:grid-cols-[minmax(0,1fr)_132px] md:items-center">
+            <div className="min-w-0">
+              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary"><Smartphone className="h-6 w-6" /></span>
+              <h2 className="mt-3 text-lg font-semibold">Stupiak’s Ops Android app</h2>
+              <p className="mt-1 text-sm leading-6 text-muted-foreground">For Android phones and tablets. Includes direct Wi-Fi/LAN, Bluetooth and system-driver label printing.</p>
+              <a
+                href={release.apk_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 flex h-11 w-full items-center justify-center rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground sm:w-fit sm:min-w-56"
+              >
+                <Download className="mr-2 h-4 w-4" />Download signed APK
+              </a>
+              <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900">
+                <Info className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>Install the new APK over the current app. Do not uninstall first, so this device keeps its outlet and printer selection.</span>
+              </div>
+            </div>
+            <div className="flex flex-col items-center gap-2">
+              <img src={apkQrUrl} alt="Download signed Android APK QR code" className="h-32 w-32 rounded-2xl border border-border bg-white p-1.5" />
+              <span className="text-center text-[10px] text-muted-foreground">Scan from another Android device</span>
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      ) : null}
 
       <section className="rounded-3xl border border-border bg-card p-4 sm:p-5">
         <div className="grid gap-5 md:grid-cols-[minmax(0,1fr)_116px] md:items-center">
           <div className="min-w-0">
             <div className="flex items-center justify-between gap-3">
               <span className="flex h-11 w-11 items-center justify-center rounded-2xl bg-muted"><Monitor className="h-5 w-5" /></span>
-              <StatusPill good={installed || installReady}>{pwaState}</StatusPill>
+              <StatusPill good={installed || installReady || platform === 'ios'}>{pwaState}</StatusPill>
             </div>
             <h2 className="mt-3 font-semibold">Web app (PWA)</h2>
-            <p className="mt-1 text-sm leading-6 text-muted-foreground">Use this for browser-based access on desktop, iPhone or devices that do not need Android direct printing.</p>
+            <p className="mt-1 text-sm leading-6 text-muted-foreground">Use this on iPhone, iPad, desktop browsers and devices that use an installed print driver.</p>
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
-              <Button disabled={installed || !installReady} onClick={async () => {
-                const result = await promptInstall()
-                if (result) setInstallReady(false)
-              }}>
-                <Download className="mr-2 h-4 w-4" />
-                {installed ? 'Installed' : installReady ? 'Install web app' : 'Use browser Install app'}
-              </Button>
+              {platform === 'ios' ? (
+                <Button variant="outline" disabled>
+                  <Share2 className="mr-2 h-4 w-4" />Safari Share → Add to Home Screen
+                </Button>
+              ) : (
+                <Button disabled={installed || !installReady} onClick={async () => {
+                  const result = await promptInstall()
+                  if (result) setInstallReady(false)
+                }}>
+                  <Download className="mr-2 h-4 w-4" />
+                  {installed ? 'Installed' : installReady ? 'Install web app' : 'Use browser Install app'}
+                </Button>
+              )}
               <Button variant="outline" disabled={permission === 'granted' || permission === 'unsupported'} onClick={enableNotifications}>
                 {permission === 'granted' ? 'Notifications enabled' : permission === 'unsupported' ? 'Notifications unavailable' : 'Enable notifications'}
               </Button>
@@ -208,8 +249,8 @@ export default function InstallApp() {
       </section>
 
       <section className="grid gap-3 md:grid-cols-3">
-        <SetupStep number="1" title="Install or update" text="Use the signed APK on Android, or install the PWA from a supported browser." />
-        <SetupStep number="2" title="Refresh outlet data" text="Download the latest operational package for the outlet assigned to this account." />
+        <SetupStep number="1" title="Install or update" text={platform === 'ios' ? 'Use Safari → Share → Add to Home Screen.' : 'Use the signed APK on Android, or install the browser PWA.'} />
+        <SetupStep number="2" title="Download outlet data" text="The first verified package now stores large media through the browser cache and metadata through IndexedDB." />
         <SetupStep number="3" title="Set the printer" text="Open More → Label Printer Settings and choose the profile for this device." />
       </section>
 
