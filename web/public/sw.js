@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-12-all-device-print-v12-master-task-refresh-shell-v10'
+const VERSION = 'chefops-v4-6-12-all-device-print-v12-label-size-contract-v14-shell-v10'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -28,37 +28,4 @@ function isStaticApi(url) {
     || url.pathname.includes('/api/entities/PaymentMethod')
     || url.pathname.includes('/api/entities/PositionMaster')
     || url.pathname.includes('/api/labels/catalog')
-    || url.pathname.includes('/api/app/v4/version')
-    || url.pathname.includes('/api/app/v4/pack/module/')
 }
-
-function isPackManifest(url) {
-  return url.pathname === '/api/app/v4/pack/manifest'
-}
-
-async function staleWhileRevalidate(request, cacheName) {
-  const cache = await caches.open(cacheName)
-  const cached = await cache.match(request)
-  const network = fetch(request).then((response) => {
-    if (response.ok) cache.put(request, response.clone())
-    return response
-  }).catch(() => cached)
-  return cached || network
-}
-
-self.addEventListener('fetch', (event) => {
-  const request = event.request
-  if (request.method !== 'GET') return
-  const url = new URL(request.url)
-  if (url.origin !== self.location.origin) return
-  if (isPackManifest(url)) {
-    event.respondWith(fetch(request).catch(() => caches.match(request)))
-    return
-  }
-  if (isStaticApi(url)) {
-    event.respondWith(staleWhileRevalidate(request, DATA_CACHE))
-    return
-  }
-  if (url.pathname.startsWith('/api/')) return
-  event.respondWith(fetch(request).catch(() => caches.match(request).then((cached) => cached || caches.match('/'))))
-})
