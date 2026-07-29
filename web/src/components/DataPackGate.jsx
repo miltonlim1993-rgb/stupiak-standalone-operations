@@ -47,7 +47,7 @@ function isStorageFailure(error) {
     'data_package_storage_blocked',
     'data_package_storage_open_failed',
     'data_package_storage_write_failed',
-  ].includes(String(error?.code || ''))
+  ].includes(String(error?.code || error?.error_code || ''))
 }
 
 export default function DataPackGate({ children }) {
