@@ -1,0 +1,17 @@
+/* Non-authenticated and non-shell pages must scroll through the document itself. */
+html[data-chefops-shell-mounted='false'],
+html[data-chefops-shell-mounted='false'] body,
+html[data-chefops-shell-mounted='false'] #root {
+  height: auto !important;
+  min-height: var(--chefops-viewport-height) !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+  overscroll-behavior-y: auto !important;
+  touch-action: pan-y pinch-zoom !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+html[data-chefops-shell-mounted='false'] #root > * {
+  min-height: min-content;
+}
