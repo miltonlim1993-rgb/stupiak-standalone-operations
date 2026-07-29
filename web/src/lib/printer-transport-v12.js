@@ -2,7 +2,7 @@ import {
   encodePrinterProfileNotes,
   normalizePrinterProfile,
   parsePrinterProfileNotes,
-} from '@/lib/label-printer-profile'
+} from './label-printer-profile.js'
 
 export const PRINTER_TRANSPORT_VERSION = '4.6.12-all-device-transport-v12'
 
