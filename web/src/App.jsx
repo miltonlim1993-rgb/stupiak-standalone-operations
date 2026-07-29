@@ -12,7 +12,7 @@ import Layout from '@/components/Layout'
 const PageNotFound = lazy(() => import('@/lib/PageNotFound'))
 const Login = lazy(() => import('@/pages/Login'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
-const Tasks = lazy(() => import('@/pages/Tasks'))
+const Tasks = lazy(() => import('@/pages/OperationalTasksV2'))
 const StockCount = lazy(() => import('@/pages/StockCount'))
 const UrgentIssues = lazy(() => import('@/pages/UrgentIssues'))
 const More = lazy(() => import('@/pages/More'))
@@ -25,6 +25,7 @@ const Reports = lazy(() => import('@/pages/Reports'))
 const Settings = lazy(() => import('@/pages/Settings'))
 const OpsControl = lazy(() => import('@/pages/OpsControl'))
 const Training = lazy(() => import('@/pages/Training'))
+const GuidedSop = lazy(() => import('@/pages/GuidedSop'))
 const ProfileSetup = lazy(() => import('@/pages/ProfileSetup'))
 const CloseUp = lazy(() => import('@/pages/CloseUp'))
 const InstallApp = lazy(() => import('@/pages/InstallApp'))
@@ -67,7 +68,7 @@ function AppRoutes() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/ops-control" element={<OpsControl />} />
               <Route path="/training" element={<Training />} />
-              <Route path="/sop/:sopId" element={<Training />} />
+              <Route path="/sop/:sopId" element={<GuidedSop />} />
             </Route>
           </Route>
           <Route path="*" element={<PageNotFound />} />
