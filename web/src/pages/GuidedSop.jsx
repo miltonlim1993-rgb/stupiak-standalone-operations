@@ -1,42 +1,709 @@
-import { useEffect,useMemo,useState } from 'react'
-import { Link,useParams } from 'react-router-dom'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import { opsClient } from '@/api/opsClient'
 import { useAuth } from '@/lib/AuthContext'
 import { parseOutletIds } from '@/lib/outlets'
 import { Button } from '@/components/ui/button'
-import { AlertTriangle,ArrowLeft,BookOpen,CheckCircle2,ChevronLeft,ChevronRight,ClipboardCheck,Expand,Loader2,ShieldAlert,Target } from 'lucide-react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  BookOpen,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCheck,
+  Expand,
+  FileText,
+  HelpCircle,
+  Image as ImageIcon,
+  ListChecks,
+  Loader2,
+  Menu,
+  ShieldAlert,
+  Sparkles,
+  Target,
+  X,
+} from 'lucide-react'
 
-const yes=v=>v===true||String(v).toLowerCase()==='true'
-function date(v){if(!v)return'';const d=new Date(v);return Number.isNaN(d.getTime())?String(v):d.toLocaleDateString('en-MY')}
-function slice(url,index,count){const top=17,band=52/Math.max(count,1),start=top+band*index;return{backgroundImage:`url(${url})`,backgroundSize:'100% auto',backgroundRepeat:'no-repeat',backgroundPosition:`center ${(start/Math.max(100-band,1))*100}%`,aspectRatio:`900 / ${1272*(band/100)}`}}
+const truthy = (value) => value === true || String(value).toLowerCase() === 'true'
 
-export default function GuidedSop(){
- const {sopId}=useParams(),{user}=useAuth()
- const [sop,setSop]=useState(null),[steps,setSteps]=useState([]),[assets,setAssets]=useState([]),[acks,setAcks]=useState([]),[loading,setLoading]=useState(true),[error,setError]=useState(''),[index,setIndex]=useState(0),[saving,setSaving]=useState(false),[full,setFull]=useState(false)
- useEffect(()=>{let off=false;setLoading(true);Promise.all([opsClient.entities.SOP.filter({id:sopId},'',5),opsClient.entities.SOPStep.filter({sop_id:sopId},'step_order',200),opsClient.entities.SOPAsset.filter({sop_id:sopId},'step_id,display_order',300),opsClient.entities.TrainingAcknowledgement.filter({sop_id:sopId,user_email:user.email},'-acknowledged_at',20)]).then(([a,b,c,d])=>{if(off)return;setSop((a||[])[0]||null);setSteps((b||[]).filter(x=>yes(x.active)).sort((x,y)=>Number(x.step_order)-Number(y.step_order)));setAssets((c||[]).filter(x=>yes(x.active)));setAcks(d||[])}).catch(e=>!off&&setError(e.message)).finally(()=>!off&&setLoading(false));return()=>{off=true}},[sopId,user.email])
- useEffect(()=>setIndex(0),[sopId])
- const poster=String(sop?.source_document_url||''),current=steps[index],stepAssets=useMemo(()=>assets.filter(a=>String(a.step_id||'')===String(current?.id||'')),[assets,current?.id]),ack=acks.some(a=>String(a.acknowledged_version)===String(sop?.version_label||sop?.version))
- async function acknowledge(){setSaving(true);try{const row=await opsClient.entities.TrainingAcknowledgement.create({sop_id:sop.id,user_email:user.email,user_name:user.full_name||user.email,outlet_id:user.outlet_id||parseOutletIds(user)[0]||'',acknowledged_version:sop.version_label||String(sop.version||''),status:'acknowledged'});setAcks(x=>[row,...x])}catch(e){setError(e.message)}finally{setSaving(false)}}
- if(loading)return <div className="flex min-h-[60dvh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin"/></div>
- if(!sop)return <div className="mx-auto max-w-lg p-4"><Link to="/training" className="flex items-center gap-2 text-sm"><ArrowLeft className="h-4 w-4"/>返回 SOP Library</Link><div className="mt-4 rounded-xl bg-destructive/10 p-4 text-sm text-destructive">{error||'SOP not found'}</div></div>
- return <div className="mx-auto max-w-6xl pb-24 md:p-6 md:pb-10">
-  <header className="border-b bg-background p-4 md:rounded-t-2xl md:border"><div className="flex gap-3"><Link to="/training" className="flex h-9 w-9 items-center justify-center rounded-xl border"><ArrowLeft className="h-4 w-4"/></Link><div className="min-w-0"><div className="flex gap-2"><span className="rounded-full bg-primary/15 px-2 py-1 text-[10px] font-bold text-primary">{sop.sop_code}</span><span className="py-1 text-[10px] text-muted-foreground">Version {sop.version_label||sop.version}</span></div><h1 className="mt-1 text-xl font-bold leading-7 md:text-2xl">{sop.title}</h1><p className="text-xs text-muted-foreground">{sop.department} · {sop.station} · Effective {date(sop.effective_date)}</p></div></div></header>
-  {error&&<div className="m-4 rounded-xl bg-destructive/10 p-3 text-sm text-destructive md:mx-0">{error}</div>}
-
-  <div className="md:hidden"><div className="space-y-3 p-4">
-   <div className="rounded-2xl border bg-card p-4"><div className="flex justify-between text-xs"><b>引导阅读</b><span>步骤 {index+1}/{Math.max(steps.length,1)}</span></div><div className="mt-2 h-2 rounded bg-muted"><div className="h-full rounded bg-primary" style={{width:`${steps.length?(index+1)/steps.length*100:100}%`}}/></div>{sop.summary&&<p className="mt-3 text-sm leading-6 text-muted-foreground">{sop.summary}</p>}</div>
-   {current?<GuideStep step={current} index={index} total={steps.length} poster={poster} assets={stepAssets}/>:<div className="rounded-2xl border p-6 text-center text-sm">No active steps.</div>}
-   {index===steps.length-1&&<Finish sop={sop} ack={ack} saving={saving} onAck={acknowledge}/>} 
-   {poster&&<button onClick={()=>setFull(true)} className="flex w-full items-center gap-3 rounded-2xl border p-3 text-left"><Expand className="h-5 w-5 text-primary"/><span className="flex-1"><b className="block text-sm">查看完整海报</b><small className="text-muted-foreground">Tablet, desktop or printing</small></span><ChevronRight className="h-4 w-4"/></button>}
-  </div>{steps.length>0&&<div className="fixed inset-x-0 bottom-[calc(4.6rem+env(safe-area-inset-bottom))] z-30 border-t bg-background/95 p-3 backdrop-blur"><div className="mx-auto grid max-w-lg grid-cols-2 gap-2"><Button variant="outline" disabled={index===0} onClick={()=>setIndex(x=>Math.max(0,x-1))}><ChevronLeft className="mr-1 h-4 w-4"/>上一步</Button><Button disabled={index>=steps.length-1} onClick={()=>setIndex(x=>Math.min(steps.length-1,x+1))}>{index>=steps.length-1?'阅读完成':'下一步'}<ChevronRight className="ml-1 h-4 w-4"/></Button></div></div>}</div>
-
-  <div className="hidden gap-6 rounded-b-2xl border border-t-0 bg-muted/10 p-6 md:grid md:grid-cols-[minmax(320px,.8fr)_minmax(0,1.2fr)]"><aside>{poster?<div className="sticky top-20 overflow-hidden rounded-2xl border bg-card"><img src={poster} alt={sop.title} className="w-full"/><button onClick={()=>setFull(true)} className="flex w-full items-center justify-center gap-2 border-t p-3 text-sm font-semibold"><Expand className="h-4 w-4"/>Enlarge full poster</button></div>:<div className="rounded-2xl border border-dashed p-8 text-center text-sm">Poster will appear here.</div>}</aside><main className="space-y-4"><Intro sop={sop}/>{steps.map((s,i)=><DesktopStep key={s.id} step={s} index={i} assets={assets.filter(a=>String(a.step_id||'')===String(s.id))}/>)}<Finish sop={sop} ack={ack} saving={saving} onAck={acknowledge}/></main></div>
-  {full&&poster&&<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-3" onClick={()=>setFull(false)}><button className="absolute right-4 top-4 rounded-full bg-white/15 px-3 py-2 text-sm text-white">关闭</button><img src={poster} alt={sop.title} className="max-h-full max-w-full object-contain" onClick={e=>e.stopPropagation()}/></div>}
- </div>
+function dateLabel(value) {
+  if (!value) return ''
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.getTime())
+    ? String(value)
+    : parsed.toLocaleDateString('en-MY', { day: '2-digit', month: 'short', year: 'numeric' })
 }
-function Intro({sop}){return <div className="space-y-3 rounded-2xl border bg-card p-4"><div className="flex gap-3"><Target className="mt-1 h-5 w-5 text-primary"/><div><b>Purpose</b><p className="mt-1 text-sm leading-6 text-muted-foreground">{sop.purpose||sop.summary}</p></div></div>{sop.scope&&<div className="border-t pt-3"><b className="text-xs text-muted-foreground">SCOPE</b><p className="mt-1 text-sm leading-6">{sop.scope}</p></div>}{sop.safety_notes&&<div className="flex gap-2 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm leading-6"><ShieldAlert className="mt-1 h-4 w-4 shrink-0"/>{sop.safety_notes}</div>}</div>}
-function GuideStep({step,index,total,poster,assets}){return <article className="overflow-hidden rounded-2xl border bg-card"><div className="bg-primary p-4 text-primary-foreground"><small className="font-bold opacity-80">STEP {index+1} OF {total}</small><h2 className="mt-1 text-lg font-bold">{step.step_title}</h2></div>{poster&&<div className="border-b bg-muted/20 p-3"><div className="w-full rounded-xl border bg-white" style={slice(poster,index,total)}/></div>}{assets.length>0&&<AssetGrid assets={assets}/>}<div className="space-y-3 p-4">{step.instruction&&<Block icon={BookOpen} label="怎么做 / HOW TO DO" text={step.instruction}/>} {step.warning&&<Block icon={AlertTriangle} label="不及格 / FAIL IF" text={step.warning} tone="bad"/>}{step.quality_check&&<Block icon={ClipboardCheck} label="完成标准 / PASS" text={step.quality_check} tone="good"/>}</div></article>}
-function DesktopStep({step,index,assets}){return <article className="overflow-hidden rounded-2xl border bg-card"><div className="flex gap-3 p-4"><span className="flex h-10 w-10 items-center justify-center rounded-full bg-primary font-bold text-primary-foreground">{index+1}</span><div><small className="font-semibold text-muted-foreground">{step.section_title}</small><h3 className="text-lg font-bold">{step.step_title}</h3></div></div>{assets.length>0&&<AssetGrid assets={assets}/>}<div className="grid gap-3 border-t p-4 lg:grid-cols-3">{step.instruction&&<Block icon={BookOpen} label="HOW TO DO" text={step.instruction}/>} {step.warning&&<Block icon={AlertTriangle} label="FAIL IF" text={step.warning} tone="bad"/>}{step.quality_check&&<Block icon={ClipboardCheck} label="PASS STANDARD" text={step.quality_check} tone="good"/>}</div></article>}
-function Block({icon:Icon,label,text,tone}){return <div className={`rounded-xl border p-3 ${tone==='bad'?'border-rose-200 bg-rose-50':tone==='good'?'border-emerald-200 bg-emerald-50':'bg-muted/25'}`}><div className="flex items-center gap-2"><Icon className="h-4 w-4"/><b className="text-[11px]">{label}</b></div><p className="mt-2 whitespace-pre-wrap text-sm leading-6">{text}</p></div>}
-function AssetGrid({assets}){return <div className="grid grid-cols-2 gap-2 border-y bg-muted/20 p-3">{assets.map(a=>a.asset_type==='image'?<img key={a.id} src={a.thumbnail_url||a.file_url} alt={a.caption||a.file_name} className="aspect-[4/3] w-full rounded-xl border bg-white object-contain"/>:<a key={a.id} href={a.file_url} target="_blank" rel="noreferrer" className="rounded-xl border bg-white p-3 text-xs font-semibold">{a.caption||a.file_name}</a>)}</div>}
-function Finish({sop,ack,saving,onAck}){return <div className="rounded-2xl border bg-card p-4"><div className="flex gap-3"><CheckCircle2 className="h-6 w-6 text-emerald-600"/><div><b>Chapter complete</b><p className="mt-1 text-sm leading-6 text-muted-foreground">确认你已经看过每一步的做法、不及格情况和完成标准。SOP 用于学习与查询，不会替代每日 Task。</p></div></div><div className="mt-4">{ack?<div className="rounded-xl bg-emerald-100 p-3 text-center text-sm font-semibold text-emerald-800">Version {sop.version_label||sop.version} acknowledged</div>:<Button className="w-full" onClick={onAck} disabled={saving}>{saving&&<Loader2 className="mr-2 h-4 w-4 animate-spin"/>}我已阅读并理解</Button>}</div></div>}
+
+function hasMaskReminder(sop, steps) {
+  const text = [
+    sop?.title,
+    sop?.summary,
+    sop?.purpose,
+    sop?.scope,
+    sop?.safety_notes,
+    ...steps.flatMap((step) => [step.section_title, step.step_title, step.instruction, step.warning, step.quality_check]),
+  ].join(' ')
+  return /口罩|face\s*mask|mask\b|pelitup\s*muka/i.test(text)
+}
+
+function isOnboardingSop(sop) {
+  return /onboarding|入职|new staff|pekerja baru/i.test(`${sop?.sop_code || ''} ${sop?.title || ''} ${sop?.category || ''}`)
+}
+
+export default function GuidedSop() {
+  const { sopId } = useParams()
+  const { user } = useAuth()
+  const contentRef = useRef(null)
+
+  const [sop, setSop] = useState(null)
+  const [steps, setSteps] = useState([])
+  const [assets, setAssets] = useState([])
+  const [acknowledgements, setAcknowledgements] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const [index, setIndex] = useState(0)
+  const [posterOpen, setPosterOpen] = useState(false)
+  const [mobileStepsOpen, setMobileStepsOpen] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError('')
+
+    Promise.all([
+      opsClient.entities.SOP.filter({ id: sopId }, '', 5),
+      opsClient.entities.SOPStep.filter({ sop_id: sopId }, 'step_order', 200),
+      opsClient.entities.SOPAsset.filter({ sop_id: sopId }, 'step_id,display_order', 300),
+      opsClient.entities.TrainingAcknowledgement.filter(
+        { sop_id: sopId, user_email: user.email },
+        '-acknowledged_at',
+        20,
+      ),
+    ])
+      .then(([sopRows, stepRows, assetRows, acknowledgementRows]) => {
+        if (cancelled) return
+        const nextSteps = (stepRows || [])
+          .filter((row) => truthy(row.active))
+          .sort((a, b) => Number(a.step_order) - Number(b.step_order))
+
+        setSop((sopRows || [])[0] || null)
+        setSteps(nextSteps)
+        setAssets((assetRows || []).filter((row) => truthy(row.active)))
+        setAcknowledgements(acknowledgementRows || [])
+
+        const storageKey = `ops:sop:${sopId}:step`
+        const savedIndex = Number(window.localStorage.getItem(storageKey) || 0)
+        setIndex(Math.min(Math.max(savedIndex, 0), Math.max(nextSteps.length - 1, 0)))
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || 'Unable to load SOP')
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => { cancelled = true }
+  }, [sopId, user.email])
+
+  useEffect(() => {
+    window.localStorage.setItem(`ops:sop:${sopId}:step`, String(index))
+    contentRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [index, sopId])
+
+  const current = steps[index]
+  const currentAssets = useMemo(
+    () => assets
+      .filter((asset) => String(asset.step_id || '') === String(current?.id || ''))
+      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)),
+    [assets, current?.id],
+  )
+
+  const generalAssets = useMemo(
+    () => assets
+      .filter((asset) => !String(asset.step_id || '').trim())
+      .sort((a, b) => Number(a.display_order || 0) - Number(b.display_order || 0)),
+    [assets],
+  )
+
+  const version = sop?.version_label || String(sop?.version || '')
+  const acknowledged = acknowledgements.some(
+    (row) => String(row.acknowledged_version) === String(version),
+  )
+  const progress = steps.length ? Math.round(((index + 1) / steps.length) * 100) : 0
+  const posterUrl = String(sop?.source_document_url || '')
+  const showMaskReminder = Boolean(sop && isOnboardingSop(sop) && !hasMaskReminder(sop, steps))
+
+  function goToStep(nextIndex) {
+    setIndex(Math.min(Math.max(nextIndex, 0), Math.max(steps.length - 1, 0)))
+    setMobileStepsOpen(false)
+  }
+
+  async function acknowledge() {
+    if (!sop || acknowledged) return
+    setSaving(true)
+    setError('')
+    try {
+      const row = await opsClient.entities.TrainingAcknowledgement.create({
+        sop_id: sop.id,
+        user_email: user.email,
+        user_name: user.full_name || user.email,
+        outlet_id: user.outlet_id || parseOutletIds(user)[0] || '',
+        acknowledged_version: version,
+        status: 'acknowledged',
+      })
+      setAcknowledgements((rows) => [row, ...rows])
+    } catch (err) {
+      setError(err.message || 'Unable to acknowledge SOP')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  if (loading) {
+    return <div className="flex min-h-[60dvh] items-center justify-center"><Loader2 className="h-7 w-7 animate-spin" /></div>
+  }
+
+  if (!sop) {
+    return (
+      <div className="mx-auto max-w-lg p-4">
+        <Link to="/training" className="flex items-center gap-2 text-sm font-medium">
+          <ArrowLeft className="h-4 w-4" />
+          返回 SOP Library
+        </Link>
+        <div className="mt-4 rounded-2xl border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive">
+          {error || 'SOP not found'}
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mx-auto w-full max-w-[1600px] pb-28 md:px-4 md:pb-8 xl:px-6">
+      <header className="sticky top-0 z-30 border-b bg-background/96 px-4 py-3 backdrop-blur md:top-2 md:mt-2 md:rounded-2xl md:border md:px-5">
+        <div className="flex items-start gap-3">
+          <Link
+            to="/training"
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background"
+            aria-label="Back to SOP library"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </Link>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] font-semibold uppercase tracking-wide">
+              <span className="rounded-full bg-primary/15 px-2.5 py-1 text-primary">{sop.sop_code}</span>
+              <span className="text-muted-foreground">Version {version || '-'}</span>
+              {sop.effective_date ? <span className="text-muted-foreground">Effective {dateLabel(sop.effective_date)}</span> : null}
+            </div>
+            <h1 className="mt-1 line-clamp-2 text-lg font-bold leading-6 md:text-xl xl:text-2xl">{sop.title}</h1>
+            <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">
+              {[sop.department, sop.station].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setMobileStepsOpen(true)}
+            className="flex h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold md:hidden"
+          >
+            <Menu className="h-4 w-4" />
+            {index + 1}/{Math.max(steps.length, 1)}
+          </button>
+        </div>
+
+        <div className="mt-3 flex items-center gap-3">
+          <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+            <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${progress}%` }} />
+          </div>
+          <span className="w-10 text-right text-xs font-semibold">{progress}%</span>
+        </div>
+      </header>
+
+      {error ? (
+        <div className="mx-4 mt-4 rounded-xl border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive md:mx-0">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="mt-4 grid gap-4 md:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[250px_minmax(0,1fr)_300px]">
+        <aside className="hidden md:block">
+          <div className="sticky top-28 space-y-3 rounded-2xl border bg-card p-3">
+            <SectionDivider icon={ListChecks} label="学习步骤 / STEPS" />
+            <nav className="space-y-1.5">
+              {steps.map((step, stepIndex) => (
+                <StepNavButton
+                  key={step.id}
+                  step={step}
+                  index={stepIndex}
+                  active={stepIndex === index}
+                  complete={stepIndex < index || acknowledged}
+                  onClick={() => goToStep(stepIndex)}
+                />
+              ))}
+            </nav>
+
+            {posterUrl ? (
+              <button
+                type="button"
+                onClick={() => setPosterOpen(true)}
+                className="flex w-full items-center gap-3 rounded-xl border bg-muted/20 p-3 text-left"
+              >
+                <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/15 text-primary">
+                  <Expand className="h-4 w-4" />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <b className="block text-xs">完整海报参考</b>
+                  <small className="block text-[10px] text-muted-foreground">仅在需要时打开</small>
+                </span>
+              </button>
+            ) : null}
+          </div>
+        </aside>
+
+        <main ref={contentRef} className="min-w-0 scroll-mt-28 space-y-4 px-4 md:px-0">
+          <LessonIntro sop={sop} showMaskReminder={showMaskReminder} />
+
+          {current ? (
+            <ActiveStep
+              step={current}
+              index={index}
+              total={steps.length}
+              assets={currentAssets}
+            />
+          ) : (
+            <div className="rounded-2xl border border-dashed bg-card p-8 text-center text-sm text-muted-foreground">
+              No active steps are available for this SOP.
+            </div>
+          )}
+
+          {generalAssets.length ? <ReferenceFiles assets={generalAssets} /> : null}
+
+          <div className="hidden grid-cols-[1fr_auto_1fr] items-center gap-3 md:grid">
+            <Button
+              variant="outline"
+              className="justify-self-start"
+              disabled={index === 0}
+              onClick={() => goToStep(index - 1)}
+            >
+              <ChevronLeft className="mr-1 h-4 w-4" />
+              上一步
+            </Button>
+            <p className="text-center text-xs text-muted-foreground">
+              {index + 1} / {Math.max(steps.length, 1)}
+            </p>
+            {index < steps.length - 1 ? (
+              <Button className="justify-self-end" onClick={() => goToStep(index + 1)}>
+                下一步
+                <ChevronRight className="ml-1 h-4 w-4" />
+              </Button>
+            ) : (
+              <Button className="justify-self-end" onClick={acknowledge} disabled={saving || acknowledged}>
+                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                {acknowledged ? '已完成' : '完成本章'}
+              </Button>
+            )}
+          </div>
+        </main>
+
+        <aside className="hidden xl:block">
+          <div className="sticky top-28 space-y-4">
+            <ProgressPanel
+              progress={progress}
+              current={index}
+              total={steps.length}
+              acknowledged={acknowledged}
+            />
+
+            <CompletionPanel
+              isLast={index === steps.length - 1}
+              acknowledged={acknowledged}
+              saving={saving}
+              onAcknowledge={acknowledge}
+            />
+
+            <div className="rounded-2xl border bg-card p-4">
+              <SectionDivider icon={HelpCircle} label="需要帮助 / HELP" />
+              <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                不确定时先停止操作，立即询问培训员或领班，不要自行猜测。
+              </p>
+            </div>
+          </div>
+        </aside>
+      </div>
+
+      <div className="fixed inset-x-0 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-40 border-t bg-background/96 p-3 backdrop-blur md:hidden">
+        <div className="mx-auto grid max-w-lg grid-cols-[0.9fr_1.2fr] gap-2">
+          <Button
+            variant="outline"
+            disabled={index === 0}
+            onClick={() => goToStep(index - 1)}
+          >
+            <ChevronLeft className="mr-1 h-4 w-4" />
+            上一步
+          </Button>
+
+          {index < steps.length - 1 ? (
+            <Button onClick={() => goToStep(index + 1)}>
+              下一步
+              <ChevronRight className="ml-1 h-4 w-4" />
+            </Button>
+          ) : (
+            <Button onClick={acknowledge} disabled={saving || acknowledged}>
+              {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              {acknowledged ? '已完成' : '我已阅读并理解'}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {mobileStepsOpen ? (
+        <div className="fixed inset-0 z-[90] bg-black/45 md:hidden" onClick={() => setMobileStepsOpen(false)}>
+          <div
+            className="absolute inset-x-0 bottom-0 max-h-[82dvh] overflow-hidden rounded-t-3xl bg-background"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b p-4">
+              <div>
+                <b className="text-sm">选择学习步骤</b>
+                <p className="text-xs text-muted-foreground">一次只看一个步骤，不需要缩放海报。</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setMobileStepsOpen(false)}
+                className="flex h-9 w-9 items-center justify-center rounded-xl border"
+                aria-label="Close step list"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[calc(82dvh-76px)] space-y-2 overflow-y-auto p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+              {steps.map((step, stepIndex) => (
+                <StepNavButton
+                  key={step.id}
+                  step={step}
+                  index={stepIndex}
+                  active={stepIndex === index}
+                  complete={stepIndex < index || acknowledged}
+                  onClick={() => goToStep(stepIndex)}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {posterOpen && posterUrl ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/92 p-3" onClick={() => setPosterOpen(false)}>
+          <button
+            type="button"
+            className="absolute right-4 top-4 flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-white"
+            onClick={() => setPosterOpen(false)}
+            aria-label="Close poster"
+          >
+            <X className="h-5 w-5" />
+          </button>
+          <img
+            src={posterUrl}
+            alt={sop.title}
+            loading="lazy"
+            className="max-h-full max-w-full object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function LessonIntro({ sop, showMaskReminder }) {
+  return (
+    <section className="overflow-hidden rounded-2xl border bg-card">
+      <div className="border-b bg-gradient-to-r from-primary/15 via-primary/5 to-transparent p-4 md:p-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <Sparkles className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wide text-primary">Lesson overview</p>
+            <p className="mt-1 text-sm leading-6 md:text-base">
+              {sop.summary || sop.purpose || 'Follow every step in order and ask the trainer whenever you are unsure.'}
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 p-4 lg:grid-cols-2">
+        {sop.purpose ? <CompactInfo icon={Target} label="目的 / PURPOSE" text={sop.purpose} /> : null}
+        {sop.scope ? <CompactInfo icon={BookOpen} label="范围 / SCOPE" text={sop.scope} /> : null}
+        {showMaskReminder ? <MaskReminder /> : null}
+        {sop.safety_notes ? (
+          <div className="flex gap-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950 lg:col-span-2">
+            <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+            <div>
+              <b className="text-xs">安全提醒 / SAFETY</b>
+              <p className="mt-1 whitespace-pre-wrap text-sm leading-6">{sop.safety_notes}</p>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+function MaskReminder() {
+  return (
+    <div className="flex gap-3 rounded-xl border border-primary/40 bg-primary/10 p-3 lg:col-span-2">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+        <ShieldAlert className="h-5 w-5" />
+      </span>
+      <div>
+        <b className="text-sm">员工必须自行准备口罩</b>
+        <p className="mt-1 text-sm leading-6 text-muted-foreground">
+          Self-prepared face mask required · Pekerja mesti menyediakan pelitup muka sendiri.
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function ActiveStep({ step, index, total, assets }) {
+  return (
+    <article className="overflow-hidden rounded-2xl border bg-card shadow-sm">
+      <div className="border-b bg-primary px-4 py-4 text-primary-foreground md:px-5">
+        <div className="flex items-start gap-3">
+          <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-black/15 text-lg font-black">
+            {index + 1}
+          </span>
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-[0.18em] opacity-75">
+              Step {index + 1} of {total}
+            </p>
+            {step.section_title ? <p className="mt-1 text-xs font-semibold opacity-80">{step.section_title}</p> : null}
+            <h2 className="mt-0.5 text-xl font-bold leading-7">{step.step_title}</h2>
+          </div>
+        </div>
+      </div>
+
+      {assets.length ? <AssetGrid assets={assets} /> : null}
+
+      <div className="space-y-5 p-4 md:p-5">
+        {step.instruction ? (
+          <StepBlock
+            icon={BookOpen}
+            label="怎么做 / HOW TO DO / CARA MELAKUKAN"
+            text={step.instruction}
+          />
+        ) : null}
+
+        {step.warning ? (
+          <StepBlock
+            icon={AlertTriangle}
+            label="错误与禁止 / FAIL IF / JANGAN"
+            text={step.warning}
+            tone="bad"
+          />
+        ) : null}
+
+        {step.quality_check ? (
+          <StepBlock
+            icon={ClipboardCheck}
+            label="完成标准 / PASS STANDARD / PIAWAI LULUS"
+            text={step.quality_check}
+            tone="good"
+          />
+        ) : null}
+      </div>
+    </article>
+  )
+}
+
+function StepBlock({ icon: Icon, label, text, tone = 'default' }) {
+  const toneClass = tone === 'bad'
+    ? 'border-rose-200 bg-rose-50'
+    : tone === 'good'
+      ? 'border-emerald-200 bg-emerald-50'
+      : 'border-border bg-muted/20'
+
+  const accentClass = tone === 'bad'
+    ? 'bg-rose-500'
+    : tone === 'good'
+      ? 'bg-emerald-500'
+      : 'bg-primary'
+
+  return (
+    <section>
+      <SectionDivider icon={Icon} label={label} />
+      <div className={`mt-3 rounded-xl border p-4 ${toneClass}`}>
+        <p className="whitespace-pre-wrap text-sm leading-7 md:text-[15px]">{text}</p>
+      </div>
+      <div className={`mt-3 h-1 overflow-hidden rounded-full ${accentClass}`} aria-hidden="true" />
+    </section>
+  )
+}
+
+function SectionDivider({ icon: Icon, label }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary/15 text-primary">
+        <Icon className="h-4 w-4" />
+      </span>
+      <span className="shrink-0 text-[11px] font-bold uppercase tracking-[0.12em] text-muted-foreground">{label}</span>
+      <span className="h-px min-w-6 flex-1 bg-border" />
+    </div>
+  )
+}
+
+function StepNavButton({ step, index, active, complete, onClick }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left transition ${
+        active
+          ? 'border-primary bg-primary/10 shadow-sm'
+          : 'border-transparent bg-muted/20 hover:border-border hover:bg-muted/40'
+      }`}
+    >
+      <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold ${
+        complete
+          ? 'bg-emerald-100 text-emerald-700'
+          : active
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-background text-muted-foreground'
+      }`}>
+        {complete ? <Check className="h-4 w-4" /> : index + 1}
+      </span>
+      <span className="min-w-0 flex-1">
+        {step.section_title ? <span className="block truncate text-[10px] uppercase tracking-wide text-muted-foreground">{step.section_title}</span> : null}
+        <span className="line-clamp-2 block text-xs font-semibold leading-5">{step.step_title}</span>
+      </span>
+      <ChevronRight className={`h-4 w-4 shrink-0 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+    </button>
+  )
+}
+
+function AssetGrid({ assets }) {
+  return (
+    <div className="border-b bg-muted/20 p-3 md:p-4">
+      <SectionDivider icon={ImageIcon} label="步骤示范 / VISUAL REFERENCE" />
+      <div className={`mt-3 grid gap-3 ${assets.length === 1 ? 'grid-cols-1' : 'grid-cols-2'}`}>
+        {assets.map((asset) => {
+          const type = String(asset.asset_type || '').toLowerCase()
+          const title = asset.caption || asset.file_name || 'SOP reference'
+          if (type === 'image') {
+            return (
+              <a
+                key={asset.id}
+                href={asset.file_url}
+                target="_blank"
+                rel="noreferrer"
+                className="overflow-hidden rounded-xl border bg-background"
+              >
+                <img
+                  src={asset.thumbnail_url || asset.file_url}
+                  alt={title}
+                  loading="lazy"
+                  className="aspect-[4/3] w-full object-contain"
+                />
+                <span className="block border-t px-3 py-2 text-[11px] font-medium">{title}</span>
+              </a>
+            )
+          }
+          return (
+            <a
+              key={asset.id}
+              href={asset.file_url}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-h-24 items-center gap-3 rounded-xl border bg-background p-4"
+            >
+              <FileText className="h-5 w-5 shrink-0 text-primary" />
+              <span className="text-sm font-medium">{title}</span>
+            </a>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+function ReferenceFiles({ assets }) {
+  return (
+    <section className="rounded-2xl border bg-card p-4 md:p-5">
+      <SectionDivider icon={FileText} label="补充资料 / REFERENCES" />
+      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+        {assets.map((asset) => (
+          <a
+            key={asset.id}
+            href={asset.file_url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center gap-3 rounded-xl border bg-muted/20 p-3"
+          >
+            <FileText className="h-4 w-4 shrink-0 text-primary" />
+            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+              {asset.caption || asset.file_name || 'Reference file'}
+            </span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </a>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function CompactInfo({ icon: Icon, label, text }) {
+  return (
+    <div className="rounded-xl border bg-muted/15 p-3">
+      <div className="flex items-center gap-2">
+        <Icon className="h-4 w-4 text-primary" />
+        <b className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</b>
+      </div>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6">{text}</p>
+    </div>
+  )
+}
+
+function ProgressPanel({ progress, current, total, acknowledged }) {
+  return (
+    <section className="rounded-2xl border bg-card p-4">
+      <SectionDivider icon={ListChecks} label="学习进度 / PROGRESS" />
+      <div className="mt-4 flex items-center gap-4">
+        <div className="relative flex h-20 w-20 shrink-0 items-center justify-center rounded-full bg-muted">
+          <div className="absolute inset-1 rounded-full bg-card" />
+          <b className="relative text-lg">{acknowledged ? '100%' : `${progress}%`}</b>
+        </div>
+        <div>
+          <b className="text-sm">Step {Math.min(current + 1, Math.max(total, 1))} of {Math.max(total, 1)}</b>
+          <p className="mt-1 text-xs leading-5 text-muted-foreground">
+            {acknowledged ? 'This SOP version is acknowledged.' : 'Complete the steps in order.'}
+          </p>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function CompletionPanel({ isLast, acknowledged, saving, onAcknowledge }) {
+  return (
+    <section className="rounded-2xl border bg-card p-4">
+      <SectionDivider icon={CheckCircle2} label="完成确认 / COMPLETE" />
+      <p className="mt-3 text-sm leading-6 text-muted-foreground">
+        {isLast
+          ? '确认你已经看过做法、错误情况和完成标准。'
+          : '完成当前步骤后继续下一步；最后一步才进行确认。'}
+      </p>
+      <Button
+        className="mt-4 w-full"
+        disabled={!isLast || saving || acknowledged}
+        onClick={onAcknowledge}
+      >
+        {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+        {acknowledged ? '已阅读并理解' : isLast ? '完成本章' : '请先完成所有步骤'}
+      </Button>
+    </section>
+  )
+}
