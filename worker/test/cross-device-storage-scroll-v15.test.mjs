@@ -65,7 +65,7 @@ test('data package gate starts at the top, remains scrollable and offers storage
 test('install page does not offer Android APK as the iPhone install path', async () => {
   const install = await source('web/src/pages/InstallApp.jsx')
   assert.match(install, /platform === 'ios'/)
-  assert.match(install, /iPhone cannot install Android APK files/)
+  assert.match(install, /Android APK files cannot be installed on iPhone/)
   assert.match(install, /target="_blank"/)
   assert.match(install, /Safari Share → Add to Home Screen/)
 })
