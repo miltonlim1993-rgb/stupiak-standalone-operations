@@ -59,11 +59,20 @@ jobs:
         run: node scripts/configure-android-direct-label-print.mjs
       - name: Configure native TSPL food labels
         run: node scripts/configure-android-tspl-food-label-compat.mjs
-      - name: Validate native TSPL path
+      - name: Configure all-device printer transport v12
+        run: node scripts/configure-android-all-device-print-v12.mjs
+      - name: Validate all-device native print paths
         run: |
-          grep -q 'rawCommandBase64' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
-          grep -q 'chefops-native-tspl-food-label' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
-          grep -q 'result.put("renderMode", renderMode)' web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          PLUGIN=web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          grep -q 'public void printSystem(PluginCall call)' "$PLUGIN"
+          grep -q 'Android System Print / installed driver' "$PLUGIN"
+          grep -q 'driver_bridge' "$PLUGIN"
+          grep -q 'X-Print-Bridge-Token' "$PLUGIN"
+          grep -q 'sendNetworkRaw' "$PLUGIN"
+          grep -q 'sendNetworkLpr' "$PLUGIN"
+          grep -q 'sendBluetooth' "$PLUGIN"
+          grep -q 'rawCommandBase64' "$PLUGIN"
+          grep -q 'result.put("renderMode", renderMode)' "$PLUGIN"
       - name: Compile unsigned debug APK
         shell: bash
         run: |
