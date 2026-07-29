@@ -8,6 +8,7 @@ import {
   savePrinterProfilesSnapshot,
   selectPrinterProfile,
 } from '@/lib/label-printer-profile'
+import { applyCreatedLabelSizeContract } from '@/lib/label-size-contract-v14'
 import {
   effectiveConnectionType,
   normalizeBridgeUrl,
@@ -276,10 +277,27 @@ export const calibrateDirectPrinterProfile = calibratePrinterProfile
 
 function prepareLabel(html, profile) {
   const options = directPrinterOptions(profile)
-  const transformed = applyPrinterLayoutToHtml(html, options.profile)
+  const dpi = Math.max(72, Number(options.profile.dpi || 203))
+  const layoutApplied = applyPrinterLayoutToHtml(html, options.profile)
+  const canonical = applyCreatedLabelSizeContract(layoutApplied.html, options.profile)
+  const transformed = {
+    html: canonical.html,
+    layout: {
+      ...layoutApplied.layout,
+      dpi,
+      created_canvas_width_mm: canonical.contract.created_canvas_width_mm,
+      created_canvas_height_mm: canonical.contract.created_canvas_height_mm,
+      content_width_mm: canonical.contract.content_width_mm,
+      content_height_mm: canonical.contract.content_height_mm,
+      raster_width_dots: canonical.contract.raster_width_dots,
+      raster_height_dots: canonical.contract.raster_height_dots,
+      size_contract_signature: canonical.contract.signature,
+    },
+  }
+  window.__chefopsLastCreatedLabelSizeContract = canonical.contract
+  window.__chefopsLastCreatedLabelSourceMatched = canonical.source_matched_setting
   const jobName = extractJobName(transformed.html)
   const copies = countCopies(transformed.html)
-  const dpi = Math.max(72, Number(options.profile.dpi || 203))
   const nativeTspl = buildTsplFoodLabelCommand(transformed.html, {
     ...options,
     widthMm: transformed.layout.width_mm,
@@ -287,7 +305,7 @@ function prepareLabel(html, profile) {
     dpi,
     copies,
   })
-  return { options, transformed, jobName, copies, dpi, nativeTspl }
+  return { options, transformed, jobName, copies, dpi, nativeTspl, sizeContract: canonical.contract }
 }
 
 async function sendNativeManagedLabel(prepared) {
@@ -366,13 +384,14 @@ async function sendLabelByProfile(html, browserOpen) {
     ? `Native ${prepared.options.commandLanguage.toUpperCase()} · fixed ${prepared.nativeTspl.widthMm}×${prepared.nativeTspl.heightMm} mm`
     : formatPrinterLayoutOutcome(prepared.transformed.layout)
   showPrinterMessage(
-    `${result?.dialog ? 'System print opened' : 'Printed'} · ${profileName} · ${printerRouteLabel(prepared.options.profile)} · ${outcome} · ${prepared.copies} cop${prepared.copies === 1 ? 'y' : 'ies'}.`,
-    'success',
+    `${result?.dialog ? 'System print opened' : 'Print job sent'} · ${profileName} · ${printerRouteLabel(prepared.options.profile)} · ${outcome} · ${prepared.copies} cop${prepared.copies === 1 ? 'y' : 'ies'}.`,
+    result?.dialog ? 'info' : 'success',
   )
 
   const detail = {
     jobName: prepared.jobName,
     copies: prepared.copies,
+    dpi: prepared.dpi,
     route: connection,
     direct: connection !== 'system_print',
     render_mode: prepared.nativeTspl?.mode || 'html-raster',
@@ -380,6 +399,7 @@ async function sendLabelByProfile(html, browserOpen) {
     profile_id: prepared.options.profile.id || '',
     profile_name: profileName,
     layout: prepared.transformed.layout,
+    size_contract: prepared.sizeContract,
   }
   window.__chefopsLastLabelPrintOutcome = detail
   window.dispatchEvent(new CustomEvent('chefops:native-print-started', { detail }))
@@ -407,8 +427,11 @@ function installSystemLabelLayoutBridge() {
         if (!isPrintableLabel(source) || source.includes('id="chefops-printer-layout"')) return originalWrite(source)
         const profile = resolveCachedPrinterProfile()
         if (!profile) return originalWrite(source)
-        const transformed = applyPrinterLayoutToHtml(source, profile)
-        return originalWrite(transformed.html)
+        const layoutApplied = applyPrinterLayoutToHtml(source, profile)
+        const canonical = applyCreatedLabelSizeContract(layoutApplied.html, profile)
+        window.__chefopsLastCreatedLabelSizeContract = canonical.contract
+        window.__chefopsLastCreatedLabelSourceMatched = canonical.source_matched_setting
+        return originalWrite(canonical.html)
       }
     }
     const originalDocumentOpen = opened.document.open.bind(opened.document)
