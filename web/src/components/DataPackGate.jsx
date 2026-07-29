@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { DatabaseZap, Download, HardDrive, Loader2, ShieldCheck } from 'lucide-react'
+import { DatabaseZap, Download, HardDrive, Loader2, RefreshCw, ShieldCheck } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { useAuth } from '@/lib/AuthContext'
@@ -9,6 +9,7 @@ import {
   getInstalledDataPackage,
   installLatestDataPackageV2,
 } from '@/lib/data-package-v2-runtime'
+import { repairLocalDataPackageStorage } from '@/lib/data-package-store-v2'
 
 function bytes(value) {
   const number = Number(value || 0)
@@ -21,6 +22,7 @@ function bytes(value) {
 function statusLabel(status) {
   if (status.state === 'checking') return 'Checking published release'
   if (status.state === 'preflight') return 'Checking device storage'
+  if (status.state === 'repairing') return 'Repairing local download storage'
   if (status.state === 'downloading') {
     const completed = Number(status.completed_objects || 0)
     const total = Number(status.total_objects || 0)
@@ -39,6 +41,15 @@ function percent(status) {
   return total > 0 ? Math.min(100, Math.round((completed / total) * 100)) : 0
 }
 
+function isStorageFailure(error) {
+  return [
+    'data_package_storage_unavailable',
+    'data_package_storage_blocked',
+    'data_package_storage_open_failed',
+    'data_package_storage_write_failed',
+  ].includes(String(error?.code || ''))
+}
+
 export default function DataPackGate({ children }) {
   const { user } = useAuth()
   const outletId = String(user?.outlet_id || '').trim()
@@ -46,7 +57,9 @@ export default function DataPackGate({ children }) {
   const [ready, setReady] = useState(false)
   const [checkingLocal, setCheckingLocal] = useState(true)
   const [downloading, setDownloading] = useState(false)
+  const [repairing, setRepairing] = useState(false)
   const attemptedOutlet = useRef('')
+  const automaticRepairOutlet = useRef('')
 
   const enableLegacy = (reason = 'migration') => {
     if (!hasUsableAppPack(outletId)) return false
@@ -83,6 +96,9 @@ export default function DataPackGate({ children }) {
         installed_version: installed.manifest.version,
         total_bytes: installed.manifest.total_bytes || current.total_bytes || 0,
         migration_mode: false,
+        error: '',
+        error_code: '',
+        error_details: null,
       }))
       return true
     }
@@ -92,54 +108,112 @@ export default function DataPackGate({ children }) {
     return false
   }
 
-  const download = async () => {
-    if (!outletId || downloading) return
+  const installOnce = async ({ force = false } = {}) => {
+    await installLatestDataPackageV2({
+      outletId,
+      force,
+      onProgress(progress) {
+        setStatus((current) => ({
+          ...current,
+          state: progress.state,
+          outlet_id: outletId,
+          completed_bytes: progress.completedBytes || 0,
+          total_bytes: progress.totalBytes || progress.storagePlan?.download_bytes || current.total_bytes || 0,
+          completed_objects: progress.completedObjects || 0,
+          total_objects: progress.totalObjects || 0,
+          current_object: progress.item?.name || '',
+          storage_plan: progress.storagePlan || current.storage_plan || null,
+          error: '',
+          error_code: '',
+          error_details: null,
+          migration_mode: false,
+        }))
+      },
+    })
+    await checkLocal()
+  }
+
+  const handleDownloadError = async (error) => {
+    if (error?.code === 'data_package_v2_not_published') {
+      try {
+        await syncAppPack({ outletId })
+      } catch {}
+      if (enableLegacy('v2-not-published')) return
+    }
+    if (enableLegacy('v2-download-failed')) return
+    setReady(false)
+    setStatus((current) => ({
+      ...current,
+      state: 'error',
+      outlet_id: outletId,
+      error: error.message || 'Unable to install the outlet data package',
+      error_code: error.code || '',
+      error_details: error.details || null,
+    }))
+  }
+
+  const download = async ({ manualRepair = false } = {}) => {
+    if (!outletId || downloading || repairing) return
     setDownloading(true)
     try {
-      await installLatestDataPackageV2({
-        outletId,
-        onProgress(progress) {
-          setStatus((current) => ({
-            ...current,
-            state: progress.state,
-            outlet_id: outletId,
-            completed_bytes: progress.completedBytes || 0,
-            total_bytes: progress.totalBytes || progress.storagePlan?.download_bytes || current.total_bytes || 0,
-            completed_objects: progress.completedObjects || 0,
-            total_objects: progress.totalObjects || 0,
-            current_object: progress.item?.name || '',
-            storage_plan: progress.storagePlan || current.storage_plan || null,
-            error: '',
-            error_code: '',
-            error_details: null,
-            migration_mode: false,
-          }))
-        },
-      })
-      await checkLocal()
+      await installOnce({ force: manualRepair })
     } catch (error) {
-      if (error?.code === 'data_package_v2_not_published') {
+      const mayRepair = isStorageFailure(error)
+        && automaticRepairOutlet.current !== outletId
+        && error?.code !== 'data_package_storage_unavailable'
+      if (mayRepair) {
+        automaticRepairOutlet.current = outletId
+        setRepairing(true)
+        setStatus((current) => ({
+          ...current,
+          state: 'repairing',
+          outlet_id: outletId,
+          error: '',
+          error_code: '',
+          error_details: null,
+        }))
         try {
-          await syncAppPack({ outletId })
-        } catch {}
-        if (enableLegacy('v2-not-published')) return
+          await repairLocalDataPackageStorage(outletId)
+          await installOnce({ force: true })
+          return
+        } catch (retryError) {
+          await handleDownloadError(retryError)
+          return
+        } finally {
+          setRepairing(false)
+        }
       }
-      if (enableLegacy('v2-download-failed')) return
-      setReady(false)
-      setStatus((current) => ({
-        ...current,
-        state: 'error',
-        outlet_id: outletId,
-        error: error.message || 'Unable to install the outlet data package',
-        error_code: error.code || '',
-        error_details: error.details || null,
-      }))
+      await handleDownloadError(error)
     } finally {
       setDownloading(false)
     }
   }
 
+  const repairAndRetry = async () => {
+    if (!outletId || downloading || repairing) return
+    setRepairing(true)
+    setStatus((current) => ({
+      ...current,
+      state: 'repairing',
+      outlet_id: outletId,
+      error: '',
+      error_code: '',
+      error_details: null,
+    }))
+    try {
+      await repairLocalDataPackageStorage(outletId)
+      automaticRepairOutlet.current = outletId
+      setRepairing(false)
+      await download({ manualRepair: true })
+    } catch (error) {
+      setRepairing(false)
+      await handleDownloadError(error)
+    }
+  }
+
   useEffect(() => {
+    attemptedOutlet.current = ''
+    automaticRepairOutlet.current = ''
     setCheckingLocal(true)
     checkLocal()
   }, [outletId])
@@ -167,12 +241,13 @@ export default function DataPackGate({ children }) {
 
   if (ready) return children
 
-  const busy = checkingLocal || downloading || ['checking', 'preflight', 'downloading'].includes(status.state)
+  const busy = checkingLocal || downloading || repairing || ['checking', 'preflight', 'repairing', 'downloading'].includes(status.state)
   const progress = percent(status)
   const storage = status.storage_plan || status.error_details || null
+  const storageFailure = isStorageFailure(status)
 
   return (
-    <div className="flex min-h-full w-full items-center justify-center p-4 sm:p-6">
+    <div className="chefops-data-pack-gate w-full p-4 sm:p-6">
       <section className="w-full max-w-xl rounded-3xl border border-primary/25 bg-card p-5 shadow-sm sm:p-7">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/15 text-primary"><DatabaseZap className="h-7 w-7" /></span>
         <h1 className="mt-5 text-2xl font-bold">Preparing outlet operations</h1>
@@ -204,10 +279,22 @@ export default function DataPackGate({ children }) {
           </div>
         ) : null}
 
-        {status.error ? <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm leading-5 text-red-700">{status.error}</p> : null}
+        {status.error ? (
+          <div className="mt-4 rounded-xl bg-red-50 px-3 py-3 text-sm leading-5 text-red-700">
+            <p>{status.error}</p>
+            {status.error_code ? <p className="mt-1 break-all text-[11px] font-semibold">Error: {status.error_code}</p> : null}
+          </div>
+        ) : null}
         {!navigator.onLine ? <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">This device has no installed package yet. Connect once to download the published outlet release.</p> : null}
 
-        <Button className="mt-5 h-12 w-full rounded-xl" onClick={download} disabled={busy || !navigator.onLine || !outletId}>
+        {storageFailure ? (
+          <Button variant="outline" className="mt-5 h-12 w-full rounded-xl" onClick={repairAndRetry} disabled={busy || !navigator.onLine || !outletId}>
+            {repairing ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <RefreshCw className="mr-2 h-5 w-5" />}
+            Repair local download storage & retry
+          </Button>
+        ) : null}
+
+        <Button className={`${storageFailure ? 'mt-2' : 'mt-5'} h-12 w-full rounded-xl`} onClick={() => download()} disabled={busy || !navigator.onLine || !outletId}>
           {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Download className="mr-2 h-5 w-5" />}
           {busy ? statusLabel(status) : status.state === 'error' ? 'Retry package download' : 'Download operations package'}
         </Button>
