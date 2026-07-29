@@ -164,11 +164,12 @@ function updateOrientationStatus() {
   }
 
   const selected = clean(select.value) || 'auto'
-  status.textContent = selected === 'portrait'
+  const nextText = selected === 'portrait'
     ? '直向内容 / Portrait content：纸张宽度与进纸长度保持不变；需要时只旋转内容 90°。'
     : selected === 'landscape'
       ? '横向内容 / Landscape content：纸张宽度与进纸长度保持不变；需要时只旋转内容 90°。'
       : '自动方向 / Auto：内容跟随实际纸张方向，纸张尺寸不会互换。'
+  if (status.textContent !== nextText) status.textContent = nextText
 }
 
 export function installLabelContentOrientationV7() {
