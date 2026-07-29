@@ -11,7 +11,7 @@ LOGIN_CLIENT_ID="460544373229-06mv64nt3e78mtse5sc375cobv13i1ii.apps.googleuserco
 ANDROID_WORKFLOW="android-apk.yml"
 ANDROID_RELEASE_TAG="android-release-latest"
 EXPECTED_WORKER_REVISION="all-device-print-v12-master-task-refresh-bilingual-v4.6.12"
-EXPECTED_SW_VERSION="chefops-v4-6-12-all-device-print-v12-master-task-refresh-shell-v10"
+EXPECTED_SW_VERSION="chefops-v4-6-12-all-device-print-v12-label-size-contract-v14-shell-v10"
 
 ROOT="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 if [[ -z "$ROOT" ]]; then
@@ -34,7 +34,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 printf '\n==================================================\n'
-echo "1. Pull and verify the exact 4.6.12 all-device printer release"
+echo "1. Pull and verify the exact 4.6.12 all-device printer + label-size release"
 echo "=================================================="
 git fetch origin "$EXPECTED_BRANCH"
 git merge --ff-only "origin/$EXPECTED_BRANCH"
@@ -44,7 +44,11 @@ echo "Commit: $COMMIT"
 grep -q '"version": "4.6.12"' package.json
 grep -q "$EXPECTED_WORKER_REVISION" worker/src/entry-v3.js
 grep -q "$EXPECTED_SW_VERSION" web/public/sw.js
-grep -q '4.6.12-all-device-print-v12-master-task-refresh-shell-v10' web/src/main.jsx
+grep -q '4.6.12-all-device-print-v12-label-size-contract-v14-shell-v10' web/src/main.jsx
+grep -q 'LABEL_SIZE_CONTRACT_VERSION' web/src/lib/label-size-contract-v14.js
+grep -q '320x240dots' worker/test/label-size-contract-v14.test.mjs
+grep -q 'Created label canvas' web/src/lib/label-size-contract-status-v14.js
+grep -q 'size_contract_match' web/src/lib/print-outcome-integrity-v13.js
 grep -q 'PRINTER_TRANSPORT_VERSION' web/src/lib/printer-transport-v12.js
 grep -q 'System / Driver' web/src/pages/LabelPrinterSettingsPublic.jsx
 grep -q 'PC/Mac Bridge' web/src/pages/LabelPrinterSettingsPublic.jsx
@@ -59,6 +63,8 @@ grep -q 'public void printSystem(PluginCall call)' scripts/configure-android-all
 grep -q 'driver_bridge' scripts/configure-android-all-device-print-v12.mjs
 grep -q 'installTaskTemplateRefreshV6' web/src/main.jsx
 grep -q 'installLabelContentOrientationV7' web/src/main.jsx
+grep -q 'installCreatedLabelSizeContractV14' web/src/main.jsx
+grep -q 'installLabelSizeContractStatusV14' web/src/main.jsx
 grep -q 'installTaskBilingualShell' web/src/main.jsx
 grep -q '4.6.12-all-device-print-v12' .github/workflows/android-apk.yml
 
@@ -72,7 +78,7 @@ gh auth status
 gh repo view "$REPOSITORY" --json nameWithOwner --jq '.nameWithOwner' | grep -qx "$REPOSITORY"
 
 printf '\n==================================================\n'
-echo "3. Build and test Web, Worker, Print Bridge and Android source"
+echo "3. Build and test Web, Worker, label-size chain, Print Bridge and Android source"
 echo "=================================================="
 export CLOUDFLARE_ACCOUNT_ID="$EXPECTED_ACCOUNT_ID"
 export CLOUDFLARE_APP_DATA_PACKS_ID="$OPS_KV_ID"
@@ -104,7 +110,7 @@ echo "=================================================="
 npx wrangler deploy --config "$CONFIG"
 
 printf '\n==================================================\n'
-echo "5. Verify production 4.6.12"
+echo "5. Verify production 4.6.12 size-contract shell"
 echo "=================================================="
 VERIFIED=""
 HEADERS=""
@@ -121,7 +127,7 @@ for attempt in $(seq 1 18); do
 done
 
 if [[ "$VERIFIED" != "yes" ]]; then
-  echo "ERROR: Deployment completed but the 4.6.12 revision markers were not visible."
+  echo "ERROR: Deployment completed but the 4.6.12 size-contract revision markers were not visible."
   printf '%s\n' "$HEADERS"
   exit 1
 fi
@@ -196,6 +202,8 @@ echo "URL: $WORKER_URL"
 echo "Commit: $COMMIT"
 echo "Worker revision: $EXPECTED_WORKER_REVISION"
 echo "Shell version: $EXPECTED_SW_VERSION"
+echo "Label size contract: created canvas = physical media = native command = system media"
+echo "Current 40x30 mm / 203 dpi contract: 320x240 printer dots"
 echo "Printer routes: System Driver / PC-Mac Bridge / Android Raw TCP-LPR / Bluetooth Classic"
 echo "Ops KV binding: $OPS_KV_ID"
 echo "Recruitment KV unchanged: $RECRUITMENT_KV_ID"
