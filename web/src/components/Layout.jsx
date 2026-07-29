@@ -102,10 +102,10 @@ export default function Layout() {
   }, [mode])
 
   return (
-    <div id="chefops-mobile-app" className={`chefops-app min-h-0 overflow-hidden bg-muted/40 ${rootClass}`}>
+    <div id="chefops-mobile-app" className={`chefops-app h-[100dvh] min-h-[100dvh] overflow-hidden bg-muted/40 ${rootClass}`}>
       <AppFoundation />
       <AppUpdateBanner />
-      <div id="chefops-mobile-shell" className="chefops-shell mx-auto flex min-h-0 w-full overflow-hidden bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]">
+      <div id="chefops-mobile-shell" className="chefops-shell mx-auto flex h-full min-h-0 w-full overflow-hidden bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]">
         <aside className="chefops-sidebar hidden border-r border-border bg-background p-4">
           <div className="chefops-sidebar-brand flex items-center gap-3 px-2 py-2">
             <Logo />
@@ -120,8 +120,8 @@ export default function Layout() {
           </div>
         </aside>
 
-        <div id="chefops-mobile-content" className="chefops-content min-h-0 min-w-0 flex-1 overflow-hidden">
-          <header id="chefops-mobile-header" className="chefops-app-header z-40 border-b border-border bg-background/95 backdrop-blur">
+        <div id="chefops-mobile-content" className="chefops-content flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+          <header id="chefops-mobile-header" className="chefops-app-header z-40 shrink-0 border-b border-border bg-background/95 backdrop-blur">
             <div className="flex h-14 items-center justify-between gap-3 px-4 lg:px-6">
               <div className="chefops-mobile-brand flex min-w-0 items-center gap-2.5">
                 <Logo />
@@ -136,11 +136,11 @@ export default function Layout() {
             </div>
           </header>
 
-          <main id="chefops-mobile-main" className="chefops-main-scroll min-h-0 min-w-0 overflow-x-hidden overflow-y-auto">
+          <main id="chefops-mobile-main" className="chefops-main-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
             <DataPackGate><Outlet /></DataPackGate>
           </main>
 
-          <nav id="chefops-mobile-nav" className="chefops-bottom-nav z-50 w-full border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
+          <nav id="chefops-mobile-nav" className="chefops-bottom-nav z-50 w-full shrink-0 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
             <div className="flex h-16 items-center justify-around">
               {primaryNav.map(({ to, label, icon: Icon, end }) => (
                 <NavLink key={to} to={to} end={end} className={({ isActive }) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1.5 text-[10px] font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
