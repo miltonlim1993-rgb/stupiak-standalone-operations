@@ -52,6 +52,16 @@ test('iPhone scroll uses one flex scroll owner and dynamic visual viewport heigh
   assert.match(css, /-webkit-overflow-scrolling: touch !important/)
   assert.match(css, /html\[data-chefops-ios='true'\]/)
   assert.match(runtime, /window\.visualViewport\?\.addEventListener\('resize'/)
+  assert.match(runtime, /chefopsShellMounted/)
+})
+
+test('login and other non-shell pages use normal document scrolling', async () => {
+  const css = await source('web/src/document-scroll-v15.css')
+  const main = await source('web/src/main.jsx')
+  assert.match(css, /data-chefops-shell-mounted='false'/)
+  assert.match(css, /overflow-y: auto !important/)
+  assert.match(css, /touch-action: pan-y pinch-zoom !important/)
+  assert.match(main, /document-scroll-v15.css/)
 })
 
 test('data package gate starts at the top, remains scrollable and offers storage repair', async () => {
@@ -59,6 +69,7 @@ test('data package gate starts at the top, remains scrollable and offers storage
   assert.match(gate, /chefops-data-pack-gate/)
   assert.match(gate, /Repair local download storage & retry/)
   assert.match(gate, /automaticRepairOutlet/)
+  assert.match(gate, /error\?\.error_code/)
   assert.doesNotMatch(gate, /className="flex min-h-full w-full items-center justify-center/)
 })
 
