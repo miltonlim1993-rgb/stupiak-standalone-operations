@@ -2,7 +2,7 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'all-device-print-v12-master-task-refresh-bilingual-v4.6.12'
+const WORKER_REVISION = 'cross-device-storage-scroll-v15-printer-v12-size-v14-v4.6.13'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
