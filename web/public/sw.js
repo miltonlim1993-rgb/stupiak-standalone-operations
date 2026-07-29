@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-13-cross-device-storage-scroll-v15-printer-v12-size-v14'
+const VERSION = 'chefops-v4-6-14-stable-tspl-v16-cross-device-v15-printer-v12'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
