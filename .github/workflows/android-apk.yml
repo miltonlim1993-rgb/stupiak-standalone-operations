@@ -16,7 +16,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.13-cross-device-storage-scroll-v15-print-v12-size-v14.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.14-stable-tspl-v16-cross-device-v15-print-v12.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -40,11 +40,20 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate cross-device storage, scroll, Tasks and printer source
+      - name: Validate stable TSPL, cross-device storage, Tasks and printer source
         run: |
-          grep -q '"version": "4.6.13"' package.json
-          grep -q "chefops-v4-6-13-cross-device-storage-scroll-v15-printer-v12-size-v14" web/public/sw.js
-          grep -q "4.6.13-cross-device-storage-scroll-v15-printer-v12-size-v14" web/src/main.jsx
+          grep -q '"version": "4.6.14"' package.json
+          grep -q "chefops-v4-6-14-stable-tspl-v16-cross-device-v15-printer-v12" web/public/sw.js
+          grep -q "4.6.14-stable-tspl-v16-cross-device-v15-printer-v12" web/src/main.jsx
+          grep -q "installStableLabelPrintV16" web/src/main.jsx
+          grep -q "STABLE_TSPL_LABEL_VERSION" web/src/lib/stable-tspl-label-v16.js
+          grep -q "tspl-stable-v16" web/src/lib/stable-tspl-label-v16.js
+          grep -q 'lines.push(`PRINT ${copies},1`)' web/src/lib/stable-tspl-label-v16.js
+          ! grep -q "BITMAP" web/src/lib/stable-tspl-label-v16.js
+          grep -q "payloadBase64: asciiBase64(command)" web/src/lib/stable-label-print-v16.js
+          grep -q "rawCommandBase64: asciiBase64(stable.command)" web/src/lib/stable-label-print-v16.js
+          ! grep -q "html-raster" web/src/lib/stable-label-print-v16.js
+          grep -q "stable-tspl-v16-cross-device-v15-printer-v12-v4.6.14" worker/src/entry-v3.js
           grep -q "installDeviceViewportV15" web/src/main.jsx
           grep -q "cross-device-v15.css" web/src/main.jsx
           grep -q "window.visualViewport" web/src/lib/device-viewport-v15.js
@@ -58,7 +67,6 @@ jobs:
           grep -q "PACKAGE_OBJECT_CACHE_PREFIX" web/public/sw.js
           grep -q "currentInstallPlatform" web/src/pages/InstallApp.jsx
           grep -q "iPhone cannot install Android APK files" web/src/lib/install-platform-v15.js
-          grep -q "cross-device-storage-scroll-v15-printer-v12-size-v14-v4.6.13" worker/src/entry-v3.js
           grep -q "installCreatedLabelSizeContractV14" web/src/main.jsx
           grep -q "installLabelSizeContractStatusV14" web/src/main.jsx
           grep -q "LABEL_SIZE_CONTRACT_VERSION" web/src/lib/label-size-contract-v14.js
@@ -66,8 +74,6 @@ jobs:
           grep -q "size_contract_match" web/src/lib/print-outcome-integrity-v13.js
           grep -q "installTaskTemplateRefreshV6" web/src/main.jsx
           grep -q "firstLoadForOutlet" web/src/lib/task-template-refresh-v6.js
-          grep -q "installLabelContentOrientationV7" web/src/main.jsx
-          grep -q "force-raster-orientation" web/src/lib/label-content-orientation-v7.js
           grep -q "installTaskBilingualShell" web/src/main.jsx
           grep -q "normalizeTaskBilingual" worker/src/task-bilingual-v5.js
           grep -q "PRINTER_TRANSPORT_VERSION" web/src/lib/printer-transport-v12.js
@@ -78,10 +84,6 @@ jobs:
           grep -q "Bluetooth Classic" web/src/pages/LabelPrinterSettingsPublic.jsx
           grep -q "discoverBridgePrinterQueues" web/src/lib/native-label-print.js
           grep -q "printSystem" web/src/lib/native-label-print.js
-          grep -q "buildTsplFoodLabelCommand" web/src/lib/native-label-print.js
-          grep -q "tspl-native-food-label" web/src/lib/tspl-food-label-compat.js
-          grep -q "REFERENCE 0,0" web/src/lib/tspl-food-label-compat.js
-          ! grep -q "BITMAP" web/src/lib/tspl-food-label-compat.js
           grep -q "stupiaks-print-bridge-v12" tools/print-bridge/server.mjs
           grep -q "windowsQueues" tools/print-bridge/server.mjs
           grep -q "unixQueues" tools/print-bridge/server.mjs
@@ -171,8 +173,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Compatibility alias for previous Direct Print Flow APK URL" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.13 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Cross-device v15 restores one reliable vertical scroll owner on iPhone Safari, iPhone Home Screen PWA, Android, tablet and desktop. Verified package media uses Cache Storage with IndexedDB metadata and ArrayBuffer fallback, automatic transaction reopen/retry and local staging repair. Label Size Contract v14 and all-device Printer Transport v12 remain included. Physical label acceptance remains required."
+            --title "Stupiak's Ops 4.6.14 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Stable TSPL Core v16 ports the proven SP Label Printing payload order, fit validation and PRINT copies,1 semantics into Stupiak's Ops. Bridge, LAN, direct Wi-Fi and Bluetooth Classic all receive the exact same RAW TSPL document; Food Label and Test Label no longer fall back to HTML raster on managed routes. Cross-device storage/scroll v15, Printer Transport v12 and physical-label acceptance remain included."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
