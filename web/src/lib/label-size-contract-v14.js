@@ -42,22 +42,16 @@ export function extractLastPageSizeMm(html = '') {
 
 export function resolveLabelSizeContract(profile = {}, sourceDimensions = {}) {
   const normalized = normalizePrinterProfile(profile)
-  const widthMm = numberValue(
-    normalized.label_width_mm ?? normalized.width_mm,
-    numberValue(sourceDimensions.width_mm ?? sourceDimensions.widthMm, 40),
-    1,
-    500,
-  )
-  const heightMm = numberValue(
-    normalized.label_height_mm ?? normalized.height_mm,
-    numberValue(sourceDimensions.height_mm ?? sourceDimensions.heightMm, 30),
-    1,
-    500,
-  )
-  const dpi = numberValue(normalized.dpi ?? profile.dpi, 203, 72, 1200)
+  const sourceWidth = numberValue(sourceDimensions.width_mm ?? sourceDimensions.widthMm, 40, 1, 500)
+  const sourceHeight = numberValue(sourceDimensions.height_mm ?? sourceDimensions.heightMm, 30, 1, 500)
+  const explicitWidth = profile.label_width_mm ?? profile.width_mm
+  const explicitHeight = profile.label_height_mm ?? profile.height_mm
+  const widthMm = numberValue(explicitWidth, sourceWidth, 1, 500)
+  const heightMm = numberValue(explicitHeight, sourceHeight, 1, 500)
+  const dpi = numberValue(profile.dpi ?? normalized.dpi, 203, 72, 1200)
   const mediaOrientation = widthMm >= heightMm ? 'landscape' : 'portrait'
-  const requested = ['portrait', 'landscape'].includes(clean(normalized.orientation))
-    ? clean(normalized.orientation)
+  const requested = ['portrait', 'landscape'].includes(clean(profile.orientation ?? normalized.orientation))
+    ? clean(profile.orientation ?? normalized.orientation)
     : 'auto'
   const contentOrientation = requested === 'auto' ? mediaOrientation : requested
   const rotateContent = contentOrientation !== mediaOrientation
@@ -104,15 +98,16 @@ function contractStyle(contract, padding = {}) {
   const physicalHeight = contract.physical_height_mm
   const contentWidth = contract.content_width_mm
   const contentHeight = contract.content_height_mm
+  const flowAdjustment = physicalHeight - contentHeight
   const transform = contract.rotate_content
-    ? `transform-origin:0 0!important;transform:translateX(${physicalWidth}mm) rotate(90deg)!important;`
-    : 'transform:none!important;'
+    ? `margin:0 0 ${flowAdjustment}mm 0!important;transform-origin:0 0!important;transform:translateX(${physicalWidth}mm) rotate(90deg)!important;`
+    : 'margin:0!important;transform:none!important;'
 
   return `<meta name="${META_NAME}" content="${contract.signature}">
 <style id="${STYLE_ID}">
 @page{size:${physicalWidth}mm ${physicalHeight}mm!important;margin:0!important}
 html,body{margin:0!important;padding:0!important;width:${physicalWidth}mm!important;min-width:${physicalWidth}mm!important;max-width:${physicalWidth}mm!important;background:#fff!important}
-.label{box-sizing:border-box!important;width:${contentWidth}mm!important;min-width:${contentWidth}mm!important;max-width:${contentWidth}mm!important;height:${contentHeight}mm!important;min-height:${contentHeight}mm!important;max-height:${contentHeight}mm!important;margin:0!important;padding:${top}mm ${right}mm ${bottom}mm ${left}mm!important;overflow:hidden!important;${transform}}
+.label{box-sizing:border-box!important;width:${contentWidth}mm!important;min-width:${contentWidth}mm!important;max-width:${contentWidth}mm!important;height:${contentHeight}mm!important;min-height:${contentHeight}mm!important;max-height:${contentHeight}mm!important;padding:${top}mm ${right}mm ${bottom}mm ${left}mm!important;overflow:hidden!important;${transform}}
 </style>`
 }
 
@@ -192,7 +187,13 @@ function decorateCreatedLabelWindow(opened) {
     const wrappedWrite = (value) => {
       const source = String(value ?? '')
       if (!isPrintableLabel(source)) return originalWrite(source)
-      const profile = cachedProfile() || extractLastPageSizeMm(source)
+      const sourceSize = extractLastPageSizeMm(source)
+      const profile = cachedProfile() || {
+        label_width_mm: sourceSize.width_mm,
+        label_height_mm: sourceSize.height_mm,
+        dpi: 203,
+        orientation: 'auto',
+      }
       const transformed = applyCreatedLabelSizeContract(source, profile)
       window.__chefopsLastCreatedLabelSizeContract = transformed.contract
       window.__chefopsLastCreatedLabelSourceMatched = transformed.source_matched_setting
