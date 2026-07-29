@@ -53,12 +53,15 @@ export function installDeviceViewportV15() {
   root.dataset.chefopsPlatform = platform
   root.dataset.chefopsIos = platform === 'ios' ? 'true' : 'false'
   root.dataset.chefopsStandalone = isStandaloneDisplay() ? 'true' : 'false'
+  root.dataset.chefopsShellMounted = 'false'
 
   let frame = 0
   const publish = () => {
     frame = 0
     const height = viewportHeight()
     const width = viewportWidth()
+    const shellMounted = Boolean(document.getElementById('chefops-mobile-app'))
+    root.dataset.chefopsShellMounted = shellMounted ? 'true' : 'false'
     root.style.setProperty('--chefops-viewport-height', `${height}px`)
     root.style.setProperty('--chefops-viewport-width', `${width}px`)
     root.style.setProperty('--chefops-browser-bottom-clearance', platform === 'ios' && !isStandaloneDisplay() ? '16px' : '0px')
@@ -66,6 +69,7 @@ export function installDeviceViewportV15() {
       version: DEVICE_VIEWPORT_VERSION,
       platform,
       standalone: isStandaloneDisplay(),
+      shellMounted,
       width,
       height,
     }
@@ -87,4 +91,8 @@ export function installDeviceViewportV15() {
     root.dataset.chefopsStandalone = isStandaloneDisplay() ? 'true' : 'false'
     schedule()
   })
+
+  const observer = new MutationObserver(schedule)
+  if (document.body) observer.observe(document.body, { childList: true, subtree: true })
+  else document.addEventListener('DOMContentLoaded', () => observer.observe(document.body, { childList: true, subtree: true }), { once: true })
 }
