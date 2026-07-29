@@ -22,6 +22,10 @@ function clean(value = '') {
   return String(value ?? '').trim()
 }
 
+function firstDefined(...values) {
+  return values.find((value) => value !== undefined && value !== null && value !== '')
+}
+
 function numberValue(value, fallback, minimum = 0, maximum = 65535) {
   const number = Number(value)
   if (!Number.isFinite(number)) return fallback
@@ -37,15 +41,43 @@ function transportMeta(profile = {}) {
   const notes = parsePrinterProfileNotes(profile.notes)
   const raw = notes.printer_transport_v12 || notes.transport || {}
   return {
-    bridge_url: clean(raw.bridge_url || raw.url || DEFAULT_PRINTER_TRANSPORT.bridge_url),
-    bridge_token: clean(raw.bridge_token || raw.token || DEFAULT_PRINTER_TRANSPORT.bridge_token),
-    bridge_transport: enumValue(raw.bridge_transport || raw.mode, ['queue', 'raw_tcp', 'lpr'], DEFAULT_PRINTER_TRANSPORT.bridge_transport),
-    bridge_queue: clean(raw.bridge_queue || raw.queue || DEFAULT_PRINTER_TRANSPORT.bridge_queue),
-    bridge_platform: enumValue(raw.bridge_platform || raw.platform, ['auto', 'windows', 'macos', 'linux'], DEFAULT_PRINTER_TRANSPORT.bridge_platform),
-    bridge_printer_ip: clean(raw.bridge_printer_ip || raw.printer_ip || profile.ip_address || DEFAULT_PRINTER_TRANSPORT.bridge_printer_ip),
-    bridge_printer_port: numberValue(raw.bridge_printer_port || raw.printer_port || profile.port, DEFAULT_PRINTER_TRANSPORT.bridge_printer_port, 1, 65535),
-    bridge_lpr_queue: clean(raw.bridge_lpr_queue || raw.lpr_queue || DEFAULT_PRINTER_TRANSPORT.bridge_lpr_queue),
-    fallback_connection: enumValue(raw.fallback_connection, ['none', 'system_print'], DEFAULT_PRINTER_TRANSPORT.fallback_connection),
+    bridge_url: clean(firstDefined(profile.bridge_url, raw.bridge_url, raw.url, DEFAULT_PRINTER_TRANSPORT.bridge_url)),
+    bridge_token: clean(firstDefined(profile.bridge_token, raw.bridge_token, raw.token, DEFAULT_PRINTER_TRANSPORT.bridge_token)),
+    bridge_transport: enumValue(
+      firstDefined(profile.bridge_transport, raw.bridge_transport, raw.mode),
+      ['queue', 'raw_tcp', 'lpr'],
+      DEFAULT_PRINTER_TRANSPORT.bridge_transport,
+    ),
+    bridge_queue: clean(firstDefined(profile.bridge_queue, raw.bridge_queue, raw.queue, DEFAULT_PRINTER_TRANSPORT.bridge_queue)),
+    bridge_platform: enumValue(
+      firstDefined(profile.bridge_platform, raw.bridge_platform, raw.platform),
+      ['auto', 'windows', 'macos', 'linux'],
+      DEFAULT_PRINTER_TRANSPORT.bridge_platform,
+    ),
+    bridge_printer_ip: clean(firstDefined(
+      profile.bridge_printer_ip,
+      raw.bridge_printer_ip,
+      raw.printer_ip,
+      profile.ip_address,
+      DEFAULT_PRINTER_TRANSPORT.bridge_printer_ip,
+    )),
+    bridge_printer_port: numberValue(
+      firstDefined(profile.bridge_printer_port, raw.bridge_printer_port, raw.printer_port, profile.port),
+      DEFAULT_PRINTER_TRANSPORT.bridge_printer_port,
+      1,
+      65535,
+    ),
+    bridge_lpr_queue: clean(firstDefined(
+      profile.bridge_lpr_queue,
+      raw.bridge_lpr_queue,
+      raw.lpr_queue,
+      DEFAULT_PRINTER_TRANSPORT.bridge_lpr_queue,
+    )),
+    fallback_connection: enumValue(
+      firstDefined(profile.fallback_connection, raw.fallback_connection),
+      ['none', 'system_print'],
+      DEFAULT_PRINTER_TRANSPORT.fallback_connection,
+    ),
   }
 }
 
