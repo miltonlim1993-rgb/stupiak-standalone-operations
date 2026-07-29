@@ -16,7 +16,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.12-all-device-print-v12.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.12-all-device-print-v12-size-contract-v14.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -40,10 +40,16 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate Tasks, orientation and all-device printer source
+      - name: Validate Tasks, orientation, size contract and all-device printer source
         run: |
-          grep -q "chefops-v4-6-12-all-device-print-v12-master-task-refresh-shell-v10" web/public/sw.js
-          grep -q "4.6.12-all-device-print-v12-master-task-refresh-shell-v10" web/src/main.jsx
+          grep -q "chefops-v4-6-12-all-device-print-v12-label-size-contract-v14-shell-v10" web/public/sw.js
+          grep -q "4.6.12-all-device-print-v12-label-size-contract-v14-shell-v10" web/src/main.jsx
+          grep -q "installCreatedLabelSizeContractV14" web/src/main.jsx
+          grep -q "installLabelSizeContractStatusV14" web/src/main.jsx
+          grep -q "LABEL_SIZE_CONTRACT_VERSION" web/src/lib/label-size-contract-v14.js
+          grep -q "320x240dots" worker/test/label-size-contract-v14.test.mjs
+          grep -q "Created label canvas" web/src/lib/label-size-contract-status-v14.js
+          grep -q "size_contract_match" web/src/lib/print-outcome-integrity-v13.js
           grep -q "installTaskTemplateRefreshV6" web/src/main.jsx
           grep -q "firstLoadForOutlet" web/src/lib/task-template-refresh-v6.js
           grep -q "installLabelContentOrientationV7" web/src/main.jsx
@@ -155,7 +161,7 @@ jobs:
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
             --title "Stupiak's Ops 4.6.12 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Printer transport v12 separates Device System Print, Windows/macOS Driver Bridge, Android Direct Raw TCP/LPR and Android Bluetooth Classic. USB, WSD, BLE and vendor-driver printers use their installed driver; bridge queues, Raw TCP and LPR return explicit connection and print errors. Fixed 40×30 mm native TSPL, functional Portrait/Landscape content rotation, Master Sheet Task refresh and bilingual practical Tasks remain included."
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Label Size Contract v14 locks the created label canvas, 40×30 mm physical media, 320×240-dot 203 dpi raster, native command SIZE and Android System Print media to one geometry. Printer transport v12 separates Device System Print, Windows/macOS Driver Bridge, Android Direct Raw TCP/LPR and Android Bluetooth Classic. USB, WSD, BLE and vendor-driver printers use their installed driver. Portrait/Landscape changes only the content plane. Physical label acceptance remains required."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
