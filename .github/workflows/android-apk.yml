@@ -12,6 +12,7 @@ jobs:
     env:
       APK_RELEASE_TAG: android-release-latest
       APK_FILE_NAME: stupiaks-ops-release.apk
+      APK_STABLE_TSPL_FILE_NAME: stupiaks-ops-stable-tspl-v16.apk
       APK_V12_FILE_NAME: stupiaks-ops-all-device-print-v12.apk
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
@@ -147,16 +148,18 @@ jobs:
         run: |
           mkdir -p release
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_FILE_NAME}"
+          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_STABLE_TSPL_FILE_NAME}"
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V12_FILE_NAME}"
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V10_FILE_NAME}"
           cp web/android/app/build/outputs/bundle/release/app-release.aab "release/${AAB_FILE_NAME}"
-          sha256sum "release/${APK_FILE_NAME}" "release/${APK_V12_FILE_NAME}" "release/${APK_V10_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
+          sha256sum "release/${APK_FILE_NAME}" "release/${APK_STABLE_TSPL_FILE_NAME}" "release/${APK_V12_FILE_NAME}" "release/${APK_V10_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: stupiaks-ops-signed-release
           path: |
             release/stupiaks-ops-release.apk
+            release/stupiaks-ops-stable-tspl-v16.apk
             release/stupiaks-ops-all-device-print-v12.apk
             release/stupiaks-ops-direct-print-flow-v10.apk
             release/stupiaks-ops-release.aab
@@ -169,6 +172,7 @@ jobs:
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
             "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
+            "release/${APK_STABLE_TSPL_FILE_NAME}#Stupiak's Ops Stable TSPL Core v16 APK" \
             "release/${APK_V12_FILE_NAME}#Stupiak's Ops All Device Print v12 APK" \
             "release/${APK_V10_FILE_NAME}#Compatibility alias for previous Direct Print Flow APK URL" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
@@ -178,6 +182,7 @@ jobs:
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
+          echo "Stable TSPL APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_STABLE_TSPL_FILE_NAME}"
           echo "V12 APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V12_FILE_NAME}"
           echo "Compatibility APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V10_FILE_NAME}"
           echo "AAB: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${AAB_FILE_NAME}"
