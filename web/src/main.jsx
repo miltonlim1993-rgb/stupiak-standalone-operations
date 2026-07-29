@@ -15,7 +15,7 @@ import { installLabelContentOrientationV7 } from '@/lib/label-content-orientatio
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.11-master-task-refresh-bilingual-native-tspl-shell-v10'
+const SHELL_VERSION = '4.6.12-all-device-print-v12-master-task-refresh-shell-v10'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -34,6 +34,7 @@ function markRuntime() {
     shell: SHELL_VERSION,
     native: isNativeAndroid(),
     origin: window.location.origin,
+    printerTransport: 'v12',
   }
 }
 
@@ -99,8 +100,6 @@ applyTheme()
 configureNativeSystemBars()
 
 if (isNativeAndroid()) {
-  // APK assets are bundled locally. Keeping a service worker on https://localhost
-  // can serve an older shell after an in-place APK update, so native builds purge it.
   purgeNativeServiceWorkers()
 }
 
@@ -111,8 +110,6 @@ if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash
 
 if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // Never reload an installed PWA while a checklist, stock count or form is in progress.
-    // The active page keeps working and the new shell is used on the next normal launch.
     localStorage.setItem('chefops.pending-shell-version', SHELL_VERSION)
     window.dispatchEvent(new CustomEvent('chefops:shell-update-ready', {
       detail: { version: SHELL_VERSION, deferred: true },
