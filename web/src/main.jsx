@@ -11,12 +11,14 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
+import { installCreatedLabelSizeContractV14 } from '@/lib/label-size-contract-v14'
+import { installLabelSizeContractStatusV14 } from '@/lib/label-size-contract-status-v14'
 import { installPrintOutcomeIntegrityV13 } from '@/lib/print-outcome-integrity-v13'
 import { installLabelContentOrientationV7 } from '@/lib/label-content-orientation-v7'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.12-all-device-print-v12-master-task-refresh-shell-v10'
+const SHELL_VERSION = '4.6.12-all-device-print-v12-label-size-contract-v14-shell-v10'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -37,6 +39,7 @@ function markRuntime() {
     origin: window.location.origin,
     printerTransport: 'v12',
     printOutcomeIntegrity: 'v13',
+    labelSizeContract: 'v14',
   }
 }
 
@@ -95,8 +98,12 @@ function publishShellHealth() {
 markRuntime()
 installNativeSessionFetch()
 installNativeLabelPrintBridge()
+// The size contract wraps the created label after the native popup manager and before
+// content orientation, so physical media remains fixed while the content plane may rotate.
+installCreatedLabelSizeContractV14()
 installPrintOutcomeIntegrityV13()
 installLabelContentOrientationV7()
+installLabelSizeContractStatusV14()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
 applyTheme()
