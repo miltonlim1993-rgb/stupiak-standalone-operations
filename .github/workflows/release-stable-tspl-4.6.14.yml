@@ -1,11 +1,6 @@
 name: Release stable TSPL 4.6.14
 
 on:
-  push:
-    branches:
-      - feature/task-workflow-v3-apk
-    paths:
-      - .github/workflows/release-stable-tspl-4.6.14.yml
   workflow_dispatch:
 
 permissions:
@@ -26,12 +21,10 @@ jobs:
       REPOSITORY: miltonlim1993-rgb/stupiak-standalone-operations
       RELEASE_BRANCH: feature/task-workflow-v3-apk
       WORKER_URL: https://stupiaks-ops.sporkburger19.workers.dev
-      EXPECTED_ACCOUNT_ID: bb2ac1970975a5018a17c878e61cb88f
       OPS_KV_ID: f62696e1a2f14b8a9e0b84a540c7e997
       RECRUITMENT_KV_ID: ccf52a9b0bb94a4a90889f30a0e623d5
-      LOGIN_CLIENT_ID: 460544373229-06mv64nt3e78mtse5sc375cobv13i1ii.apps.googleusercontent.com
-      EXPECTED_WORKER_REVISION: stable-tspl-v16-cross-device-v15-v4.6.14
-      EXPECTED_SW_VERSION: chefops-v4-6-14-stable-tspl-v16-cross-device-v15
+      EXPECTED_WORKER_REVISION: stable-tspl-v16-cross-device-v15-printer-v12-v4.6.14
+      EXPECTED_SW_VERSION: chefops-v4-6-14-stable-tspl-v16-cross-device-v15-printer-v12
       ANDROID_WORKFLOW: android-apk.yml
       ANDROID_RELEASE_TAG: android-release-latest
       CLOUDFLARE_ACCOUNT_ID: bb2ac1970975a5018a17c878e61cb88f
@@ -59,17 +52,21 @@ jobs:
         run: |
           set -Eeuo pipefail
           test "${GITHUB_REF_NAME}" = "${RELEASE_BRANCH}"
-          test -n "${CLOUDFLARE_API_TOKEN}"
+          if [ -z "${CLOUDFLARE_API_TOKEN}" ]; then
+            echo 'CLOUDFLARE_API_TOKEN is not configured. Use the guarded local Mac release script with the existing Wrangler OAuth login.'
+            exit 1
+          fi
           grep -q '"version": "4.6.14"' package.json
           grep -q "${EXPECTED_WORKER_REVISION}" worker/src/entry-v3.js
           grep -q "${EXPECTED_SW_VERSION}" web/public/sw.js
           grep -q 'installStableLabelPrintV16' web/src/main.jsx
           grep -q 'tspl-stable-v16' web/src/lib/stable-tspl-label-v16.js
-          grep -q 'PRINT ${copies},1' web/src/lib/stable-tspl-label-v16.js
+          grep -q 'lines.push(`PRINT ${copies},1`)' web/src/lib/stable-tspl-label-v16.js
           grep -q 'rawCommandBase64: asciiBase64(stable.command)' web/src/lib/stable-label-print-v16.js
           grep -q 'payloadBase64: asciiBase64(command)' web/src/lib/stable-label-print-v16.js
           ! grep -q 'html-raster' web/src/lib/stable-label-print-v16.js
           ! grep -q 'BITMAP' web/src/lib/stable-tspl-label-v16.js
+          grep -q 'stupiaks-ops-stable-tspl-v16.apk' .github/workflows/android-apk.yml
 
       - name: Install dependencies
         run: npm ci
@@ -81,7 +78,7 @@ jobs:
           npm run build
           node --check tools/print-bridge/server.mjs
           node --check scripts/configure-android-all-device-print-v12.mjs
-          node --check scripts/deploy-web-4.6.14-stable-tspl-local.sh
+          bash -n scripts/deploy-web-4.6.14-stable-tspl-local.sh
 
       - name: Render and audit Cloudflare production configuration
         shell: bash
@@ -102,10 +99,7 @@ jobs:
           fi
 
       - name: Deploy Web assets and Ops Worker 4.6.14
-        shell: bash
-        run: |
-          set -Eeuo pipefail
-          npx wrangler deploy --config worker/wrangler.production.jsonc
+        run: npx wrangler deploy --config worker/wrangler.production.jsonc
 
       - name: Verify production worker, shell and health
         shell: bash
@@ -166,5 +160,16 @@ jobs:
         run: |
           STATUS='${{ job.status }}'
           ANDROID_RUN='${{ steps.android.outputs.run_id }}'
-          BODY="## Stable TSPL 4.6.14 release automation\n\n- Result: **${STATUS}**\n- Source commit: \`${GITHUB_SHA}\`\n- Release workflow: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}\n- Android workflow run: ${ANDROID_RUN:-not started}\n- Production URL: ${WORKER_URL}\n- PR remains Draft and unmerged.\n- No Sheet upgrade, TaskTemplate apply, Data Package publication, Ops Control publication, Recruitment KV mutation or R2 mutation was run."
-          gh pr comment 4 --repo "$REPOSITORY" --body "$BODY"
+          cat > /tmp/release-comment.md <<EOF
+          ## Stable TSPL 4.6.14 release automation
+
+          - Result: **${STATUS}**
+          - Source commit: \`${GITHUB_SHA}\`
+          - Release workflow: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          - Android workflow run: ${ANDROID_RUN:-not started}
+          - Production URL: ${WORKER_URL}
+          - PR remains Draft and unmerged.
+          - No Sheet upgrade, TaskTemplate apply, Data Package publication, Ops Control publication, Recruitment KV mutation or R2 mutation was run.
+          EOF
+          sed -i 's/^          //' /tmp/release-comment.md
+          gh pr comment 4 --repo "$REPOSITORY" --body-file /tmp/release-comment.md
