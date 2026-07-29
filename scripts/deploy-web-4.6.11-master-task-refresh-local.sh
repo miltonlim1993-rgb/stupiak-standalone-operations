@@ -47,6 +47,10 @@ grep -q "$EXPECTED_SW_VERSION" web/public/sw.js
 grep -q 'installTaskTemplateRefreshV6' web/src/main.jsx
 grep -q 'firstLoadForOutlet' web/src/lib/task-template-refresh-v6.js
 grep -q 'refresh: Boolean(refresh || firstLoadForOutlet)' web/src/lib/task-template-refresh-v6.js
+grep -q 'installLabelContentOrientationV7' web/src/main.jsx
+grep -q 'rotate_content' web/src/lib/label-content-orientation-v7.js
+grep -q 'translateX' web/src/lib/label-content-orientation-v7.js
+grep -q 'force-raster-orientation' web/src/lib/label-content-orientation-v7.js
 grep -q 'installTaskBilingualShell' web/src/main.jsx
 grep -q 'Available after' web/src/lib/task-bilingual-shell.js
 grep -q '4.6.11-master-task-refresh-bilingual' .github/workflows/android-apk.yml
