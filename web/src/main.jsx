@@ -11,6 +11,7 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
+import { installPrintOutcomeIntegrityV13 } from '@/lib/print-outcome-integrity-v13'
 import { installLabelContentOrientationV7 } from '@/lib/label-content-orientation-v7'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
@@ -35,6 +36,7 @@ function markRuntime() {
     native: isNativeAndroid(),
     origin: window.location.origin,
     printerTransport: 'v12',
+    printOutcomeIntegrity: 'v13',
   }
 }
 
@@ -93,6 +95,7 @@ function publishShellHealth() {
 markRuntime()
 installNativeSessionFetch()
 installNativeLabelPrintBridge()
+installPrintOutcomeIntegrityV13()
 installLabelContentOrientationV7()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
