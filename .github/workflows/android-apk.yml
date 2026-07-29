@@ -57,7 +57,7 @@ jobs:
           grep -q "repairLocalDataPackageStorage" web/src/lib/data-package-store-v2.js
           grep -q "PACKAGE_OBJECT_CACHE_PREFIX" web/public/sw.js
           grep -q "currentInstallPlatform" web/src/pages/InstallApp.jsx
-          grep -q "iPhone cannot install Android APK files" web/src/pages/InstallApp.jsx
+          grep -q "iPhone cannot install Android APK files" web/src/lib/install-platform-v15.js
           grep -q "cross-device-storage-scroll-v15-printer-v12-size-v14-v4.6.13" worker/src/entry-v3.js
           grep -q "installCreatedLabelSizeContractV14" web/src/main.jsx
           grep -q "installLabelSizeContractStatusV14" web/src/main.jsx
