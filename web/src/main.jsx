@@ -7,8 +7,10 @@ import '@/panels-v8.css'
 import '@/direct-print-v10.css'
 import '@/label-printer-settings-v2.css'
 import '@/label-printer-settings-force-mobile.css'
+import '@/cross-device-v15.css'
 import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
+import { installDeviceViewportV15 } from '@/lib/device-viewport-v15'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 import { installCreatedLabelSizeContractV14 } from '@/lib/label-size-contract-v14'
@@ -18,7 +20,7 @@ import { installLabelContentOrientationV7 } from '@/lib/label-content-orientatio
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.12-all-device-print-v12-label-size-contract-v14-shell-v10'
+const SHELL_VERSION = '4.6.13-cross-device-storage-scroll-v15-printer-v12-size-v14'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -40,6 +42,8 @@ function markRuntime() {
     printerTransport: 'v12',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
+    deviceViewport: 'v15',
+    dataPackageStorage: 'cache-idb-v3',
   }
 }
 
@@ -58,7 +62,7 @@ async function purgeNativeServiceWorkers() {
   try {
     if ('caches' in window) {
       const names = await caches.keys()
-      await Promise.all(names.map((name) => caches.delete(name)))
+      await Promise.all(names.filter((name) => !name.startsWith('stupiaks-ops-data-package-v2-objects-')).map((name) => caches.delete(name)))
     }
   } catch (error) {
     console.warn('Unable to clear the old native shell cache', error)
@@ -81,8 +85,9 @@ function publishShellHealth() {
     const navRect = nav.getBoundingClientRect()
     window.__chefopsShellHealth = {
       version: SHELL_VERSION,
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight,
+      viewportWidth: window.__chefopsViewport?.width || window.innerWidth,
+      viewportHeight: window.__chefopsViewport?.height || window.innerHeight,
+      platform: window.__chefopsViewport?.platform || 'web',
       mainTop: Math.round(mainRect.top),
       mainBottom: Math.round(mainRect.bottom),
       mainHeight: Math.round(mainRect.height),
@@ -90,16 +95,15 @@ function publishShellHealth() {
       mainCanScroll: main.scrollHeight > main.clientHeight + 1,
       navTop: Math.round(navRect.top),
       navBottom: Math.round(navRect.bottom),
-      navVisible: navRect.top >= 0 && navRect.bottom <= window.innerHeight + 2,
+      navVisible: navRect.top >= 0 && navRect.bottom <= (window.__chefopsViewport?.height || window.innerHeight) + 2,
     }
   })
 }
 
 markRuntime()
+installDeviceViewportV15()
 installNativeSessionFetch()
 installNativeLabelPrintBridge()
-// The size contract wraps the created label after the native popup manager and before
-// content orientation, so physical media remains fixed while the content plane may rotate.
 installCreatedLabelSizeContractV14()
 installPrintOutcomeIntegrityV13()
 installLabelContentOrientationV7()
@@ -137,3 +141,4 @@ const rootElement = document.getElementById('root')
 ReactDOM.createRoot(rootElement).render(<App />)
 window.addEventListener('load', publishShellHealth, { once: true })
 window.addEventListener('resize', publishShellHealth, { passive: true })
+window.visualViewport?.addEventListener('resize', publishShellHealth, { passive: true })
