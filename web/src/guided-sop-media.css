@@ -1,0 +1,21 @@
+/* Guided SOP visuals must remain fully visible on desktop, tablet and mobile.
+   The Tailwind aspect utility previously forced every image into a 4:3 frame,
+   which clipped or hid parts of tall SOP and recipe references. */
+main article a[href] > img.aspect-\[4\/3\] {
+  display: block;
+  width: auto !important;
+  max-width: 100%;
+  height: auto !important;
+  max-height: min(70dvh, 760px);
+  margin-inline: auto;
+  aspect-ratio: auto !important;
+  object-fit: contain !important;
+  background: #fff;
+  cursor: zoom-in;
+}
+
+@media (max-width: 767px) {
+  main article a[href] > img.aspect-\[4\/3\] {
+    max-height: 58dvh;
+  }
+}
