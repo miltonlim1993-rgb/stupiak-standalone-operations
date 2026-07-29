@@ -196,6 +196,24 @@ function stableCommand(html, options) {
   })
 }
 
+function stableSizeContract(stable) {
+  return {
+    version: STABLE_TSPL_LABEL_VERSION,
+    source: 'stable-tspl-core-v16',
+    physical_width_mm: stable.widthMm,
+    physical_height_mm: stable.heightMm,
+    created_canvas_width_mm: stable.widthMm,
+    created_canvas_height_mm: stable.heightMm,
+    content_width_mm: stable.widthMm,
+    content_height_mm: stable.heightMm,
+    raster_width_dots: stable.report.widthDots,
+    raster_height_dots: stable.report.heightDots,
+    native_command_width_mm: stable.widthMm,
+    native_command_height_mm: stable.heightMm,
+    signature: `${stable.widthMm}x${stable.heightMm}@${stable.dpi}:tspl-stable-v16`,
+  }
+}
+
 async function sendManagedStableLabel(html, profile) {
   const connection = effectiveConnectionType(profile)
   const options = directPrinterOptions(profile)
@@ -225,6 +243,7 @@ async function sendManagedStableLabel(html, profile) {
   }
 
   const profileName = String(options.profile.profile_name || 'Food Label Printer').trim()
+  const sizeContract = stableSizeContract(stable)
   const detail = {
     jobName: extractJobName(html),
     copies: stable.copies,
@@ -238,9 +257,20 @@ async function sendManagedStableLabel(html, profile) {
     profile_name: profileName,
     width_mm: stable.widthMm,
     height_mm: stable.heightMm,
+    layout: {
+      width_mm: stable.widthMm,
+      height_mm: stable.heightMm,
+      dpi: stable.dpi,
+      stable_tspl: true,
+      raster_width_dots: stable.report.widthDots,
+      raster_height_dots: stable.report.heightDots,
+    },
+    size_contract: sizeContract,
     fit_report: stable.report,
     payload_bytes: stable.command.length,
   }
+  window.__chefopsLastCreatedLabelSizeContract = sizeContract
+  window.__chefopsLastCreatedLabelSourceMatched = true
   window.__chefopsLastLabelPrintOutcome = detail
   window.__chefopsLastStableTsplPayload = stable.command
   window.dispatchEvent(new CustomEvent('chefops:native-print-started', { detail }))
