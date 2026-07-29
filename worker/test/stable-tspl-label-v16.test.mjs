@@ -71,7 +71,8 @@ test('unsupported printer characters are sanitized without switching to raster',
     '<div class="title">蓝莓酱 Blueberry Sauce</div>',
   )
   const result = buildStableTsplLabelCommand(chineseHtml, options)
-  assert.match(result.command, /\?\?\? Blueberry Sauce/)
+  assert.match(result.command, /TEXT \d+,\d+,"3",0,1,1,"\?\?\? Blueberry"/)
+  assert.match(result.command, /TEXT \d+,\d+,"3",0,1,1,"Sauce"/)
   assert.doesNotMatch(result.command, /BITMAP/)
 })
 
