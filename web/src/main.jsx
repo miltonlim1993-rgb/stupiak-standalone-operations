@@ -11,7 +11,7 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = 'guided-sop-media-login-v13'
+const SHELL_VERSION = 'guided-sop-responsive-v14'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -119,7 +119,10 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) 
   })
 }
 
-const rootElement = document.getElementById('root')
-ReactDOM.createRoot(rootElement).render(<App />)
-window.addEventListener('load', publishShellHealth, { once: true })
-window.addEventListener('resize', publishShellHealth, { passive: true })
+ReactDOM.createRoot(document.getElementById('root')).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+)
+
+publishShellHealth()
