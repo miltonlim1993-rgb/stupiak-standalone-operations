@@ -1,7 +1,7 @@
 {
   "name": "chefops-standalone",
   "private": true,
-  "version": "4.6.11",
+  "version": "4.6.12",
   "type": "module",
   "workspaces": [
     "web",
@@ -11,7 +11,7 @@
     "dev": "node scripts/dev.mjs",
     "dev:web": "npm run dev -w web",
     "dev:api": "npm run dev -w worker",
-    "check:task-v4-tools": "node --check scripts/audit-task-package-source-v4-locked.mjs && node --check scripts/import-task-sample-photos-v4.mjs && node --check scripts/verify-data-package-release-candidate-locked.mjs && node --check scripts/setup-android.mjs && node --check scripts/configure-android-direct-label-print.mjs && node --check scripts/configure-android-tspl-food-label-compat.mjs",
+    "check:task-v4-tools": "node --check scripts/audit-task-package-source-v4-locked.mjs && node --check scripts/import-task-sample-photos-v4.mjs && node --check scripts/verify-data-package-release-candidate-locked.mjs && node --check scripts/setup-android.mjs && node --check scripts/configure-android-direct-label-print.mjs && node --check scripts/configure-android-tspl-food-label-compat.mjs && node --check scripts/configure-android-all-device-print-v12.mjs && node --check tools/print-bridge/server.mjs",
     "build": "npm run check:task-v4-tools && npm run build -w web && npm run check -w worker",
     "setup:google": "node scripts/setup-google.mjs",
     "deploy:secrets": "node scripts/push-worker-secrets.mjs",
@@ -33,6 +33,7 @@
     "mobile:prepare:task-v3": "node scripts/prepare-android-task-v3.mjs",
     "mobile:apk:task-v3:debug": "npm run mobile:prepare:task-v3 && cd web/android && ./gradlew assembleDebug",
     "mobile:apk:task-v3:release": "npm run mobile:prepare:task-v3 && cd web/android && ./gradlew assembleRelease",
+    "print-bridge": "node tools/print-bridge/server.mjs",
     "test:sales-template-direct": "node scripts/test-sales-template-direct.mjs",
     "cf:render": "node scripts/render-wrangler-production.mjs",
     "cf:deploy": "npm run build && npm run cf:render && npx wrangler deploy --config worker/wrangler.production.jsonc",
