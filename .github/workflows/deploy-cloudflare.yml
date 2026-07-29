@@ -2,9 +2,23 @@ name: Deploy Cloudflare
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'web/**'
+      - 'worker/**'
+      - 'scripts/render-wrangler-production.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/deploy-cloudflare.yml'
 
 permissions:
   contents: read
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: true
 
 jobs:
   deploy:
