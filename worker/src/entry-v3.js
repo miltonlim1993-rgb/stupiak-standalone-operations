@@ -2,7 +2,7 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'master-task-refresh-bilingual-v6-native-tspl-v4.6.11'
+const WORKER_REVISION = 'all-device-print-v12-master-task-refresh-bilingual-v4.6.12'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
