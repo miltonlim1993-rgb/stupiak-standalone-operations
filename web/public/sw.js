@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-14-stable-tspl-v16-cross-device-v15-printer-v12'
+const VERSION = 'chefops-v4-6-15-label-settings-staff-v17-stable-tspl-v16'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -11,12 +11,22 @@ self.addEventListener('install', (event) => {
 })
 
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
+  event.waitUntil(Promise.all([
     caches.keys().then((keys) => Promise.all(keys
       .filter((key) => ![SHELL_CACHE, DATA_CACHE, OCR_CACHE].includes(key))
       .filter((key) => !key.startsWith(PACKAGE_OBJECT_CACHE_PREFIX))
       .map((key) => caches.delete(key)))),
-  )
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clients) => Promise.all(clients.map((client) => {
+      try {
+        const url = new URL(client.url)
+        if (url.origin !== self.location.origin) return undefined
+        if (!['/labels', '/labels/settings', '/more'].includes(url.pathname)) return undefined
+        return client.navigate(client.url)
+      } catch {
+        return undefined
+      }
+    }))),
+  ]))
   self.clients.claim()
 })
 
