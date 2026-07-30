@@ -28,24 +28,25 @@ test('Food and Test labels still block browser page printing', async () => {
   assert.match(stableV20, /window\.__chefopsPrintStableLabelHtml/)
 })
 
-test('Label Settings exposes Windows Queue and Direct IP to staff', async () => {
+test('Label Settings exposes Windows Queue and Kitchen Direct IP to staff', async () => {
   const page = await source('web/src/pages/LabelPrinterSettingsSimpleV20.jsx')
   const app = await source('web/src/App.jsx')
-  assert.match(page, /标签打印机 \/ Label Printer/)
+  assert.match(page, /标签打印机 \/ Label Printers/)
   assert.match(page, /Windows Printer/)
-  assert.match(page, /Direct IP/)
+  assert.match(page, /Kitchen Printer · Direct IP/)
   assert.match(page, /Kitchen Label Printer/)
-  assert.match(page, /Printer IP/)
+  assert.match(page, /Kitchen printer IP/)
   assert.match(page, /Stable TSPL v16/)
   assert.match(page, /printStableLabelHtmlV20/)
+  assert.match(page, /Install \/ Repair Print Service/)
   assert.match(app, /LabelPrinterSettingsSimpleV20/)
 })
 
 test('device-local routes keep bridge credentials out of staff settings', async () => {
   const page = await source('web/src/pages/LabelPrinterSettingsSimpleV20.jsx')
   const connector = await source('web/src/lib/device-printer-v20.js')
-  assert.match(page, /Enter the printer IP/)
-  assert.match(page, /Select a Windows printer queue/)
+  assert.match(page, /Enter the Kitchen printer IP/)
+  assert.match(page, /Select the installed Windows printer/)
   assert.match(connector, /http:\/\/127\.0\.0\.1:8788/)
   assert.match(connector, /targetAddressSpace: 'loopback'/)
   assert.match(connector, /mode: 'queue'/)
