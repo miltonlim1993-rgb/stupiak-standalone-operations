@@ -23,10 +23,11 @@ import { installLabelContentOrientationV7 } from '@/lib/label-content-orientatio
 import { installLabelSettingsStaffV17 } from '@/lib/label-settings-staff-v17'
 import { installWebShellFreshnessV17 } from '@/lib/web-shell-freshness-v17'
 import { installSupermarketBarcodeScannerV25 } from '@/lib/supermarket-barcode-scan-v25'
+import { installLabelFifoPolicyV26 } from '@/lib/install-label-fifo-policy-v26'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.24-supermarket-barcode-scanner-v25'
+const SHELL_VERSION = '4.6.25-label-source-fifo-v26'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -52,6 +53,7 @@ function markRuntime() {
     labelDateBoxes: 'shared-core-narrow-1x2-centered-2-dot-safe-area',
     labelSettingsStaff: 'single-toolbar-icon-v25',
     barcodeScanner: 'supermarket-hid-live-camera-native-v25',
+    labelFifoPolicy: 'three-stage-source-chain-v26',
     webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
@@ -126,6 +128,7 @@ if (isNativeAndroid()) installStableLabelPrintV16()
 else installStableLabelPrintV20()
 installLabelSettingsStaffV17()
 installSupermarketBarcodeScannerV25()
+installLabelFifoPolicyV26()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
 applyTheme()
