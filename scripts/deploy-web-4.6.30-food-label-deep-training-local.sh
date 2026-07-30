@@ -48,7 +48,7 @@ grep -q 'installTrainingQuestionRandomV31' web/src/main.jsx
 grep -q '4.6.30-random-50-v31' web/src/lib/training-question-random-core-v31.js
 grep -q 'randomizeTrainingQuestions(await originalList(...args), 50)' web/src/lib/training-question-random-v31.js
 grep -q '"activeStepCount": 12' config/training-content-baseline-v31.json
-grep -q '"questionBankSize": 50' config/training-content-baseline-v31.json
+grep -q '"questionBankSize": 70' config/training-content-baseline-v31.json
 grep -q '"questionsPerAttempt": 50' config/training-content-baseline-v31.json
 grep -q "import('@/pages/OperationalTasksV2')" web/src/App.jsx
 grep -q "import('@/pages/TrainingHubV29')" web/src/App.jsx
@@ -152,7 +152,7 @@ echo "=================================================="
 echo "URL: $WORKER_URL/training"
 echo "Commit: $COMMIT"
 echo "Food Label SOP: bilingual 12-step deep training"
-echo "Certification: up to 50 randomized questions, 80 percent pass"
+echo "Certification: 70-question bank, 50 randomly selected per attempt, 80 percent pass"
 echo "Existing linked images: eight original step visuals remain"
 echo "New scenario images: tracked separately and not falsely marked complete"
 echo "Tasks, FIFO, scanner, no-delete and Stable TSPL routes remain unchanged"
