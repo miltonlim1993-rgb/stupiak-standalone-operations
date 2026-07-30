@@ -26,6 +26,11 @@ function actionKey(value = '') {
 }
 
 export function labelSourceTier(value = '') {
+  const raw = String(value || '').trim().toLowerCase()
+  const words = ` ${raw.replace(/[^a-z]+/g, ' ').trim()} `
+  if (/\b(refill|refilled|refilling|cook|cooked|cooking)\b/.test(words)) return 3
+  if (/\b(open|opened|opening)\b/.test(words)) return 2
+  if (/\b(prepare|prepared|preparation|freeze|frozen|freezing|receive|received|receiving)\b/.test(words)) return 1
   return ACTION_TIERS.get(actionKey(value)) || 0
 }
 
@@ -50,7 +55,7 @@ export function applyHierarchyToRule(rule = {}) {
     return {
       ...rule,
       requiresSource: true,
-      allowedSourceActions: 'prepare,prepared,freeze,frozen,received,receive',
+      allowedSourceActions: 'prepare,prepared,preparation,freeze,frozen,freezing,received,receive,receiving',
       sourceExpiryMode: 'min',
       sourceUsageMode: 'tracked',
       consumePerLabel: 1,
@@ -63,7 +68,7 @@ export function applyHierarchyToRule(rule = {}) {
   return {
     ...rule,
     requiresSource: true,
-    allowedSourceActions: 'open,opened',
+    allowedSourceActions: 'open,opened,opening',
     sourceExpiryMode: 'min',
     consumePerLabel: 1,
     sourceTier: 3,
