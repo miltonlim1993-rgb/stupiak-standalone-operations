@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-16-web-direct-lan-stable-tspl-v18'
+const VERSION = 'chefops-v4-6-17-auto-web-direct-lan-stable-tspl-v19'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
