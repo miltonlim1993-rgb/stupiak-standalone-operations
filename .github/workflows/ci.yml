@@ -61,9 +61,15 @@ jobs:
         run: node scripts/configure-android-tspl-food-label-compat.mjs
       - name: Configure all-device printer transport v12
         run: node scripts/configure-android-all-device-print-v12.mjs
-      - name: Validate all-device native print paths
+      - name: Configure supermarket barcode scanner v25
+        run: node scripts/configure-android-barcode-scanner-v25.mjs
+      - name: Validate all-device native print and barcode paths
         run: |
           PLUGIN=web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          SCANNER=web/android/app/src/main/java/com/stupiaks/ops/NativeBarcodeScannerPlugin.java
+          MAIN=web/android/app/src/main/java/com/stupiaks/ops/MainActivity.java
+          GRADLE=web/android/app/build.gradle
+          MANIFEST=web/android/app/src/main/AndroidManifest.xml
           grep -q 'public void printSystem(PluginCall call)' "$PLUGIN"
           grep -q 'Android System Print / installed driver' "$PLUGIN"
           grep -q 'driver_bridge' "$PLUGIN"
@@ -73,6 +79,12 @@ jobs:
           grep -q 'sendBluetooth' "$PLUGIN"
           grep -q 'rawCommandBase64' "$PLUGIN"
           grep -q 'result.put("renderMode", renderMode)' "$PLUGIN"
+          grep -q 'registerPlugin(NativeBarcodeScannerPlugin.class)' "$MAIN"
+          grep -q 'play-services-code-scanner:16.1.0' "$GRADLE"
+          grep -q 'android:value="barcode_ui"' "$MANIFEST"
+          grep -q 'enableAutoZoom' "$SCANNER"
+          grep -q 'Barcode.FORMAT_EAN_13' "$SCANNER"
+          grep -q 'Barcode.FORMAT_CODE_128' "$SCANNER"
       - name: Compile unsigned debug APK
         shell: bash
         run: |
