@@ -25,7 +25,7 @@ import { installWebShellFreshnessV17 } from '@/lib/web-shell-freshness-v17'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.21-windows-queue-direct-ip-v23'
+const SHELL_VERSION = '4.6.22-windows-queue-kitchen-ip-service-v24'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -47,9 +47,9 @@ function markRuntime() {
     printerTransport: 'v12',
     stableTsplCore: 'v16-date-fit-v22',
     androidStablePrint: 'v16-date-fit-v22',
-    webStablePrint: 'device-local-v22-windows-queue-direct-ip',
+    webStablePrint: 'device-local-v24-windows-queue-kitchen-ip',
     labelDateBoxes: 'shared-core-narrow-1x2-centered-2-dot-safe-area',
-    labelSettingsStaff: 'two-route-v23',
+    labelSettingsStaff: 'two-route-service-v24',
     webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
