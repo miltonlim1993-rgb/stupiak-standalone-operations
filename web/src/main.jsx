@@ -22,10 +22,11 @@ import { installPrintOutcomeIntegrityV13 } from '@/lib/print-outcome-integrity-v
 import { installLabelContentOrientationV7 } from '@/lib/label-content-orientation-v7'
 import { installLabelSettingsStaffV17 } from '@/lib/label-settings-staff-v17'
 import { installWebShellFreshnessV17 } from '@/lib/web-shell-freshness-v17'
+import { installSupermarketBarcodeScannerV25 } from '@/lib/supermarket-barcode-scan-v25'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.23-windows-installer-startup-v25'
+const SHELL_VERSION = '4.6.24-supermarket-barcode-scanner-v25'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -50,6 +51,7 @@ function markRuntime() {
     webStablePrint: 'device-local-v25-windows-queue-kitchen-ip',
     labelDateBoxes: 'shared-core-narrow-1x2-centered-2-dot-safe-area',
     labelSettingsStaff: 'single-toolbar-icon-v25',
+    barcodeScanner: 'supermarket-hid-live-camera-native-v25',
     webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
@@ -123,6 +125,7 @@ installLabelSizeContractStatusV14()
 if (isNativeAndroid()) installStableLabelPrintV16()
 else installStableLabelPrintV20()
 installLabelSettingsStaffV17()
+installSupermarketBarcodeScannerV25()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
 applyTheme()
