@@ -17,7 +17,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.20-stable-tspl-v16-date-fit-v22.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.21-windows-queue-direct-ip-v23-date-fit-v22.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -41,12 +41,14 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate shared Web and APK date fit, Tasks and printer source
+      - name: Validate current shell and shared Web/APK date fit
         run: |
-          grep -q '"version": "4.6.20"' package.json
-          grep -q "chefops-v4-6-20-shared-web-apk-date-fit-v22" web/public/sw.js
-          grep -q "4.6.20-shared-web-apk-date-fit-v22" web/src/main.jsx
+          grep -q '"version": "4.6.21"' package.json
+          grep -q "chefops-v4-6-21-windows-queue-direct-ip-v23" web/public/sw.js
+          grep -q "4.6.21-windows-queue-direct-ip-v23" web/src/main.jsx
           grep -q "androidStablePrint: 'v16-date-fit-v22'" web/src/main.jsx
+          grep -q "webStablePrint: 'device-local-v22-windows-queue-direct-ip'" web/src/main.jsx
+          grep -q "labelSettingsStaff: 'two-route-v23'" web/src/main.jsx
           grep -q "STABLE_TSPL_LABEL_VERSION = '4.6.20-stable-tspl-core-v16-date-fit-v22'" web/src/lib/stable-tspl-label-v16.js
           grep -q "function fittedDateCommand" web/src/lib/stable-tspl-label-v16.js
           grep -q "date_box_padding_dots: 2" web/src/lib/stable-tspl-label-v16.js
@@ -56,7 +58,7 @@ jobs:
           ! grep -q "BITMAP" web/src/lib/stable-tspl-label-v16.js
           grep -q "rawCommandBase64: asciiBase64(stable.command)" web/src/lib/stable-label-print-v16.js
           ! grep -q "html-raster" web/src/lib/stable-label-print-v16.js
-          grep -q "shared-web-apk-date-fit-v22-v4.6.20" worker/src/entry-v3.js
+          grep -q "windows-queue-direct-ip-v23-v4.6.21" worker/src/entry-v3.js
           grep -q "installDeviceViewportV15" web/src/main.jsx
           grep -q "cross-device-v15.css" web/src/main.jsx
           grep -q "window.visualViewport" web/src/lib/device-viewport-v15.js
@@ -100,7 +102,7 @@ jobs:
           grep -q "sendNetworkRaw" scripts/configure-android-all-device-print-v12.mjs
           grep -q "sendNetworkLpr" scripts/configure-android-all-device-print-v12.mjs
           grep -q "sendBluetooth" scripts/configure-android-all-device-print-v12.mjs
-          grep -q "LabelPrinterSettingsPublic" web/src/App.jsx
+          grep -q "LabelPrinterSettingsSimpleV20" web/src/App.jsx
           grep -q "PrinterProfile: LEVEL.staff" worker/src/permissions.js
           ! grep -q "installShellGuard" web/src/main.jsx
       - name: Generate and sync Capacitor Android project
@@ -174,13 +176,13 @@ jobs:
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
             "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
-            "release/${APK_STABLE_TSPL_FILE_NAME}#Stupiak's Ops Stable TSPL Core v16 Date Fit v22 APK" \
+            "release/${APK_STABLE_TSPL_FILE_NAME}#Stupiak's Ops Stable TSPL v16 Date Fit v22 APK" \
             "release/${APK_V12_FILE_NAME}#Stupiak's Ops All Device Print v12 APK" \
             "release/${APK_V10_FILE_NAME}#Compatibility alias for previous Direct Print Flow APK URL" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.20 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. The stable TSPL v16 core now applies the same narrow 1x2 centered Made/Use By date layout used by the verified Web output. Both date strings stay inside their own boxes with a two-dot safe edge. LAN, Wi-Fi and Bluetooth transport, 40x30 mm media, 203 dpi, Gap 2 mm, offsets and barcode behavior remain unchanged."
+            --title "Stupiak's Ops 4.6.21 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Android now uses the same narrow 1x2 centered Made/Use By date commands as the verified Web output, with a two-dot safe edge inside each box. The accepted Native RAW TSPL transport remains unchanged. Current Web Windows Queue/Direct IP settings, 40x30 mm media, 203 dpi, Gap 2 mm, offsets, barcode behavior and Staff access remain included."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
