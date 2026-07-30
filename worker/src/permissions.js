@@ -55,6 +55,10 @@ export function assertAssignedOutletAccess(user, outletId) {
 }
 
 export function assertReadPermission(user, entity) {
+  if (entity === 'PrinterProfile') {
+    if (level(user?.role) < LEVEL.staff) deny('Sign in as outlet staff to view printer settings')
+    return
+  }
   if (entity === 'Notification') deny('Use the notification API')
   if (entity === 'LabelPrintLog') deny('Use the label printing API')
   if (entity === 'User' && level(user.role) < LEVEL.manager) deny('Only managers can view users')
@@ -99,6 +103,10 @@ export function assertUpdatePermission(user, entity, existing, patch) {
   if (entity === 'LabelPrintLog') deny('Use the label printing API')
   if (['InventoryCatalog', 'OutletStockList'].includes(entity)) deny(`${entity} is managed in ChefOps Master`)
   const userLevel = level(user.role)
+  if (entity === 'PrinterProfile') {
+    if (userLevel < LEVEL.staff) deny('Sign in as outlet staff to update printer settings')
+    return
+  }
   if (entity === 'User') {
     if (userLevel < LEVEL.manager) deny('Only managers can update users')
     if (patch.role === 'owner' && user.role !== 'owner') deny('Only an owner can grant the owner role')
@@ -148,9 +156,12 @@ export function assertDeletePermission(user, entity, existing) {
   if (entity === 'LabelPrintLog') deny('Use the label printing API')
   if (['InventoryCatalog', 'OutletStockList'].includes(entity)) deny(`${entity} is managed in ChefOps Master`)
   const userLevel = level(user.role)
+  if (entity === 'PrinterProfile') {
+    if (userLevel < LEVEL.staff) deny('Sign in as outlet staff to delete printer settings')
+    return
+  }
   if (entity === 'User' && existing.role === 'owner' && user.role !== 'owner') deny('Only an owner can delete another owner')
   if (entity === 'User' && existing.id === user.id) deny('You cannot delete your own active account')
-  if (entity === 'PrinterProfile') return
   if ([
     'User', 'Outlet', 'Task', 'TaskTemplate', 'TaskTemplatePhoto', 'InventoryItem',
     'AppSetting', 'MediaRule', 'SOP', 'SOPStep', 'SOPAsset', 'TrainingCourse',
