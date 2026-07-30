@@ -76,7 +76,7 @@ function hardwareKeydown(event) {
   if (!labelsPage() || scannerCleanup || event.ctrlKey || event.altKey || event.metaKey) return
   const now = performance.now()
 
-  if (event.key === 'Enter') {
+  if (event.key === 'Enter' || event.key === 'Tab') {
     const code = buffer
     const duration = startedAt ? now - startedAt : Infinity
     resetBuffer()
@@ -227,7 +227,9 @@ async function startScanner() {
   if (nativeAndroid() && nativeScanner?.scan) {
     try {
       const result = await nativeScanner.scan()
-      if (!complete(result?.rawValue || result?.value)) throw new Error('No barcode was returned')
+      const value = normaliseScannedValue(result?.rawValue || result?.value)
+      if (!value) throw new Error('No barcode was returned')
+      complete(value)
       return
     } catch (error) {
       if (/cancel/i.test(clean(error?.message))) return
