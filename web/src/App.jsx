@@ -11,8 +11,8 @@ import Layout from '@/components/Layout'
 
 const PageNotFound = lazy(() => import('@/lib/PageNotFound'))
 const Login = lazy(() => import('@/pages/Login'))
-const Dashboard = lazy(() => import('@/pages/Dashboard'))
-const Tasks = lazy(() => import('@/pages/Tasks'))
+const Dashboard = lazy(() => import('@/pages/DashboardV3'))
+const Tasks = lazy(() => import('@/pages/OperationalTasksV2'))
 const StockCount = lazy(() => import('@/pages/StockCount'))
 const UrgentIssues = lazy(() => import('@/pages/UrgentIssues'))
 const More = lazy(() => import('@/pages/More'))
@@ -20,12 +20,14 @@ const Inventory = lazy(() => import('@/pages/Inventory'))
 const Attendance = lazy(() => import('@/pages/Attendance'))
 const Receipts = lazy(() => import('@/pages/Receipts'))
 const FoodLabels = lazy(() => import('@/pages/FoodLabels'))
-const LabelSettings = lazy(() => import('@/pages/LabelPrinterSettings'))
+const LabelSettings = lazy(() => import('@/pages/LabelPrinterSettingsSimpleV20'))
 const Reports = lazy(() => import('@/pages/Reports'))
 const Settings = lazy(() => import('@/pages/Settings'))
 const OpsControl = lazy(() => import('@/pages/OpsControl'))
 const DataPackages = lazy(() => import('@/pages/DataPackages'))
-const Training = lazy(() => import('@/pages/Training'))
+const TrainingHub = lazy(() => import('@/pages/TrainingHubV29'))
+const TrainingManage = lazy(() => import('@/pages/Training'))
+const GuidedSop = lazy(() => import('@/pages/GuidedSopLearningV30'))
 const ProfileSetup = lazy(() => import('@/pages/ProfileSetup'))
 const CloseUp = lazy(() => import('@/pages/CloseUp'))
 const InstallApp = lazy(() => import('@/pages/InstallApp'))
@@ -68,8 +70,9 @@ function AppRoutes() {
               <Route path="/settings" element={<Settings />} />
               <Route path="/ops-control" element={<OpsControl />} />
               <Route path="/data-packages" element={<DataPackages />} />
-              <Route path="/training" element={<Training />} />
-              <Route path="/sop/:sopId" element={<Training />} />
+              <Route path="/training" element={<TrainingHub />} />
+              <Route path="/training/manage" element={<TrainingManage />} />
+              <Route path="/sop/:sopId" element={<GuidedSop />} />
             </Route>
           </Route>
           <Route path="*" element={<PageNotFound />} />

@@ -18,6 +18,7 @@ import { useAuth } from "@/lib/AuthContext";
 import { ROLE_LEVEL } from "@/lib/ops-helpers";
 
 const commonOperations = [
+  { to: "/labels/settings", label: "Label Printer Settings", desc: "All staff can choose, test and tune this device + outlet printer", icon: Printer },
   { to: "/inventory", label: "Outlet Stock List", desc: "View this outlet's enabled list and minimums", icon: Boxes },
   { to: "/training", label: "SOP & Training", desc: "Read SOPs, complete courses and track progress", icon: GraduationCap },
 ];
@@ -30,7 +31,7 @@ const mobileOnlyOperations = [
 
 const systemItems = [
   { to: "/notifications", label: "Notifications", desc: "Updates sent to your user ID", icon: Bell },
-  { to: "/install", label: "Install App", desc: "PWA, operational patch and Android status", icon: Download },
+  { to: "/install", label: "Install App", desc: "Install or update Android/PWA and refresh outlet data", icon: Download },
   { to: "/settings", label: "Settings", desc: "Profile and standalone connection", icon: Settings },
 ];
 
@@ -41,7 +42,6 @@ export default function More() {
     ...(canUseControl ? [
       { to: "/ops-control", label: "Ops Control", desc: "Approve access, assign outlets and send updates", icon: ShieldCheck },
       { to: "/data-packages", label: "Data Packages", desc: "Preview, publish, install and roll back offline Task, SOP, Stock and Label releases", icon: Database },
-      { to: "/labels/settings", label: "Label Printer Settings", desc: "Direct Wi-Fi/LAN or paired Bluetooth printing, printer language and label size", icon: Printer },
     ] : []),
     { to: "/reports", label: "Reports", desc: "Export operations, stock, photo and training reports", icon: BarChart3 },
   ];
@@ -50,16 +50,16 @@ export default function More() {
     <div className="chefops-page more-page mx-auto w-full max-w-5xl space-y-5 p-4">
       <div>
         <h1 className="text-xl font-heading font-bold">More</h1>
-        <p className="mt-0.5 text-xs text-muted-foreground">Tools that are not already shown in the current navigation mode.</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Operations, device and system tools.</p>
       </div>
 
-      <MenuSection title="Operations" items={commonOperations} />
+      <MenuSection title="Operations & device" items={commonOperations} />
       <div className="chefops-more-mobile-only">
         <MenuSection title="Mobile shortcuts" items={mobileOnlyOperations} />
       </div>
       <MenuSection title="Management" items={managementItems} />
       <MenuSection title="System" items={systemItems} />
-      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Direct Print Flow v10 · Data Package v2 preview</p>
+      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Staff Label Settings v17 · Stable TSPL v16</p>
     </div>
   );
 }

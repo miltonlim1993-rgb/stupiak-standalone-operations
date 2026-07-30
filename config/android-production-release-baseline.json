@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-31T07:30:00+08:00",
+  "releasePolicy": {
+    "status": "HOLD_UNTIL_EXPLICIT_APPROVAL",
+    "releaseTag": "android-release-latest",
+    "moveReleaseTagBeforeApproval": false,
+    "requireSameProductionSigningCertificate": true,
+    "requirePhysicalOutletAcceptanceBeforeReplacingRelease": true
+  },
+  "acceptedAndroidBaseline": {
+    "printingCore": "stable-tspl-v16-date-fit-v22",
+    "physicalMediaMm": "40x30",
+    "dpi": 203,
+    "printerModel": "4BARCODE 4B-2054K",
+    "preserveWithoutRegression": [
+      "TSPL command layout",
+      "physical media size and gap",
+      "date-fit behavior",
+      "barcode printing",
+      "Direct IP RAW TCP printing",
+      "existing production signing identity"
+    ]
+  },
+  "heldChangesForNextSignedApk": {
+    "minimumSourceVersion": "4.6.30",
+    "sourceBranch": "feature/task-workflow-v3-apk",
+    "fifoBaselineCommit": "2f53469f76b378c6d1882bc8adf8f8121b4bced5",
+    "noDeleteAndContentBaselineCommit": "3b85198ac5095b9538ee363a67e838d692b30cd9",
+    "include": [
+      "three-stage label source hierarchy: Prepare/Freeze/Received -> Open -> Refill/Cooked",
+      "FIFO source enforcement and first/second-hand extra-print lock",
+      "updated ExpiryRules source-product mappings",
+      "native supermarket barcode scanner v25",
+      "hard-delete controls removed from the Android WebView shell",
+      "Worker hard-delete rejection for old and new clients",
+      "restored Task v4/v5 bilingual baseline",
+      "restored OperationalTasksV2 daily task interface",
+      "correct Kitchen Station SOP and Training baseline",
+      "compact Ops-aligned Training Hub v29",
+      "compact Ops-aligned Guided SOP detail reader v30",
+      "Food Label, FIFO and traceability SOP v3 with 12 bilingual deep-learning steps",
+      "Food Label certification course with a 70-question bank, 50 randomly selected per attempt and an 80 percent pass score",
+      "clean active-linked-content-only Data Package v2",
+      "latest Web/API compatibility"
+    ],
+    "workstreamReleaseState": "No signed APK was published or replaced by the 4.6.24 through 4.6.30 work in this PR. Existing installed APK remains the production baseline until an explicitly approved signed release."
+  },
+  "futureReleaseChecklist": [
+    "Deploy and accept Web/Worker 4.6.30 first",
+    "Publish and install the clean Data Package v2 after the new Training content and assets are complete",
+    "Build from a 4.6.30-or-later reviewed commit",
+    "Use the existing production keystore and alias",
+    "Verify APK certificate and SHA-256",
+    "Confirm no Delete/Trash controls are visible",
+    "Confirm stable TSPL output on the outlet printer",
+    "Test first-hand, Open, and Refill/Cooked FIFO flows",
+    "Test restored OperationalTasksV2 and compact Training Hub",
+    "Test the compact Guided SOP detail reader on phone, tablet and desktop",
+    "Test the Food Label 12-step bilingual training and verify that each attempt selects 50 questions from the 70-question bank",
+    "Test native barcode scanner",
+    "Only then replace android-release-latest"
+  ]
+}

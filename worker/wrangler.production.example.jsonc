@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stupiaks-ops",
-  "main": "src/entry.js",
+  "main": "src/entry-v3.js",
   "compatibility_date": "2026-07-25",
   "assets": {
     "directory": "../web/dist",

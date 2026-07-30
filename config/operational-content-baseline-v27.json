@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "policyVersion": "operational-content-baseline-v27",
+  "recordedAt": "2026-07-30T18:50:00+08:00",
+  "task": {
+    "approvedActiveTemplateIds": [
+      "tmpl-rr-opening-checklist-v3",
+      "tmpl-rr-toilet-full-v3",
+      "tmpl-rr-morning-cleaning-v4",
+      "tmpl-rr-toilet-quick-v4",
+      "tmpl-rr-evening-closing-v4",
+      "tmpl-rr-weekly-deep-fryer-freezer-v5",
+      "tmpl-rr-weekly-kitchen-door-freezer-v5",
+      "tmpl-rr-weekly-kitchen-freezer-v5",
+      "tmpl-rr-weekly-kitchen-meat-freezer-v5",
+      "tmpl-rr-weekly-kitchen-cashier-chillers-v5"
+    ],
+    "retiredTemplateIds": [
+      "tmpl-rr-opening-preparation-v6",
+      "tmpl-rr-opening-area-v6",
+      "tmpl-rr-nonbusy-cleaning-v6",
+      "tmpl-rr-closing-kitchen-v6",
+      "tmpl-rr-closing-front-v6",
+      "tmpl-rr-toilet-closing-v6",
+      "tmpl-rr-garbage-bin-v6",
+      "tmpl-rr-freezer-deep-clean-v6"
+    ],
+    "contentRule": "Task checklists stay in Tasks and remain fixed Chinese-first bilingual content. They must not be duplicated into Training."
+  },
+  "training": {
+    "approvedKitchenSopCodes": [
+      "SOP-KIT-001",
+      "SOP-KIT-002",
+      "SOP-KIT-003",
+      "SOP-KIT-004",
+      "SOP-KIT-005"
+    ],
+    "retiredDuplicateSopCodes": [
+      "SOP-OPS-101",
+      "SOP-OPS-102",
+      "SOP-OPS-103",
+      "SOP-OPS-104",
+      "SOP-OPS-105",
+      "SOP-OPS-106",
+      "SOP-OPS-107",
+      "SOP-OPS-108"
+    ],
+    "requiredStationSops": [
+      "sop-fryer-oil",
+      "sop-grill-packaging",
+      "sop-grill-station"
+    ],
+    "contentRule": "Training contains true guided SOP chapters, steps and assets. Daily Task checklists and discontinued materials are excluded."
+  },
+  "package": {
+    "excludeDeletedRecords": true,
+    "excludeInactiveRecords": true,
+    "excludeRetiredTemplates": true,
+    "excludeOrphanMedia": true,
+    "preserveSourceDriveFiles": true,
+    "removalMode": "soft-disable-and-exclude-from-new-package"
+  },
+  "deletePolicy": {
+    "hardDeleteEnabled": false,
+    "allowedAlternatives": ["archive", "void", "inactive", "retired", "corrective workflow"]
+  }
+}

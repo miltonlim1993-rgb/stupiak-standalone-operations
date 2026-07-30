@@ -12,10 +12,12 @@ jobs:
     env:
       APK_RELEASE_TAG: android-release-latest
       APK_FILE_NAME: stupiaks-ops-release.apk
+      APK_STABLE_TSPL_FILE_NAME: stupiaks-ops-stable-tspl-v16.apk
+      APK_V12_FILE_NAME: stupiaks-ops-all-device-print-v12.apk
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.1.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.30-food-label-deep-training-v31.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -31,79 +33,155 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+
       - name: Validate signing secrets
         run: |
           test -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}"
           test -n "${ANDROID_KEYSTORE_PASSWORD}"
           test -n "${ANDROID_KEY_ALIAS}"
           test -n "${ANDROID_KEY_PASSWORD}"
+
       - name: Install dependencies
         run: npm ci
-      - name: Validate direct print flow v10 source
+
+      - name: Validate held 4.6.30 training shell and stable print boundary
         run: |
-          grep -q "direct-print-flow-shell-v10" web/public/sw.js
-          grep -q "direct-print-flow-shell-v10" web/src/main.jsx
-          grep -q "@/direct-print-v10.css" web/src/main.jsx
-          grep -q "DirectLabelPrint" web/src/lib/native-label-print.js
-          grep -q "printDirect" web/src/lib/native-label-print.js
-          grep -q "DirectLabelPrintPlugin.class" scripts/configure-android-direct-label-print.mjs
-          grep -q "buildTspl" scripts/configure-android-direct-label-print.mjs
-          grep -q "buildZpl" scripts/configure-android-direct-label-print.mjs
-          grep -q "buildCpcl" scripts/configure-android-direct-label-print.mjs
-          grep -q "buildEscPos" scripts/configure-android-direct-label-print.mjs
-          grep -q "sendNetwork" scripts/configure-android-direct-label-print.mjs
-          grep -q "sendBluetooth" scripts/configure-android-direct-label-print.mjs
-          grep -q "position: static !important" web/src/direct-print-v10.css
-          grep -q 'id="chefops-mobile-main"' web/src/components/Layout.jsx
-          grep -q 'id="chefops-mobile-nav"' web/src/components/Layout.jsx
-          grep -q 'refetchInterval: false' web/src/lib/query-client.js
-          grep -q 'App shell: Direct Print Flow v10' web/src/pages/More.jsx
-          grep -q 'purgeNativeServiceWorkers' web/src/main.jsx
-          ! grep -q 'installShellGuard' web/src/main.jsx
+          set -Eeuo pipefail
+          grep -q '"version": "4.6.30"' package.json
+          grep -q "chefops-v4-6-30-food-label-deep-training-v31" web/public/sw.js
+          grep -q "4.6.30-food-label-deep-training-v31" web/src/main.jsx
+          grep -q "import('@/pages/OperationalTasksV2')" web/src/App.jsx
+          grep -q "import('@/pages/TrainingHubV29')" web/src/App.jsx
+          grep -q "import('@/pages/GuidedSopLearningV30')" web/src/App.jsx
+          grep -q 'data-training-hub="ops-compact-v29"' web/src/pages/TrainingHubV29.jsx
+          grep -q 'data-sop-standard="ops-compact-guided-v30"' web/src/pages/GuidedSopLearningV30.jsx
+          test ! -f web/src/pages/GuidedSopLearning.jsx
+          grep -q 'operationalBootstrap' web/src/pages/OperationalTasksV2.jsx
+          grep -q "foodLabelTraining: 'deep-bilingual-12-step-v31'" web/src/main.jsx
+          grep -q "trainingQuestionBank: 'random-up-to-50-v31'" web/src/main.jsx
+          grep -q 'installTrainingQuestionRandomV31' web/src/main.jsx
+          grep -q '4.6.30-random-50-v31' web/src/lib/training-question-random-core-v31.js
+          grep -q '"activeStepCount": 12' config/training-content-baseline-v31.json
+          grep -q '"questionBankSize": 70' config/training-content-baseline-v31.json
+          grep -q '"questionsPerAttempt": 50' config/training-content-baseline-v31.json
+          grep -q "noDeletePolicy: 'hard-delete-disabled-v27'" web/src/main.jsx
+          grep -q "installNoDeleteUiV27" web/src/main.jsx
+          grep -q "lucide-trash-2" web/src/lib/no-delete-ui-v27.js
+          grep -q "hard_delete_disabled" worker/src/no-delete-policy-v27.js
+          grep -q "operational-content-baseline-v27" config/operational-content-baseline-v27.json
+          grep -q "barcodeScanner: 'supermarket-hid-live-camera-native-v25'" web/src/main.jsx
+          grep -q "stableTsplCore: 'v16-date-fit-v22'" web/src/main.jsx
+          grep -q "androidStablePrint: 'v16-date-fit-v22'" web/src/main.jsx
+          grep -q "SUPERMARKET_BARCODE_SCANNER_VERSION" web/src/lib/supermarket-barcode-scan-v25.js
+          grep -q "document.addEventListener('keydown', hardwareKeydown, true)" web/src/lib/supermarket-barcode-scan-v25.js
+          grep -q "getUserMedia" web/src/lib/supermarket-barcode-scan-v25.js
+          grep -q "windows-queue-kitchen-ip" web/src/main.jsx
+          grep -q "STABLE_TSPL_LABEL_VERSION = '4.6.20-stable-tspl-core-v16-date-fit-v22'" web/src/lib/stable-tspl-label-v16.js
+          grep -q 'lines.push(`PRINT ${copies},1`)' web/src/lib/stable-tspl-label-v16.js
+          ! grep -q "BITMAP" web/src/lib/stable-tspl-label-v16.js
+          grep -q "rawCommandBase64: asciiBase64(stable.command)" web/src/lib/stable-label-print-v16.js
+          ! grep -q "html-raster" web/src/lib/stable-label-print-v16.js
+          grep -q "food-label-deep-training-v31-v4.6.30" worker/src/entry-v3.js
+          grep -q "HOLD_UNTIL_EXPLICIT_APPROVAL" config/android-production-release-baseline.json
+          ! grep -q "installShellGuard" web/src/main.jsx
+
+      - name: Build and run the complete validation suite
+        run: npm run build
+
       - name: Generate and sync Capacitor Android project
         run: npm run mobile:init
+
       - name: Apply Stupiak's Ops Android launcher icon
         run: node scripts/configure-android-branding.mjs
+
       - name: Configure native Google Credential Manager, system print and mobile WebView
         run: node scripts/configure-android-native-google-auth.mjs
-      - name: Configure direct LAN and Bluetooth label printing
+
+      - name: Configure direct printer transport and media controls
         run: node scripts/configure-android-direct-label-print.mjs
+
+      - name: Configure native TSPL food label compatibility
+        run: node scripts/configure-android-tspl-food-label-compat.mjs
+
+      - name: Configure all-device printer transport v12
+        run: node scripts/configure-android-all-device-print-v12.mjs
+
+      - name: Configure supermarket barcode scanner v25
+        run: node scripts/configure-android-barcode-scanner-v25.mjs
+
+      - name: Validate generated native print, scanner and no-delete paths
+        run: |
+          set -Eeuo pipefail
+          PLUGIN=web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          SCANNER=web/android/app/src/main/java/com/stupiaks/ops/NativeBarcodeScannerPlugin.java
+          MAIN=web/android/app/src/main/java/com/stupiaks/ops/MainActivity.java
+          GRADLE=web/android/app/build.gradle
+          MANIFEST=web/android/app/src/main/AndroidManifest.xml
+          grep -q 'public void printSystem(PluginCall call)' "$PLUGIN"
+          grep -q 'sendNetworkRaw' "$PLUGIN"
+          grep -q 'sendNetworkLpr' "$PLUGIN"
+          grep -q 'sendBluetooth' "$PLUGIN"
+          grep -q 'rawCommandBase64' "$PLUGIN"
+          grep -q 'result.put("renderMode", renderMode)' "$PLUGIN"
+          grep -q 'registerPlugin(NativeBarcodeScannerPlugin.class)' "$MAIN"
+          grep -q 'play-services-code-scanner:16.1.0' "$GRADLE"
+          grep -q 'android:value="barcode_ui"' "$MANIFEST"
+          grep -q 'enableAutoZoom' "$SCANNER"
+          grep -q 'Barcode.FORMAT_EAN_13' "$SCANNER"
+          grep -q 'Barcode.FORMAT_CODE_128' "$SCANNER"
+          grep -q 'Barcode.FORMAT_QR_CODE' "$SCANNER"
+          grep -q 'hard-delete-disabled-v27' web/dist/assets/*.js
+          grep -q 'ops-compact-v29' web/dist/assets/*.js
+          grep -q 'ops-compact-guided-v30' web/dist/assets/*.js
+          grep -q 'random-up-to-50-v31' web/dist/assets/*.js
+          grep -q '今日任务' web/dist/assets/*.js
+
       - name: Restore private release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           printf '%s' "${ANDROID_KEYSTORE_BASE64}" | base64 --decode > web/android/app/stupiaks-ops-release.jks
           chmod 600 web/android/app/stupiaks-ops-release.jks
+
       - name: Configure release signing
         run: node scripts/configure-android-release-signing.mjs
+
       - name: Build signed release APK and AAB
         run: |
           chmod +x web/android/gradlew
           cd web/android
           ./gradlew clean assembleRelease bundleRelease
+
       - name: Verify APK signature
         run: |
           APK_PATH="web/android/app/build/outputs/apk/release/app-release.apk"
           APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "${APKSIGNER}"
           "${APKSIGNER}" verify --verbose --print-certs "${APK_PATH}"
+
       - name: Prepare release files
         run: |
           mkdir -p release
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_FILE_NAME}"
+          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_STABLE_TSPL_FILE_NAME}"
+          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V12_FILE_NAME}"
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V10_FILE_NAME}"
           cp web/android/app/build/outputs/bundle/release/app-release.aab "release/${AAB_FILE_NAME}"
-          sha256sum "release/${APK_FILE_NAME}" "release/${APK_V10_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
+          sha256sum "release/${APK_FILE_NAME}" "release/${APK_STABLE_TSPL_FILE_NAME}" "release/${APK_V12_FILE_NAME}" "release/${APK_V10_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
+
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: stupiaks-ops-signed-release
           path: |
             release/stupiaks-ops-release.apk
+            release/stupiaks-ops-stable-tspl-v16.apk
+            release/stupiaks-ops-all-device-print-v12.apk
             release/stupiaks-ops-direct-print-flow-v10.apk
             release/stupiaks-ops-release.aab
             release/SHA256SUMS.txt
           if-no-files-found: error
+
       - name: Publish stable signed release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -111,13 +189,18 @@ jobs:
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
             "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
-            "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
+            "release/${APK_STABLE_TSPL_FILE_NAME}#Stupiak's Ops Stable TSPL v16 APK" \
+            "release/${APK_V12_FILE_NAME}#Stupiak's Ops All Device Print v12 APK" \
+            "release/${APK_V10_FILE_NAME}#Compatibility alias for previous Direct Print Flow APK URL" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Direct Print Flow v10 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Direct Print Flow v10 keeps Close Up submit controls in normal mobile document flow and sends labels directly to configured Wi-Fi/LAN or paired Bluetooth Classic printers using TSPL, ZPL, CPCL or ESC/POS without leaving the app or opening Android print preview."
+            --title "Stupiak's Ops 4.6.30 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Includes the 12-step bilingual Food Label, FIFO and traceability training with a 70-question bank and 50 randomly selected per attempt, compact Training and SOP interfaces, no-delete, FIFO and supermarket scanning, while preserving the physically accepted Stable TSPL v16 printing route."
+
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
-          echo "V10 APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V10_FILE_NAME}"
+          echo "Stable TSPL APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_STABLE_TSPL_FILE_NAME}"
+          echo "V12 APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V12_FILE_NAME}"
+          echo "Compatibility APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V10_FILE_NAME}"
           echo "AAB: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${AAB_FILE_NAME}"

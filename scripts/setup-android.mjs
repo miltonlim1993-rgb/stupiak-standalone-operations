@@ -11,8 +11,36 @@ function run(command, args, cwd = root) {
 }
 
 if (!existsSync(path.join(web, 'package.json'))) throw new Error('Run this from the ChefOps project root.')
-run('npm', ['install', '-w', 'web', '@capacitor/core@^8', '@capacitor/android@^8', '@capacitor/app@^8'])
-run('npm', ['install', '-D', '-w', 'web', '@capacitor/cli@^8'])
+const requiredPackages = [
+  '@capacitor/core',
+  '@capacitor/android',
+  '@capacitor/app',
+  '@capacitor/cli',
+]
+
+for (const packageName of requiredPackages) {
+  const parts = packageName.split('/')
+  const candidates = [
+    path.join(
+      root,
+      'node_modules',
+      ...parts,
+      'package.json',
+    ),
+    path.join(
+      web,
+      'node_modules',
+      ...parts,
+      'package.json',
+    ),
+  ]
+
+  if (!candidates.some((candidate) => existsSync(candidate))) {
+    throw new Error(
+      `Missing ${packageName}. Run npm install from the repository root.`,
+    )
+  }
+}
 run('npm', ['run', 'build', '-w', 'web'])
 if (!existsSync(path.join(web, 'android'))) run('npx', ['cap', 'add', 'android'], web)
 run('npx', ['cap', 'sync', 'android'], web)

@@ -16,5 +16,87 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
-      - run: npm run build
+      - name: Install dependencies
+        run: npm ci
+      - name: Build and test
+        shell: bash
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee source-validation-build.log
+      - name: Upload source validation log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-validation-build-log
+          path: source-validation-build.log
+          if-no-files-found: warn
+          retention-days: 7
+
+  android-native-compile:
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
+      VITE_GOOGLE_LOGIN_CLIENT_ID: 460544373229-06mv64nt3e78mtse5sc375cobv13i1ii.apps.googleusercontent.com
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install dependencies
+        run: npm ci
+      - name: Generate Android project
+        run: npm run mobile:init
+      - name: Apply Android branding
+        run: node scripts/configure-android-branding.mjs
+      - name: Configure native authentication and system print
+        run: node scripts/configure-android-native-google-auth.mjs
+      - name: Configure printer hardware profiles
+        run: node scripts/configure-android-direct-label-print.mjs
+      - name: Configure native TSPL food labels
+        run: node scripts/configure-android-tspl-food-label-compat.mjs
+      - name: Configure all-device printer transport v12
+        run: node scripts/configure-android-all-device-print-v12.mjs
+      - name: Configure supermarket barcode scanner v25
+        run: node scripts/configure-android-barcode-scanner-v25.mjs
+      - name: Validate all-device native print and barcode paths
+        run: |
+          PLUGIN=web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          SCANNER=web/android/app/src/main/java/com/stupiaks/ops/NativeBarcodeScannerPlugin.java
+          MAIN=web/android/app/src/main/java/com/stupiaks/ops/MainActivity.java
+          GRADLE=web/android/app/build.gradle
+          MANIFEST=web/android/app/src/main/AndroidManifest.xml
+          grep -q 'public void printSystem(PluginCall call)' "$PLUGIN"
+          grep -q 'Android System Print / installed driver' "$PLUGIN"
+          grep -q 'driver_bridge' "$PLUGIN"
+          grep -q 'X-Print-Bridge-Token' "$PLUGIN"
+          grep -q 'sendNetworkRaw' "$PLUGIN"
+          grep -q 'sendNetworkLpr' "$PLUGIN"
+          grep -q 'sendBluetooth' "$PLUGIN"
+          grep -q 'rawCommandBase64' "$PLUGIN"
+          grep -q 'result.put("renderMode", renderMode)' "$PLUGIN"
+          grep -q 'registerPlugin(NativeBarcodeScannerPlugin.class)' "$MAIN"
+          grep -q 'play-services-code-scanner:16.1.0' "$GRADLE"
+          grep -q 'android:value="barcode_ui"' "$MANIFEST"
+          grep -q 'enableAutoZoom' "$SCANNER"
+          grep -q 'Barcode.FORMAT_EAN_13' "$SCANNER"
+          grep -q 'Barcode.FORMAT_CODE_128' "$SCANNER"
+      - name: Compile unsigned debug APK
+        shell: bash
+        run: |
+          set -o pipefail
+          chmod +x web/android/gradlew
+          cd web/android
+          ./gradlew clean assembleDebug 2>&1 | tee ../../android-native-compile.log
+      - name: Upload Android compile log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-native-compile-log
+          path: android-native-compile.log
+          if-no-files-found: warn
+          retention-days: 7
