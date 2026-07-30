@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-23-windows-installer-startup-v25'
+const VERSION = 'chefops-v4-6-24-supermarket-barcode-scanner-v25'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
