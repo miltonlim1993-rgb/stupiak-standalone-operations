@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-07-30T18:27:00+08:00",
+  "recordedAt": "2026-07-30T18:55:00+08:00",
   "releasePolicy": {
     "status": "HOLD_UNTIL_EXPLICIT_APPROVAL",
     "releaseTag": "android-release-latest",
@@ -23,25 +23,34 @@
     ]
   },
   "heldChangesForNextSignedApk": {
-    "minimumSourceVersion": "4.6.25",
+    "minimumSourceVersion": "4.6.26",
     "sourceBranch": "feature/task-workflow-v3-apk",
     "fifoBaselineCommit": "2f53469f76b378c6d1882bc8adf8f8121b4bced5",
+    "noDeleteAndContentBaselineCommit": "3b85198ac5095b9538ee363a67e838d692b30cd9",
     "include": [
       "three-stage label source hierarchy: Prepare/Freeze/Received -> Open -> Refill/Cooked",
       "FIFO source enforcement and first/second-hand extra-print lock",
       "updated ExpiryRules source-product mappings",
       "native supermarket barcode scanner v25",
+      "hard-delete controls removed from the Android WebView shell",
+      "Worker hard-delete rejection for old and new clients",
+      "restored Task v4/v5 bilingual baseline",
+      "correct Kitchen Station SOP and Training baseline",
+      "clean active-linked-content-only Data Package v2",
       "latest Web/API compatibility"
     ],
-    "workstreamReleaseState": "No signed APK was published or replaced by the 4.6.24 or 4.6.25 work in this PR. Existing installed APK remains the production baseline until an explicitly approved signed release."
+    "workstreamReleaseState": "No signed APK was published or replaced by the 4.6.24, 4.6.25 or 4.6.26 work in this PR. Existing installed APK remains the production baseline until an explicitly approved signed release."
   },
   "futureReleaseChecklist": [
-    "Deploy and accept Web/Worker 4.6.25 first",
-    "Build from 4.6.25-or-later reviewed commit",
+    "Deploy and accept Web/Worker 4.6.26 first",
+    "Publish and install the clean Data Package v2",
+    "Build from a 4.6.26-or-later reviewed commit",
     "Use the existing production keystore and alias",
     "Verify APK certificate and SHA-256",
+    "Confirm no Delete/Trash controls are visible",
     "Confirm stable TSPL output on the outlet printer",
     "Test first-hand, Open, and Refill/Cooked FIFO flows",
+    "Test restored Tasks and Kitchen Training",
     "Test native barcode scanner",
     "Only then replace android-release-latest"
   ]
