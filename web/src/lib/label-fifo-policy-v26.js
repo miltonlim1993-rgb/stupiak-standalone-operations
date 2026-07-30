@@ -34,6 +34,13 @@ export function labelSourceTier(value = '') {
   return ACTION_TIERS.get(actionKey(value)) || 0
 }
 
+function sourceProductDefaults(rule = {}) {
+  return {
+    sourceProductId: rule.sourceProductId || rule.productId || '',
+    sourceProductName: rule.sourceProductName || rule.productName || '',
+  }
+}
+
 export function applyHierarchyToRule(rule = {}) {
   const tier = labelSourceTier(rule.action)
   if (!tier) return { ...rule, sourceTier: 0, sourceStage: 'unclassified', fifoReprintLocked: false }
@@ -54,6 +61,7 @@ export function applyHierarchyToRule(rule = {}) {
   if (tier === 2) {
     return {
       ...rule,
+      ...sourceProductDefaults(rule),
       requiresSource: true,
       allowedSourceActions: 'prepare,prepared,preparation,freeze,frozen,freezing,received,receive,receiving',
       sourceExpiryMode: 'min',
@@ -67,6 +75,7 @@ export function applyHierarchyToRule(rule = {}) {
   }
   return {
     ...rule,
+    ...sourceProductDefaults(rule),
     requiresSource: true,
     allowedSourceActions: 'open,opened,opening',
     sourceExpiryMode: 'min',
