@@ -2,8 +2,8 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'windows-installer-startup-v25-v4.6.23'
-const SHELL_REVISION = '4.6.23-windows-installer-startup-v25'
+const WORKER_REVISION = 'supermarket-barcode-scanner-v25-v4.6.24'
+const SHELL_REVISION = '4.6.24-supermarket-barcode-scanner-v25'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
