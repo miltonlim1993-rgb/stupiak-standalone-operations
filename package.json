@@ -1,7 +1,7 @@
 {
   "name": "chefops-standalone",
   "private": true,
-  "version": "4.6.19",
+  "version": "4.6.20",
   "type": "module",
   "workspaces": [
     "web",
@@ -33,7 +33,7 @@
     "mobile:prepare:task-v3": "node scripts/prepare-android-task-v3.mjs",
     "mobile:apk:task-v3:debug": "npm run mobile:prepare:task-v3 && cd web/android && ./gradlew assembleDebug",
     "mobile:apk:task-v3:release": "npm run mobile:prepare:task-v3 && cd web/android && ./gradlew assembleRelease",
-    "print-bridge": "node tools/print-bridge/automatic-local-web-v19.mjs",
+    "print-bridge": "node tools/print-bridge/server.mjs",
     "test:sales-template-direct": "node scripts/test-sales-template-direct.mjs",
     "cf:render": "node scripts/render-wrangler-production.mjs",
     "cf:deploy": "npm run build && npm run cf:render && npx wrangler deploy --config worker/wrangler.production.jsonc",
