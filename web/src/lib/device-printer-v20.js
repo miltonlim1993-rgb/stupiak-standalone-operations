@@ -1,5 +1,6 @@
-export const DEVICE_PRINTER_VERSION = '4.6.20-device-printer-v22'
+export const DEVICE_PRINTER_VERSION = '4.6.22-device-printer-v24-standalone-service'
 export const LOCAL_CONNECTOR_URL = 'http://127.0.0.1:8788'
+export const LOCAL_CONNECTOR_INSTALLER = '/print-service/install-stupiaks-print-service.cmd'
 
 export const STABLE_4BARCODE_MEDIA = Object.freeze({
   brand: '4BARCODE',
@@ -131,6 +132,25 @@ export async function fetchLocalConnector(pathname = '/health', init = {}) {
   return fetch(loopbackRequest(`${LOCAL_CONNECTOR_URL}${path}`, init))
 }
 
+export async function listLocalPrinterQueues() {
+  const response = await fetchLocalConnector('/printers')
+  const data = await response.json().catch(() => null)
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || 'Installed Windows printers could not be loaded.')
+  return Array.isArray(data?.printers) ? data.printers : []
+}
+
+export function chooseRecommendedQueue(queues = [], savedQueue = '') {
+  const rows = Array.isArray(queues) ? queues.filter((row) => clean(row?.name)) : []
+  const exact = rows.find((row) => clean(row.name).toLowerCase() === clean(savedQueue).toLowerCase())
+  if (exact) return exact.name
+  const kitchenLabel = rows.find((row) => /kitchen\s*label\s*printer/i.test(clean(row.name)))
+  if (kitchenLabel) return kitchenLabel.name
+  const kitchen = rows.find((row) => /kitchen/i.test(clean(row.name)))
+  if (kitchen) return kitchen.name
+  const label = rows.find((row) => /label|4barcode|4b-2054/i.test(`${clean(row.name)} ${clean(row.driver)}`))
+  return label?.name || rows[0]?.name || ''
+}
+
 export async function loopbackPermissionState() {
   if (!navigator.permissions?.query) return 'unknown'
   for (const name of ['loopback-network', 'local-network']) {
@@ -149,21 +169,21 @@ export async function describeConnectorFailure(error) {
     return {
       code: 'loopback_permission_denied',
       title: 'Chrome blocked local printing',
-      message: 'Allow Local network access for Stupiak’s Ops in the address-bar site controls, then press Connect again.',
+      message: 'Allow Local network access for Stupiak’s Ops in the address-bar site controls, then press Check again.',
     }
   }
   if (error?.name === 'AbortError') {
     return {
       code: 'connector_timeout',
-      title: 'Web print service did not respond',
-      message: 'The local print service is not responding on this computer.',
+      title: 'Local Print Service did not respond',
+      message: 'Install or repair the Stupiak Print Service on this computer, then press Check again.',
     }
   }
   if (error instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(message)) {
     return {
       code: 'connector_unreachable',
-      title: 'Web print service is not running',
-      message: 'The automatic local print service could not be reached on this computer.',
+      title: 'Local Print Service is not running',
+      message: 'This computer needs the one-time Stupiak Print Service installation. It enables both Windows Printer Queue and Kitchen Direct IP.',
     }
   }
   return {
