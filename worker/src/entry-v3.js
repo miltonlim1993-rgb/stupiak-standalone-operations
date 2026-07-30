@@ -4,8 +4,8 @@ import { handleLabelFifoV26 } from './label-fifo-v26.js'
 import { handleNoDeletePolicyV27 } from './no-delete-policy-v27.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'no-delete-task-training-package-v27-v4.6.26'
-const SHELL_REVISION = '4.6.26-no-delete-task-training-package-v27'
+const WORKER_REVISION = 'restored-task-sop-ui-v28-v4.6.27'
+const SHELL_REVISION = '4.6.27-restored-task-sop-ui-v28'
 
 function apiHeaders(request, response) {
   const headers = new Headers(response.headers)
@@ -42,6 +42,7 @@ function withShellHeaders(request, url, response) {
   const isFreshnessResource = url.pathname === '/sw.js'
     || isNavigation
     || ['/labels', '/labels/settings', '/tasks', '/training', '/more'].includes(url.pathname)
+    || url.pathname.startsWith('/sop/')
     || url.pathname.startsWith('/print-service/')
 
   if (isFreshnessResource) {
@@ -74,7 +75,7 @@ export default {
         if (labelResponse) return apiHeaders(request, labelResponse)
       }
       if (url.pathname.startsWith('/api/tasks/')) {
-        const taskResponse = await handleTaskWorkflowV5(request, env)
+        const taskResponse = await handleTaskWorkflowV5(request, env, url, context, app)
         if (taskResponse) return apiHeaders(request, taskResponse)
       }
       const response = await app.fetch(request, env, context)

@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-26-no-delete-task-training-package-v27'
+const VERSION = 'chefops-v4-6-27-restored-task-sop-ui-v28'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -20,7 +20,7 @@ self.addEventListener('activate', (event) => {
       try {
         const url = new URL(client.url)
         if (url.origin !== self.location.origin) return undefined
-        if (!['/labels', '/labels/settings', '/tasks', '/training', '/more'].includes(url.pathname)) return undefined
+        if (!['/labels', '/labels/settings', '/tasks', '/training', '/more'].includes(url.pathname) && !url.pathname.startsWith('/sop/')) return undefined
         return client.navigate(client.url)
       } catch {
         return undefined
@@ -38,6 +38,7 @@ self.addEventListener('fetch', (event) => {
 
   const alwaysFresh = request.mode === 'navigate'
     || ['/labels', '/labels/settings', '/tasks', '/training', '/more', '/sw.js'].includes(url.pathname)
+    || url.pathname.startsWith('/sop/')
     || url.pathname.startsWith('/print-service/')
 
   if (alwaysFresh) {
