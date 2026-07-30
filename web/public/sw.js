@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-25-label-source-fifo-v26'
+const VERSION = 'chefops-v4-6-26-no-delete-task-training-package-v27'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -20,7 +20,7 @@ self.addEventListener('activate', (event) => {
       try {
         const url = new URL(client.url)
         if (url.origin !== self.location.origin) return undefined
-        if (!['/labels', '/labels/settings', '/more'].includes(url.pathname)) return undefined
+        if (!['/labels', '/labels/settings', '/tasks', '/training', '/more'].includes(url.pathname)) return undefined
         return client.navigate(client.url)
       } catch {
         return undefined
@@ -37,7 +37,7 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return
 
   const alwaysFresh = request.mode === 'navigate'
-    || ['/labels', '/labels/settings', '/more', '/sw.js'].includes(url.pathname)
+    || ['/labels', '/labels/settings', '/tasks', '/training', '/more', '/sw.js'].includes(url.pathname)
     || url.pathname.startsWith('/print-service/')
 
   if (alwaysFresh) {
