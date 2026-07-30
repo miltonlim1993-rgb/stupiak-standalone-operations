@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Outlet, NavLink } from 'react-router-dom'
 import {
   AlertTriangle, CheckSquare, ClipboardList, Home, LayoutGrid,
-  Package, Printer, Receipt, Tag, WalletCards,
+  Package, Receipt, Tag, WalletCards,
 } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
 import { ROLE_LABELS } from '@/lib/ops-helpers'
@@ -23,7 +23,6 @@ const primaryNav = [
 const desktopNav = [
   ...primaryNav.slice(0, 3),
   { to: '/labels', label: 'Food Labels', icon: Tag },
-  { to: '/labels/settings', label: 'Label Printer Settings', icon: Printer },
   ...primaryNav.slice(4, 5),
   { to: '/urgent', label: 'Issues', icon: AlertTriangle },
   { to: '/receipts', label: 'Receipts & OCR', icon: Receipt },
@@ -132,14 +131,6 @@ export default function Layout() {
               <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{user?.outlet_id || 'All assigned outlets'}</p></div>
               <div className="flex items-center gap-2">
                 {!online ? <span className="hidden rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-800 sm:inline">Offline</span> : null}
-                <NavLink
-                  to="/labels/settings"
-                  title="Label Printer Settings · available to all staff"
-                  aria-label="Open Label Printer Settings"
-                  className={({ isActive }) => `flex h-9 w-9 items-center justify-center rounded-xl border transition ${isActive ? 'border-primary bg-primary text-primary-foreground' : 'border-border bg-background text-foreground hover:bg-muted'}`}
-                >
-                  <Printer className="h-4 w-4" />
-                </NavLink>
                 <NotificationBell />
               </div>
             </div>
