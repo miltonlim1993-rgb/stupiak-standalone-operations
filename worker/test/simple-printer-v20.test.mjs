@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 import {
   STABLE_4BARCODE_MEDIA,
+  chooseRecommendedQueue,
   localConnectorTarget,
   stablePrinterProfile,
 } from '../../web/src/lib/device-printer-v20.js'
@@ -14,7 +15,7 @@ async function source(path) {
   return readFile(new URL(path, root), 'utf8')
 }
 
-test('accepted APK media values are locked to the proven 4BARCODE setup', () => {
+test('accepted APK media values remain locked to the proven 4BARCODE setup', () => {
   assert.deepEqual({
     width: STABLE_4BARCODE_MEDIA.label_width_mm,
     height: STABLE_4BARCODE_MEDIA.label_height_mm,
@@ -56,8 +57,8 @@ test('Android stays on stable v16 while Web uses isolated two-route printing', a
   assert.match(main, /if \(isNativeAndroid\(\)\) installStableLabelPrintV16\(\)/)
   assert.match(main, /else installStableLabelPrintV20\(\)/)
   assert.match(main, /androidStablePrint: 'v16-date-fit-v22'/)
-  assert.match(main, /webStablePrint: 'device-local-v22-windows-queue-direct-ip'/)
-  assert.match(main, /labelSettingsStaff: 'two-route-v23'/)
+  assert.match(main, /webStablePrint: 'device-local-v24-windows-queue-kitchen-ip'/)
+  assert.match(main, /labelSettingsStaff: 'two-route-service-v24'/)
   assert.doesNotMatch(main, /installStableLabelPrintV19\(\)/)
 })
 
@@ -67,7 +68,8 @@ test('Web printer route is device-local and supports Windows queue plus direct I
   assert.match(device, /web_transport/)
   assert.match(device, /web_queue/)
   assert.match(device, /targetAddressSpace: 'loopback'/)
-  assert.match(device, /Chrome blocked local printing/)
+  assert.match(device, /LOCAL_CONNECTOR_INSTALLER/)
+  assert.match(device, /one-time Stupiak Print Service installation/)
 
   assert.deepEqual(localConnectorTarget({ web_transport: 'queue', web_queue: 'Kitchen Label Printer' }), {
     mode: 'queue',
@@ -78,6 +80,13 @@ test('Web printer route is device-local and supports Windows queue plus direct I
     host: '192.168.0.211',
     port: 9100,
   })
+})
+
+test('recommended queue prefers the existing Kitchen Label Printer', () => {
+  assert.equal(chooseRecommendedQueue([
+    { name: 'Bar Label Printer', port: 'USB004' },
+    { name: 'Kitchen Label Printer', port: '192.168.0.211' },
+  ]), 'Kitchen Label Printer')
 })
 
 test('Web labels send one stable TSPL document through the selected local route', async () => {
@@ -91,20 +100,36 @@ test('Web labels send one stable TSPL document through the selected local route'
   assert.doesNotMatch(printer, /opsClient/)
 })
 
-test('staff settings expose only two understandable routes and keep them device-local', async () => {
+test('staff settings present Windows Queue and Kitchen IP as two simple device choices', async () => {
   const settings = await source('web/src/pages/LabelPrinterSettingsSimpleV20.jsx')
   assert.match(settings, /Windows Printer/)
-  assert.match(settings, /Direct IP/)
-  assert.match(settings, /Kitchen Label Printer/)
-  assert.match(settings, /Printer IP/)
+  assert.match(settings, /Kitchen Printer · Direct IP/)
+  assert.match(settings, /FeedMe/)
+  assert.match(settings, /Install \/ Repair Print Service/)
+  assert.match(settings, /Kitchen printer IP/)
   assert.match(settings, /40 × 30 mm/)
   assert.match(settings, /Stable TSPL v16/)
-  assert.match(settings, /Connect/)
+  assert.match(settings, /Test route/)
   assert.match(settings, /Test label/)
-  assert.match(settings, /Save/)
-  assert.match(settings, /Android and other devices were not changed/)
+  assert.match(settings, /Use here/)
   assert.doesNotMatch(settings, /Pairing token/)
   assert.doesNotMatch(settings, /LPR queue/)
+})
+
+test('standalone Windows service supports queue and Raw TCP without Node or pairing token', async () => {
+  const service = await source('web/public/print-service/stupiaks-print-service.ps1')
+  const installer = await source('web/public/print-service/install-stupiaks-print-service.ps1')
+  const launcher = await source('web/public/print-service/install-stupiaks-print-service.cmd')
+  assert.match(service, /StupiaksRawPrinterV24/)
+  assert.match(service, /Get-PrinterRows/)
+  assert.match(service, /Send-RawTcp/)
+  assert.match(service, /pairing_token_required = \$false/)
+  assert.match(service, /queue_accepted/)
+  assert.match(service, /raw_tcp_data_sent/)
+  assert.doesNotMatch(service, /node\.exe/)
+  assert.match(installer, /schtasks\.exe \/Create/)
+  assert.match(installer, /Stupiaks Print Service/)
+  assert.match(launcher, /ExecutionPolicy Bypass/)
 })
 
 test('production shell explicitly permits loopback/local network permission prompts', async () => {
