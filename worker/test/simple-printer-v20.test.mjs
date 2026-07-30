@@ -55,7 +55,8 @@ test('Android installs the accepted stable v16 route while Web installs isolated
   assert.match(main, /if \(isNativeAndroid\(\)\) installStableLabelPrintV16\(\)/)
   assert.match(main, /else installStableLabelPrintV20\(\)/)
   assert.match(main, /androidStablePrint: 'frozen-v16'/)
-  assert.match(main, /webStablePrint: 'device-local-v20'/)
+  assert.match(main, /webStablePrint: 'device-local-v20-date-fit-v21'/)
+  assert.match(main, /labelDateBoxes: 'narrow-1x2-centered-2-dot-safe-area'/)
   assert.doesNotMatch(main, /installStableLabelPrintV19\(\)/)
 })
 
@@ -72,6 +73,7 @@ test('Web labels send one stable TSPL document without changing APK profiles', a
   assert.match(printer, /payloadBase64: asciiBase64\(stable\.command\)/)
   assert.match(printer, /Web device-local RAW TCP/)
   assert.match(printer, /fixed 40×30 mm/)
+  assert.match(printer, /fitStableTsplDateBoxes/)
   assert.doesNotMatch(printer, /html-raster/)
   assert.doesNotMatch(printer, /BITMAP/)
   assert.doesNotMatch(printer, /opsClient/)
