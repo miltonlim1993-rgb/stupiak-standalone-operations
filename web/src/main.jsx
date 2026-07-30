@@ -19,10 +19,12 @@ import { installCreatedLabelSizeContractV14 } from '@/lib/label-size-contract-v1
 import { installLabelSizeContractStatusV14 } from '@/lib/label-size-contract-status-v14'
 import { installPrintOutcomeIntegrityV13 } from '@/lib/print-outcome-integrity-v13'
 import { installLabelContentOrientationV7 } from '@/lib/label-content-orientation-v7'
+import { installLabelSettingsStaffV17 } from '@/lib/label-settings-staff-v17'
+import { installWebShellFreshnessV17 } from '@/lib/web-shell-freshness-v17'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.14-stable-tspl-v16-cross-device-v15-printer-v12'
+const SHELL_VERSION = '4.6.15-label-settings-staff-v17-stable-tspl-v16'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -43,6 +45,8 @@ function markRuntime() {
     origin: window.location.origin,
     printerTransport: 'v12',
     stableTsplCore: 'v16',
+    labelSettingsStaff: 'v17',
+    webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
     deviceViewport: 'v15',
@@ -105,6 +109,7 @@ function publishShellHealth() {
 
 markRuntime()
 installDeviceViewportV15()
+installWebShellFreshnessV17()
 installNativeSessionFetch()
 installNativeLabelPrintBridge()
 installCreatedLabelSizeContractV14()
@@ -112,6 +117,7 @@ installPrintOutcomeIntegrityV13()
 installLabelContentOrientationV7()
 installLabelSizeContractStatusV14()
 installStableLabelPrintV16()
+installLabelSettingsStaffV17()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
 applyTheme()
