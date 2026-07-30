@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-18-apk-v16-web-device-v20-simple-settings'
+const VERSION = 'chefops-v4-6-19-web-date-box-fit-v21-apk-v16-frozen'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
