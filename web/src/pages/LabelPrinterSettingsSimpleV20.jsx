@@ -4,6 +4,7 @@ import {
   ArrowLeft,
   CheckCircle2,
   Loader2,
+  Monitor,
   Printer,
   RefreshCw,
   Save,
@@ -27,12 +28,13 @@ import {
   readWebPrinterDevice,
   saveWebPrinterDevice,
   stablePrinterProfile,
+  webPrinterRouteLabel,
 } from '@/lib/device-printer-v20'
 import { encodePrinterTransportNotes, normalizePrinterTransportProfile } from '@/lib/printer-transport-v12'
 import { isNativeAndroidPrinterRuntime, testPrinterProfile } from '@/lib/native-label-print'
 import { printStableLabelHtmlV20 } from '@/lib/stable-label-print-v20'
 
-const SETTINGS_VERSION = '4.6.18-simple-stable-printer-v20'
+const SETTINGS_VERSION = '4.6.20-two-route-printer-v22'
 
 function clean(value = '') {
   return String(value ?? '').trim()
@@ -55,11 +57,15 @@ export default function LabelPrinterSettingsSimpleV20() {
   const outletId = clean(user?.outlet_id)
   const nativeAndroid = isNativeAndroidPrinterRuntime()
   const [sharedProfile, setSharedProfile] = useState(null)
+  const [route, setRoute] = useState('raw_tcp')
   const [ipAddress, setIpAddress] = useState('')
+  const [queueName, setQueueName] = useState('')
+  const [queues, setQueues] = useState([])
   const [status, setStatus] = useState('idle')
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
+  const [loadingQueues, setLoadingQueues] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
 
@@ -84,11 +90,13 @@ export default function LabelPrinterSettingsSimpleV20() {
         || null
       setSharedProfile(selected)
     } catch {
-      // The page remains usable from this device even if the shared profile request is temporarily unavailable.
+      // Device-local web printing remains available if the shared profile API is unavailable.
     }
 
     const local = readWebPrinterDevice(outletId, selected || {})
+    setRoute(nativeAndroid ? 'raw_tcp' : local.web_transport || 'raw_tcp')
     setIpAddress(clean(local.ip_address || selected?.ip_address))
+    setQueueName(clean(local.web_queue))
     setStatus('idle')
     setLoading(false)
   }
@@ -101,11 +109,13 @@ export default function LabelPrinterSettingsSimpleV20() {
       profile_name: clean(sharedProfile?.profile_name || 'Food Label Printer'),
       ip_address: clean(ipAddress),
       port: 9100,
+      web_transport: nativeAndroid ? 'raw_tcp' : route,
+      web_queue: clean(queueName),
       is_default: sharedProfile?.is_default !== false,
     })
   }
 
-  async function repairSharedProfile(profile) {
+  async function repairAndroidSharedProfile(profile) {
     const next = {
       outlet_id: outletId,
       purpose: 'food_label',
@@ -149,21 +159,54 @@ export default function LabelPrinterSettingsSimpleV20() {
     return normalized
   }
 
+  function validate() {
+    if (!outletId) return 'This staff account must be assigned to an outlet.'
+    if ((nativeAndroid || route === 'raw_tcp') && !clean(ipAddress)) return 'Enter the printer IP.'
+    if (!nativeAndroid && route === 'queue' && !clean(queueName)) return 'Select a Windows printer queue.'
+    return ''
+  }
+
+  async function loadQueues() {
+    setLoadingQueues(true)
+    setError('')
+    try {
+      const response = await fetchLocalConnector('/printers')
+      const data = await response.json().catch(() => null)
+      if (!response.ok || data?.ok === false) throw new Error(data?.error || 'Installed printers could not be read.')
+      const rows = Array.isArray(data?.printers) ? data.printers : []
+      setQueues(rows)
+      if (!queueName && rows.length) {
+        const kitchen = rows.find((item) => /kitchen label printer/i.test(item.name))
+          || rows.find((item) => /kitchen/i.test(item.name))
+          || rows[0]
+        setQueueName(kitchen?.name || '')
+      }
+      setMessage(rows.length ? `${rows.length} installed printer(s) found.` : 'No installed printer queue was found.')
+    } catch (loadError) {
+      const described = await describeConnectorFailure(loadError)
+      setError(`${described.title}. ${described.message}`)
+    } finally {
+      setLoadingQueues(false)
+    }
+  }
+
   async function save() {
-    if (!outletId) { setError('This staff account must be assigned to an outlet.'); return null }
-    if (!clean(ipAddress)) { setError('Enter the printer IP.'); return null }
+    const validationError = validate()
+    if (validationError) { setError(validationError); return null }
     setSaving(true)
     setError('')
     setMessage('')
     try {
       const profile = fixedProfile()
-      saveWebPrinterDevice(outletId, profile)
-      const repaired = await repairSharedProfile(profile)
-      setIpAddress(repaired.ip_address)
-      setMessage(nativeAndroid
-        ? 'Saved. APK printing is restored to the accepted Stable TSPL settings.'
-        : 'Saved on this computer. The shared APK profile was also restored to 40×30 mm, 203 dpi and 2 mm gap.')
-      return repaired
+      const savedLocal = saveWebPrinterDevice(outletId, profile)
+      if (nativeAndroid) {
+        const repaired = await repairAndroidSharedProfile(profile)
+        setIpAddress(repaired.ip_address)
+        setMessage('Saved. Android Stable TSPL direct-IP printing remains locked to the accepted settings.')
+        return repaired
+      }
+      setMessage(`Saved on this computer: ${webPrinterRouteLabel(savedLocal)}. Android and other devices were not changed.`)
+      return savedLocal
     } catch (saveError) {
       setError(saveError.message || 'Printer settings could not be saved.')
       return null
@@ -172,8 +215,9 @@ export default function LabelPrinterSettingsSimpleV20() {
     }
   }
 
-  async function connect({ testPrinter = true } = {}) {
-    if (!clean(ipAddress)) { setError('Enter the printer IP.'); return false }
+  async function connect() {
+    const validationError = validate()
+    if (validationError) { setError(validationError); return false }
     setTesting(true)
     setStatus('checking')
     setError('')
@@ -186,21 +230,18 @@ export default function LabelPrinterSettingsSimpleV20() {
         setMessage(`Printer ready: ${result.printer || `${profile.ip_address}:9100`}.`)
         return true
       }
-
       const healthResponse = await fetchLocalConnector('/health')
       const health = await healthResponse.json().catch(() => null)
       if (!healthResponse.ok || health?.ok === false) throw new Error(health?.error || 'Web print service is unavailable.')
-      if (testPrinter) {
-        const response = await fetchLocalConnector('/test', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(localConnectorTarget(profile)),
-        })
-        const result = await response.json().catch(() => null)
-        if (!response.ok || result?.ok === false) throw new Error(result?.error || 'The printer did not accept the connection test.')
-      }
+      const response = await fetchLocalConnector('/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(localConnectorTarget(profile)),
+      })
+      const result = await response.json().catch(() => null)
+      if (!response.ok || result?.ok === false) throw new Error(result?.error || 'The selected printer route did not pass the test.')
       setStatus('ready')
-      setMessage(`Printer ready: ${profile.ip_address}:9100.`)
+      setMessage(`Printer ready: ${result?.printer || webPrinterRouteLabel(profile)}.`)
       return true
     } catch (connectError) {
       setStatus('error')
@@ -215,18 +256,22 @@ export default function LabelPrinterSettingsSimpleV20() {
   }
 
   async function testLabel() {
-    if (!clean(ipAddress)) { setError('Enter the printer IP.'); return }
+    const validationError = validate()
+    if (validationError) { setError(validationError); return }
     setTesting(true)
     setError('')
     setMessage('')
     try {
       const profile = fixedProfile()
       saveWebPrinterDevice(outletId, profile)
-      const repaired = await repairSharedProfile(profile)
-      if (nativeAndroid) openNativeTestLabel(outletId)
-      else await printStableLabelHtmlV20(testLabelHtml(outletId), repaired)
+      if (nativeAndroid) {
+        await repairAndroidSharedProfile(profile)
+        openNativeTestLabel(outletId)
+      } else {
+        await printStableLabelHtmlV20(testLabelHtml(outletId), profile)
+      }
       setStatus('ready')
-      setMessage('One Stable TSPL test label was sent after restoring the accepted APK profile. No browser page or Raster route was used.')
+      setMessage(`One Stable TSPL test label was sent through ${webPrinterRouteLabel(profile)}.`)
     } catch (printError) {
       setStatus('error')
       setError(printError.message || 'Test label failed.')
@@ -242,7 +287,7 @@ export default function LabelPrinterSettingsSimpleV20() {
           <Button asChild variant="outline" size="icon" className="h-10 w-10 shrink-0 rounded-xl"><Link to="/labels"><ArrowLeft className="h-4 w-4" /></Link></Button>
           <div>
             <h1 className="text-xl font-bold">标签打印机 / Label Printer</h1>
-            <p className="mt-1 text-sm text-muted-foreground">和稳定 APK 一样：输入打印机 IP，然后测试和保存。</p>
+            <p className="mt-1 text-sm text-muted-foreground">Windows 可选择现有 Printer Queue 或 Direct IP；Android 保持稳定 Direct IP。</p>
           </div>
         </div>
       </header>
@@ -250,35 +295,51 @@ export default function LabelPrinterSettingsSimpleV20() {
       {loading ? <div className="flex justify-center py-16"><Loader2 className="h-6 w-6 animate-spin" /></div> : (
         <>
           <section className="rounded-3xl border border-border bg-card p-5 shadow-sm">
-            <div className="flex items-center gap-3">
-              <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/15 text-primary"><Wifi className="h-6 w-6" /></span>
-              <div className="min-w-0 flex-1">
-                <h2 className="font-semibold">Direct Wi-Fi / LAN</h2>
-                <p className="text-xs text-muted-foreground">{nativeAndroid ? 'Android Native RAW TCP' : 'Web RAW TCP through this computer'}</p>
+            {!nativeAndroid ? (
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => { setRoute('queue'); setStatus('idle'); setError(''); setMessage('') }} className={`rounded-2xl border p-4 text-left ${route === 'queue' ? 'border-primary bg-primary/10' : 'border-border'}`}>
+                  <Monitor className="mb-2 h-5 w-5" />
+                  <b className="block text-sm">Windows Printer</b>
+                  <span className="text-xs text-muted-foreground">复用 FeedMe 已安装 Queue</span>
+                </button>
+                <button type="button" onClick={() => { setRoute('raw_tcp'); setStatus('idle'); setError(''); setMessage('') }} className={`rounded-2xl border p-4 text-left ${route === 'raw_tcp' ? 'border-primary bg-primary/10' : 'border-border'}`}>
+                  <Wifi className="mb-2 h-5 w-5" />
+                  <b className="block text-sm">Direct IP</b>
+                  <span className="text-xs text-muted-foreground">Kitchen printer · Port 9100</span>
+                </button>
               </div>
-              {status === 'ready' ? <CheckCircle2 className="h-6 w-6 text-emerald-600" /> : null}
-            </div>
+            ) : null}
 
-            <div className="mt-5 space-y-2">
-              <Label>Printer IP</Label>
-              <Input
-                inputMode="decimal"
-                value={ipAddress}
-                onChange={(event) => { setIpAddress(event.target.value); setStatus('idle'); setError(''); setMessage('') }}
-                placeholder="192.168.0.211"
-                className="h-12 text-base"
-              />
-            </div>
+            {nativeAndroid || route === 'raw_tcp' ? (
+              <div className="mt-5 space-y-2">
+                <Label>Printer IP</Label>
+                <Input inputMode="decimal" value={ipAddress} onChange={(event) => { setIpAddress(event.target.value); setStatus('idle'); setError(''); setMessage('') }} placeholder="192.168.0.211" className="h-12 text-base" />
+              </div>
+            ) : (
+              <div className="mt-5 space-y-2">
+                <Label>Windows Printer Queue</Label>
+                <div className="flex gap-2">
+                  <select className="h-12 min-w-0 flex-1 rounded-md border border-input bg-background px-3 text-sm" value={queueName} onChange={(event) => { setQueueName(event.target.value); setStatus('idle'); setError(''); setMessage('') }}>
+                    <option value="">Select installed printer</option>
+                    {queues.map((queue) => <option key={queue.name} value={queue.name}>{queue.name}{queue.port ? ` · ${queue.port}` : ''}</option>)}
+                  </select>
+                  <Button type="button" variant="outline" className="h-12 shrink-0" onClick={loadQueues} disabled={loadingQueues}>
+                    {loadingQueues ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">选择 Windows 已经能打印的 Kitchen Label Printer；不会修改 Android 或其他设备。</p>
+              </div>
+            )}
 
             <div className="mt-4 rounded-2xl bg-muted/55 p-4 text-sm leading-6">
+              <div className="flex justify-between gap-4"><span className="text-muted-foreground">Route</span><b>{nativeAndroid ? `Direct IP · ${ipAddress || 'Not set'}:9100` : route === 'queue' ? `Windows Queue · ${queueName || 'Not selected'}` : `Direct IP · ${ipAddress || 'Not set'}:9100`}</b></div>
               <div className="flex justify-between gap-4"><span className="text-muted-foreground">Label</span><b>40 × 30 mm</b></div>
               <div className="flex justify-between gap-4"><span className="text-muted-foreground">Print core</span><b>Stable TSPL v16</b></div>
               <div className="flex justify-between gap-4"><span className="text-muted-foreground">DPI / Gap</span><b>203 / 2 mm</b></div>
-              <div className="flex justify-between gap-4"><span className="text-muted-foreground">Port</span><b>9100</b></div>
             </div>
 
             <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
-              <Button variant="outline" className="h-12" onClick={() => connect({ testPrinter: true })} disabled={testing}>
+              <Button variant="outline" className="h-12" onClick={connect} disabled={testing}>
                 {testing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}Connect
               </Button>
               <Button variant="outline" className="h-12" onClick={testLabel} disabled={testing}>
@@ -288,6 +349,7 @@ export default function LabelPrinterSettingsSimpleV20() {
                 {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}Save
               </Button>
             </div>
+            {status === 'ready' ? <div className="mt-3 flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="h-4 w-4" />Ready on this device</div> : null}
           </section>
 
           {error ? <div className="rounded-2xl bg-red-50 p-4 text-sm leading-6 text-red-700">{error}</div> : null}
