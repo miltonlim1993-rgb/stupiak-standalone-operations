@@ -21,8 +21,8 @@ const ACTION_ALIASES = new Map([
   ['cooking', 3],
 ])
 
-export const FIRST_HAND_SOURCE_ACTIONS = 'prepare,prepared,freeze,frozen,received,receive'
-export const SECOND_HAND_SOURCE_ACTIONS = 'open,opened'
+export const FIRST_HAND_SOURCE_ACTIONS = 'prepare,prepared,preparation,freeze,frozen,freezing,received,receive,receiving'
+export const SECOND_HAND_SOURCE_ACTIONS = 'open,opened,opening'
 
 export function normalizeLabelAction(value = '') {
   return String(value || '')
@@ -32,6 +32,11 @@ export function normalizeLabelAction(value = '') {
 }
 
 export function labelSourceTier(value = '') {
+  const raw = String(value || '').trim().toLowerCase()
+  const words = ` ${raw.replace(/[^a-z]+/g, ' ').trim()} `
+  if (/\b(refill|refilled|refilling|cook|cooked|cooking)\b/.test(words)) return 3
+  if (/\b(open|opened|opening)\b/.test(words)) return 2
+  if (/\b(prepare|prepared|preparation|freeze|frozen|freezing|receive|received|receiving)\b/.test(words)) return 1
   return ACTION_ALIASES.get(normalizeLabelAction(value)) || 0
 }
 
