@@ -22,8 +22,32 @@ const EXACT_DELETE_LABELS = new Set([
   '永久删除',
 ])
 
+const DELETE_STYLE_ID = 'chefops-no-delete-controls-v27'
+
 function normalized(value = '') {
   return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase()
+}
+
+function installImmediateDeleteStyle() {
+  if (document.getElementById(DELETE_STYLE_ID)) return
+  const style = document.createElement('style')
+  style.id = DELETE_STYLE_ID
+  style.textContent = `
+    button:has(svg.lucide-trash),
+    button:has(svg.lucide-trash-2),
+    a:has(svg.lucide-trash),
+    a:has(svg.lucide-trash-2),
+    [role="button"]:has(svg.lucide-trash),
+    [role="button"]:has(svg.lucide-trash-2),
+    [data-action="delete"],
+    [data-action="trash"],
+    [data-command="delete"],
+    [data-command="trash"] {
+      display: none !important;
+      pointer-events: none !important;
+    }
+  `
+  document.head.appendChild(style)
 }
 
 function isDeleteIcon(control) {
@@ -69,6 +93,8 @@ export function installNoDeleteUiV27() {
     version: NO_DELETE_UI_VERSION,
     hardDeleteEnabled: false,
   }
+
+  installImmediateDeleteStyle()
 
   const scan = (root = document) => window.requestAnimationFrame(() => removeDeleteControls(root))
   scan()
