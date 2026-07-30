@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-20-shared-web-apk-date-fit-v22'
+const VERSION = 'chefops-v4-6-21-windows-queue-direct-ip-v23'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -30,16 +30,26 @@ self.addEventListener('activate', (event) => {
   self.clients.claim()
 })
 
-function isStaticApi(url) {
-  return url.pathname.includes('/api/entities/Outlet')
-    || url.pathname.includes('/api/entities/TaskTemplate')
-    || url.pathname.includes('/api/entities/SOP')
-    || url.pathname.includes('/api/entities/TrainingCourse')
-    || url.pathname.includes('/api/entities/TrainingLesson')
-    || url.pathname.includes('/api/entities/TrainingQuiz')
-    || url.pathname.includes('/api/entities/TrainingQuestion')
-    || url.pathname.includes('/api/entities/OutletStockList')
-    || url.pathname.includes('/api/entities/PaymentMethod')
-    || url.pathname.includes('/api/entities/PositionMaster')
-    || url.pathname.includes('/api/labels/catalog')
-}
+self.addEventListener('fetch', (event) => {
+  const request = event.request
+  if (request.method !== 'GET') return
+  const url = new URL(request.url)
+  if (url.origin !== self.location.origin) return
+
+  if (request.mode === 'navigate' || ['/labels', '/labels/settings', '/more', '/sw.js'].includes(url.pathname)) {
+    event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => caches.match(request).then((cached) => cached || caches.match('/'))))
+    return
+  }
+
+  if (url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(request).catch(() => caches.match(request)))
+    return
+  }
+
+  event.respondWith(caches.match(request).then((cached) => cached || fetch(request).then((response) => {
+    if (!response || response.status !== 200 || response.type !== 'basic') return response
+    const copy = response.clone()
+    caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy)).catch(() => undefined)
+    return response
+  })))
+})
