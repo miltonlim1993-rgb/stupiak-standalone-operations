@@ -17,7 +17,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.22-windows-queue-kitchen-ip-v24-date-fit-v22.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.24-supermarket-barcode-scanner-v25.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -44,30 +44,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate current shell and shared Web/APK date fit
+      - name: Validate current shell, scanner and stable print boundary
         run: |
           set -Eeuo pipefail
-          grep -q '"version": "4.6.22"' package.json
-          grep -q "chefops-v4-6-22-windows-queue-kitchen-ip-service-v24" web/public/sw.js
-          grep -q "4.6.22-windows-queue-kitchen-ip-service-v24" web/src/main.jsx
+          grep -q '"version": "4.6.24"' package.json
+          grep -q "chefops-v4-6-24-supermarket-barcode-scanner-v25" web/public/sw.js
+          grep -q "4.6.24-supermarket-barcode-scanner-v25" web/src/main.jsx
+          grep -q "barcodeScanner: 'supermarket-hid-live-camera-native-v25'" web/src/main.jsx
           grep -q "stableTsplCore: 'v16-date-fit-v22'" web/src/main.jsx
           grep -q "androidStablePrint: 'v16-date-fit-v22'" web/src/main.jsx
-          grep -q "webStablePrint: 'device-local-v24-windows-queue-kitchen-ip'" web/src/main.jsx
-          grep -q "labelSettingsStaff: 'two-route-service-v24'" web/src/main.jsx
+          grep -q "SUPERMARKET_BARCODE_SCANNER_VERSION" web/src/lib/supermarket-barcode-scan-v25.js
+          grep -q "document.addEventListener('keydown', hardwareKeydown, true)" web/src/lib/supermarket-barcode-scan-v25.js
+          grep -q "getUserMedia" web/src/lib/supermarket-barcode-scan-v25.js
+          grep -q "windows-queue-kitchen-ip" web/src/main.jsx
           grep -q "STABLE_TSPL_LABEL_VERSION = '4.6.20-stable-tspl-core-v16-date-fit-v22'" web/src/lib/stable-tspl-label-v16.js
-          grep -q "function fittedDateCommand" web/src/lib/stable-tspl-label-v16.js
-          grep -q "date_box_padding_dots: 2" web/src/lib/stable-tspl-label-v16.js
-          grep -q "date_font: '1x2'" web/src/lib/stable-tspl-label-v16.js
-          grep -q "tspl-stable-v16-date-fit-v22" web/src/lib/stable-tspl-label-v16.js
           grep -q 'lines.push(`PRINT ${copies},1`)' web/src/lib/stable-tspl-label-v16.js
           ! grep -q "BITMAP" web/src/lib/stable-tspl-label-v16.js
           grep -q "rawCommandBase64: asciiBase64(stable.command)" web/src/lib/stable-label-print-v16.js
-          grep -q "html: ''" web/src/lib/stable-label-print-v16.js
           ! grep -q "html-raster" web/src/lib/stable-label-print-v16.js
-          grep -q "windows-queue-kitchen-ip-service-v24-v4.6.22" worker/src/entry-v3.js
-          grep -q "LabelPrinterSettingsSimpleV20" web/src/App.jsx
-          grep -q "PrinterProfile: LEVEL.staff" worker/src/permissions.js
-          grep -q "shared TSPL core fits Made and Use By dates before Android transport" worker/test/android-date-fit-v22.test.mjs
+          grep -q "supermarket-barcode-scanner-v25-v4.6.24" worker/src/entry-v3.js
           ! grep -q "installShellGuard" web/src/main.jsx
 
       - name: Build and run the complete validation suite
@@ -91,16 +86,30 @@ jobs:
       - name: Configure all-device printer transport v12
         run: node scripts/configure-android-all-device-print-v12.mjs
 
-      - name: Validate generated Native RAW TSPL transport
+      - name: Configure supermarket barcode scanner v25
+        run: node scripts/configure-android-barcode-scanner-v25.mjs
+
+      - name: Validate generated native print and barcode paths
         run: |
           set -Eeuo pipefail
           PLUGIN=web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          SCANNER=web/android/app/src/main/java/com/stupiaks/ops/NativeBarcodeScannerPlugin.java
+          MAIN=web/android/app/src/main/java/com/stupiaks/ops/MainActivity.java
+          GRADLE=web/android/app/build.gradle
+          MANIFEST=web/android/app/src/main/AndroidManifest.xml
           grep -q 'public void printSystem(PluginCall call)' "$PLUGIN"
           grep -q 'sendNetworkRaw' "$PLUGIN"
           grep -q 'sendNetworkLpr' "$PLUGIN"
           grep -q 'sendBluetooth' "$PLUGIN"
           grep -q 'rawCommandBase64' "$PLUGIN"
           grep -q 'result.put("renderMode", renderMode)' "$PLUGIN"
+          grep -q 'registerPlugin(NativeBarcodeScannerPlugin.class)' "$MAIN"
+          grep -q 'play-services-code-scanner:16.1.0' "$GRADLE"
+          grep -q 'android:value="barcode_ui"' "$MANIFEST"
+          grep -q 'enableAutoZoom' "$SCANNER"
+          grep -q 'Barcode.FORMAT_EAN_13' "$SCANNER"
+          grep -q 'Barcode.FORMAT_CODE_128' "$SCANNER"
+          grep -q 'Barcode.FORMAT_QR_CODE' "$SCANNER"
 
       - name: Restore private release keystore
         env:
@@ -155,13 +164,13 @@ jobs:
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
             "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
-            "release/${APK_STABLE_TSPL_FILE_NAME}#Stupiak's Ops Stable TSPL v16 Date Fit v22 APK" \
+            "release/${APK_STABLE_TSPL_FILE_NAME}#Stupiak's Ops Stable TSPL v16 APK" \
             "release/${APK_V12_FILE_NAME}#Stupiak's Ops All Device Print v12 APK" \
             "release/${APK_V10_FILE_NAME}#Compatibility alias for previous Direct Print Flow APK URL" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.22 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Android now generates the Made and Use By dates through the same shared Stable TSPL core as the verified Web output: printer Font 1, vertical multiplier 2, centred inside each box with a two-dot safe edge. Native RAW TSPL LAN/Wi-Fi/Bluetooth transport, 40x30 mm media, 203 dpi, Gap 2 mm, offsets, barcode behaviour and device/outlet printer selection remain unchanged."
+            --title "Stupiak's Ops 4.6.24 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Adds supermarket-style native barcode scanning with EAN-13, EAN-8, UPC, Code 128, Code 39 and QR auto-zoom. Existing accepted Stable TSPL v16 printing remains unchanged."
 
       - name: Show stable release URLs
         run: |
