@@ -11,12 +11,17 @@ function isNativeAndroid() {
   )
 }
 
+function normalizeVersion(value = '') {
+  const raw = String(value || '').trim().replace(/^chefops-v/i, '')
+  return raw.replace(/^(\d+)-(\d+)-(\d+)(?=-|$)/, '$1.$2.$3')
+}
+
 function publishedVersion(source = '') {
-  return String(source || '').match(/const VERSION = ['"]([^'"]+)['"]/)?.[1] || ''
+  return normalizeVersion(String(source || '').match(/const VERSION = ['"]([^'"]+)['"]/)?.[1] || '')
 }
 
 function currentVersion() {
-  return String(document.documentElement.dataset.chefopsShell || window.__chefopsBuild?.shell || '')
+  return normalizeVersion(document.documentElement.dataset.chefopsShell || window.__chefopsBuild?.shell || '')
 }
 
 function shouldCheck(pathname = window.location.pathname) {
