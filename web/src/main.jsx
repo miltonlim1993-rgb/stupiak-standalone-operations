@@ -14,7 +14,8 @@ import { applyTheme } from '@/lib/theme'
 import { installDeviceViewportV15 } from '@/lib/device-viewport-v15'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
-import { installStableLabelPrintV19 } from '@/lib/stable-label-print-v19'
+import { installStableLabelPrintV16 } from '@/lib/stable-label-print-v16'
+import { installStableLabelPrintV20 } from '@/lib/stable-label-print-v20'
 import { installCreatedLabelSizeContractV14 } from '@/lib/label-size-contract-v14'
 import { installLabelSizeContractStatusV14 } from '@/lib/label-size-contract-status-v14'
 import { installPrintOutcomeIntegrityV13 } from '@/lib/print-outcome-integrity-v13'
@@ -24,7 +25,7 @@ import { installWebShellFreshnessV17 } from '@/lib/web-shell-freshness-v17'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.17-auto-web-direct-lan-stable-tspl-v19'
+const SHELL_VERSION = '4.6.18-apk-v16-web-device-v20-simple-settings'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -45,9 +46,9 @@ function markRuntime() {
     origin: window.location.origin,
     printerTransport: 'v12',
     stableTsplCore: 'v16',
-    stableLabelPrint: 'v19',
-    webDirectLan: 'automatic-local-connector-no-token',
-    labelSettingsStaff: 'v19',
+    androidStablePrint: 'frozen-v16',
+    webStablePrint: 'device-local-v20',
+    labelSettingsStaff: 'simple-v20',
     webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
@@ -118,7 +119,8 @@ installCreatedLabelSizeContractV14()
 installPrintOutcomeIntegrityV13()
 installLabelContentOrientationV7()
 installLabelSizeContractStatusV14()
-installStableLabelPrintV19()
+if (isNativeAndroid()) installStableLabelPrintV16()
+else installStableLabelPrintV20()
 installLabelSettingsStaffV17()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
