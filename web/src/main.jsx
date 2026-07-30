@@ -25,7 +25,7 @@ import { installWebShellFreshnessV17 } from '@/lib/web-shell-freshness-v17'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.18-apk-v16-web-device-v20-simple-settings'
+const SHELL_VERSION = '4.6.19-web-date-box-fit-v21-apk-v16-frozen'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -47,7 +47,8 @@ function markRuntime() {
     printerTransport: 'v12',
     stableTsplCore: 'v16',
     androidStablePrint: 'frozen-v16',
-    webStablePrint: 'device-local-v20',
+    webStablePrint: 'device-local-v20-date-fit-v21',
+    labelDateBoxes: 'narrow-1x2-centered-2-dot-safe-area',
     labelSettingsStaff: 'simple-v20',
     webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
