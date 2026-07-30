@@ -4,8 +4,8 @@ import { handleLabelFifoV26 } from './label-fifo-v26.js'
 import { handleNoDeletePolicyV27 } from './no-delete-policy-v27.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'compact-sop-detail-v30-v4.6.29'
-const SHELL_REVISION = '4.6.29-compact-sop-detail-v30'
+const WORKER_REVISION = 'food-label-deep-training-v31-v4.6.30'
+const SHELL_REVISION = '4.6.30-food-label-deep-training-v31'
 
 function apiHeaders(request, response) {
   const headers = new Headers(response.headers)
