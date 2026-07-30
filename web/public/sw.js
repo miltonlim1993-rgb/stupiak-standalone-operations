@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-27-restored-task-sop-ui-v28'
+const VERSION = 'chefops-v4-6-28-compact-training-hub-v29'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
