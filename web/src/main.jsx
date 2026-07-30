@@ -28,7 +28,7 @@ import { installNoDeleteUiV27 } from '@/lib/no-delete-ui-v27'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.28-compact-training-hub-v29'
+const SHELL_VERSION = '4.6.29-compact-sop-detail-v30'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -60,7 +60,7 @@ function markRuntime() {
     dataPackageContentPolicy: 'active-linked-content-only-v27',
     taskUi: 'operational-tasks-v2',
     trainingHub: 'ops-compact-v29',
-    sopReader: 'stupiaks-poster-v1-responsive',
+    sopReader: 'ops-compact-guided-v30',
     webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
