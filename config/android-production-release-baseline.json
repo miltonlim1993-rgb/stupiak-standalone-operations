@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-07-31T07:15:00+08:00",
+  "recordedAt": "2026-07-31T07:30:00+08:00",
   "releasePolicy": {
     "status": "HOLD_UNTIL_EXPLICIT_APPROVAL",
     "releaseTag": "android-release-latest",
@@ -40,7 +40,7 @@
       "compact Ops-aligned Training Hub v29",
       "compact Ops-aligned Guided SOP detail reader v30",
       "Food Label, FIFO and traceability SOP v3 with 12 bilingual deep-learning steps",
-      "Food Label certification course with 50-question randomized bank and 80 percent pass score",
+      "Food Label certification course with a 70-question bank, 50 randomly selected per attempt and an 80 percent pass score",
       "clean active-linked-content-only Data Package v2",
       "latest Web/API compatibility"
     ],
@@ -57,7 +57,7 @@
     "Test first-hand, Open, and Refill/Cooked FIFO flows",
     "Test restored OperationalTasksV2 and compact Training Hub",
     "Test the compact Guided SOP detail reader on phone, tablet and desktop",
-    "Test the Food Label 12-step bilingual training and randomized 50-question certification",
+    "Test the Food Label 12-step bilingual training and verify that each attempt selects 50 questions from the 70-question bank",
     "Test native barcode scanner",
     "Only then replace android-release-latest"
   ]
