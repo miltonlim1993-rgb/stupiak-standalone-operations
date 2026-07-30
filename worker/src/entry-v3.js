@@ -2,8 +2,8 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'web-date-box-fit-v21-apk-v16-frozen-v4.6.19'
-const SHELL_REVISION = '4.6.19-web-date-box-fit-v21-apk-v16-frozen'
+const WORKER_REVISION = 'shared-web-apk-date-fit-v22-v4.6.20'
+const SHELL_REVISION = '4.6.20-shared-web-apk-date-fit-v22'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
