@@ -2,8 +2,8 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'windows-queue-direct-ip-v23-v4.6.21'
-const SHELL_REVISION = '4.6.21-windows-queue-direct-ip-v23'
+const WORKER_REVISION = 'windows-queue-kitchen-ip-service-v24-v4.6.22'
+const SHELL_REVISION = '4.6.22-windows-queue-kitchen-ip-service-v24'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
