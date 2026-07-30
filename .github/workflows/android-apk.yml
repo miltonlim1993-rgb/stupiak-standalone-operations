@@ -17,7 +17,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.29-compact-sop-detail-v30.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.30-food-label-deep-training-v31.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -44,12 +44,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate held 4.6.29 shell, compact Training and SOP UI and stable print boundary
+      - name: Validate held 4.6.30 training shell and stable print boundary
         run: |
           set -Eeuo pipefail
-          grep -q '"version": "4.6.29"' package.json
-          grep -q "chefops-v4-6-29-compact-sop-detail-v30" web/public/sw.js
-          grep -q "4.6.29-compact-sop-detail-v30" web/src/main.jsx
+          grep -q '"version": "4.6.30"' package.json
+          grep -q "chefops-v4-6-30-food-label-deep-training-v31" web/public/sw.js
+          grep -q "4.6.30-food-label-deep-training-v31" web/src/main.jsx
           grep -q "import('@/pages/OperationalTasksV2')" web/src/App.jsx
           grep -q "import('@/pages/TrainingHubV29')" web/src/App.jsx
           grep -q "import('@/pages/GuidedSopLearningV30')" web/src/App.jsx
@@ -57,6 +57,12 @@ jobs:
           grep -q 'data-sop-standard="ops-compact-guided-v30"' web/src/pages/GuidedSopLearningV30.jsx
           test ! -f web/src/pages/GuidedSopLearning.jsx
           grep -q 'operationalBootstrap' web/src/pages/OperationalTasksV2.jsx
+          grep -q "foodLabelTraining: 'deep-bilingual-12-step-v31'" web/src/main.jsx
+          grep -q "trainingQuestionBank: 'random-up-to-50-v31'" web/src/main.jsx
+          grep -q 'installTrainingQuestionRandomV31' web/src/main.jsx
+          grep -q '4.6.30-random-50-v31' web/src/lib/training-question-random-core-v31.js
+          grep -q '"activeStepCount": 12' config/training-content-baseline-v31.json
+          grep -q '"questionBankSize": 50' config/training-content-baseline-v31.json
           grep -q "noDeletePolicy: 'hard-delete-disabled-v27'" web/src/main.jsx
           grep -q "installNoDeleteUiV27" web/src/main.jsx
           grep -q "lucide-trash-2" web/src/lib/no-delete-ui-v27.js
@@ -74,7 +80,7 @@ jobs:
           ! grep -q "BITMAP" web/src/lib/stable-tspl-label-v16.js
           grep -q "rawCommandBase64: asciiBase64(stable.command)" web/src/lib/stable-label-print-v16.js
           ! grep -q "html-raster" web/src/lib/stable-label-print-v16.js
-          grep -q "compact-sop-detail-v30-v4.6.29" worker/src/entry-v3.js
+          grep -q "food-label-deep-training-v31-v4.6.30" worker/src/entry-v3.js
           grep -q "HOLD_UNTIL_EXPLICIT_APPROVAL" config/android-production-release-baseline.json
           ! grep -q "installShellGuard" web/src/main.jsx
 
@@ -126,6 +132,7 @@ jobs:
           grep -q 'hard-delete-disabled-v27' web/dist/assets/*.js
           grep -q 'ops-compact-v29' web/dist/assets/*.js
           grep -q 'ops-compact-guided-v30' web/dist/assets/*.js
+          grep -q 'random-up-to-50-v31' web/dist/assets/*.js
           grep -q '今日任务' web/dist/assets/*.js
 
       - name: Restore private release keystore
@@ -186,8 +193,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Compatibility alias for previous Direct Print Flow APK URL" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.29 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Includes compact Ops-aligned Training and SOP detail interfaces, approved responsive Daily Tasks UI, no-delete, FIFO and supermarket scanning, while preserving the physically accepted Stable TSPL v16 printing route."
+            --title "Stupiak's Ops 4.6.30 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Includes the 12-step bilingual Food Label, FIFO and traceability training with randomized 50-question certification, compact Training and SOP interfaces, no-delete, FIFO and supermarket scanning, while preserving the physically accepted Stable TSPL v16 printing route."
 
       - name: Show stable release URLs
         run: |
