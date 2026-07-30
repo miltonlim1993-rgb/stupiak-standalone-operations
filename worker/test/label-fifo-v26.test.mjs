@@ -93,9 +93,11 @@ test('Web normalizes both live and packed label catalogs before Food Labels rend
   assert.match(main, /labelFifoPolicy: 'three-stage-source-chain-v26'/)
 })
 
-test('entry routes label create, catalog and reprint through the FIFO gate', async () => {
+test('entry keeps label create, catalog and reprint behind FIFO after no-delete policy', async () => {
   const entry = await source('worker/src/entry-v3.js')
+  assert.match(entry, /handleNoDeletePolicyV27/)
   assert.match(entry, /handleLabelFifoV26/)
   assert.match(entry, /url\.pathname\.startsWith\('\/api\/labels\/'\)/)
-  assert.match(entry, /label-source-fifo-v26-v4\.6\.25/)
+  assert.match(entry, /no-delete-task-training-package-v27-v4\.6\.26/)
+  assert.ok(entry.indexOf('handleNoDeletePolicyV27(request)') < entry.indexOf("url.pathname.startsWith('/api/labels/')"))
 })
