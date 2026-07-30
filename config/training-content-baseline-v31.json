@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-31T06:55:00+08:00",
+  "spreadsheetId": "1oljGV1NxJyGbFQoxkrzHeVBGCK7zs3r8x3jphe0HQAs",
+  "sop": {
+    "id": "sop-food-labels",
+    "code": "SOP-KIT-003",
+    "version": 3,
+    "language": "ZH-EN",
+    "activeStepCount": 12,
+    "requiredTopics": [
+      "exact product selection",
+      "Prepare/Freeze/Received first-hand source",
+      "Open second-hand source",
+      "Refill/Cooked third-hand source",
+      "oldest eligible FIFO source",
+      "source expiry inheritance",
+      "first/second-hand initial print capacity",
+      "extra reprint lock",
+      "physical label verification and placement",
+      "wrong, missing or damaged label isolation",
+      "FIFO blocked and source_chain_incomplete handling",
+      "final audit and shift handover"
+    ]
+  },
+  "course": {
+    "id": "course-food-label-fifo",
+    "quizId": "quiz-food-label",
+    "questionBankSize": 50,
+    "questionsPerAttempt": 50,
+    "randomizeEachLoad": true,
+    "passingScore": 80,
+    "maxAttempts": 3
+  },
+  "visualStatus": {
+    "existingLinkedStepImages": 8,
+    "missingNewScenarioImages": 4,
+    "nextVisualBatch": [
+      "wrong label isolation",
+      "missing or damaged label decision flow",
+      "FIFO blocked and source-chain exception",
+      "final reverse audit and handover"
+    ]
+  }
+}
