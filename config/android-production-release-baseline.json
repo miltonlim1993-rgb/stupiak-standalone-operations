@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 1,
+  "recordedAt": "2026-07-30T18:27:00+08:00",
+  "releasePolicy": {
+    "status": "HOLD_UNTIL_EXPLICIT_APPROVAL",
+    "releaseTag": "android-release-latest",
+    "moveReleaseTagBeforeApproval": false,
+    "requireSameProductionSigningCertificate": true,
+    "requirePhysicalOutletAcceptanceBeforeReplacingRelease": true
+  },
+  "acceptedAndroidBaseline": {
+    "printingCore": "stable-tspl-v16-date-fit-v22",
+    "physicalMediaMm": "40x30",
+    "dpi": 203,
+    "printerModel": "4BARCODE 4B-2054K",
+    "preserveWithoutRegression": [
+      "TSPL command layout",
+      "physical media size and gap",
+      "date-fit behavior",
+      "barcode printing",
+      "Direct IP RAW TCP printing",
+      "existing production signing identity"
+    ]
+  },
+  "heldChangesForNextSignedApk": {
+    "minimumSourceVersion": "4.6.25",
+    "sourceBranch": "feature/task-workflow-v3-apk",
+    "fifoBaselineCommit": "2f53469f76b378c6d1882bc8adf8f8121b4bced5",
+    "include": [
+      "three-stage label source hierarchy: Prepare/Freeze/Received -> Open -> Refill/Cooked",
+      "FIFO source enforcement and first/second-hand extra-print lock",
+      "updated ExpiryRules source-product mappings",
+      "native supermarket barcode scanner v25",
+      "latest Web/API compatibility"
+    ],
+    "workstreamReleaseState": "No signed APK was published or replaced by the 4.6.24 or 4.6.25 work in this PR. Existing installed APK remains the production baseline until an explicitly approved signed release."
+  },
+  "futureReleaseChecklist": [
+    "Deploy and accept Web/Worker 4.6.25 first",
+    "Build from 4.6.25-or-later reviewed commit",
+    "Use the existing production keystore and alias",
+    "Verify APK certificate and SHA-256",
+    "Confirm stable TSPL output on the outlet printer",
+    "Test first-hand, Open, and Refill/Cooked FIFO flows",
+    "Test native barcode scanner",
+    "Only then replace android-release-latest"
+  ]
+}
