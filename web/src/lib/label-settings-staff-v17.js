@@ -1,28 +1,22 @@
-export const LABEL_SETTINGS_STAFF_VERSION = '4.6.15-label-settings-staff-v17'
+export const LABEL_SETTINGS_STAFF_VERSION = '4.6.16-label-settings-staff-v18'
 
 let installed = false
 let scheduled = false
 
-function applyLatestWorkspaceLayout() {
+function markCurrentWorkspace() {
   const workspace = document.querySelector('[data-printer-workspace]')
   if (!workspace) return
-
-  // The responsive workspace stylesheet was originally anchored to max-w-6xl.
-  // The page later moved to max-w-7xl without updating those selectors, causing
-  // Web browsers to fall back to the first-generation stacked form. Keep both
-  // classes so the intended responsive layout applies on Web and APK equally.
-  workspace.classList.add('max-w-6xl')
-  workspace.dataset.printerWorkspace = LABEL_SETTINGS_STAFF_VERSION
+  workspace.dataset.staffPrinterAccess = 'true'
 
   const heading = workspace.querySelector('h1')
   const header = heading?.closest('header')
-  if (header && !header.querySelector('[data-label-settings-staff-badge]')) {
-    const badge = document.createElement('span')
-    badge.dataset.labelSettingsStaffBadge = 'true'
-    badge.className = 'inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-    badge.textContent = 'All staff access · Stable TSPL v16'
-    heading.parentElement?.appendChild(badge)
-  }
+  if (!header || /all staff/i.test(header.textContent || '') || header.querySelector('[data-label-settings-staff-badge]')) return
+
+  const badge = document.createElement('span')
+  badge.dataset.labelSettingsStaffBadge = 'true'
+  badge.className = 'inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+  badge.textContent = 'All staff access · Web Direct LAN · Stable TSPL v18'
+  heading.parentElement?.appendChild(badge)
 }
 
 function exposeFoodLabelShortcut() {
@@ -43,7 +37,7 @@ function exposeFoodLabelShortcut() {
 
 function apply() {
   scheduled = false
-  applyLatestWorkspaceLayout()
+  markCurrentWorkspace()
   exposeFoodLabelShortcut()
 }
 
