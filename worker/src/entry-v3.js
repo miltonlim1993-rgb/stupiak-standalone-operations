@@ -1,11 +1,12 @@
 import app from './entry.js'
 import { errorResponse } from './http.js'
+import { handleLabelFifoV26 } from './label-fifo-v26.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'supermarket-barcode-scanner-v25-v4.6.24'
-const SHELL_REVISION = '4.6.24-supermarket-barcode-scanner-v25'
+const WORKER_REVISION = 'label-source-fifo-v26-v4.6.25'
+const SHELL_REVISION = '4.6.25-label-source-fifo-v26'
 
-function taskApiHeaders(request, response) {
+function apiHeaders(request, response) {
   const headers = new Headers(response.headers)
   const origin = String(request.headers.get('Origin') || '')
   const allowed = new Set([
@@ -59,14 +60,18 @@ export default {
   async fetch(request, env, context) {
     try {
       const url = new URL(request.url)
+      if (url.pathname.startsWith('/api/labels/')) {
+        const labelResponse = await handleLabelFifoV26(request, env, url)
+        if (labelResponse) return apiHeaders(request, labelResponse)
+      }
       if (url.pathname.startsWith('/api/tasks/')) {
         const taskResponse = await handleTaskWorkflowV5(request, env)
-        if (taskResponse) return taskApiHeaders(request, taskResponse)
+        if (taskResponse) return apiHeaders(request, taskResponse)
       }
       const response = await app.fetch(request, env, context)
       return withShellHeaders(request, url, response)
     } catch (error) {
-      return errorResponse(error)
+      return apiHeaders(request, errorResponse(request, env, error))
     }
   },
 }
