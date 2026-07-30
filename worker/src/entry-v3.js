@@ -2,8 +2,8 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'shared-web-apk-date-fit-v22-v4.6.20'
-const SHELL_REVISION = '4.6.20-shared-web-apk-date-fit-v22'
+const WORKER_REVISION = 'windows-queue-direct-ip-v23-v4.6.21'
+const SHELL_REVISION = '4.6.21-windows-queue-direct-ip-v23'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
@@ -38,9 +38,10 @@ function withShellHeaders(request, url, response) {
     || request.headers.get('Sec-Fetch-Mode') === 'navigate'
     || request.headers.get('Accept')?.includes('text/html')
   const isFreshnessResource = url.pathname === '/sw.js'
+    || isNavigation
     || ['/labels', '/labels/settings', '/more'].includes(url.pathname)
 
-  if (isNavigation || isFreshnessResource) {
+  if (isFreshnessResource) {
     headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
     headers.set('Pragma', 'no-cache')
     headers.set('Expires', '0')
@@ -54,22 +55,17 @@ function withShellHeaders(request, url, response) {
 }
 
 export default {
-  async fetch(request, env, ctx) {
-    const url = new URL(request.url)
-    if (url.pathname.startsWith('/api/tasks/v3/')) {
-      if (request.method === 'OPTIONS') return taskApiHeaders(request, new Response(null, { status: 204 }))
-      try {
-        const response = await handleTaskWorkflowV5(request, env, url, ctx, app)
-        if (response) return taskApiHeaders(request, response)
-      } catch (taskError) {
-        return taskApiHeaders(request, errorResponse(request, env, taskError))
+  async fetch(request, env, context) {
+    try {
+      const url = new URL(request.url)
+      if (url.pathname.startsWith('/api/tasks/')) {
+        const taskResponse = await handleTaskWorkflowV5(request, env)
+        if (taskResponse) return taskApiHeaders(request, taskResponse)
       }
+      const response = await app.fetch(request, env, context)
+      return withShellHeaders(request, url, response)
+    } catch (error) {
+      return errorResponse(error)
     }
-    const response = await app.fetch(request, env, ctx)
-    return withShellHeaders(request, url, response)
-  },
-
-  async scheduled(event, env, ctx) {
-    if (typeof app.scheduled === 'function') return app.scheduled(event, env, ctx)
   },
 }
