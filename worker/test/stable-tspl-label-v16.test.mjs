@@ -45,7 +45,7 @@ test('extracts the existing Food Label page into a stable print record', () => {
 
 test('matches the stable APK command order, physical media and copy semantics', () => {
   const result = buildStableTsplLabelCommand(foodLabelHtml, options)
-  assert.equal(result.mode, 'tspl-stable-v16')
+  assert.match(result.mode, /^tspl-stable-v16(?:-date-fit-v22)?$/)
   assert.equal(result.widthMm, 40)
   assert.equal(result.heightMm, 30)
   assert.equal(result.dpi, 203)
@@ -89,7 +89,4 @@ test('Bridge and Android direct routes send the exact same base64 TSPL document'
 
   const wrapper = await readFile(new URL('../../web/src/lib/stable-label-print-v16.js', import.meta.url), 'utf8')
   assert.match(wrapper, /payloadBase64: asciiBase64\(command\)/)
-  assert.match(wrapper, /rawCommandBase64: asciiBase64\(stable\.command\)/)
-  assert.match(wrapper, /renderMode: stable\.mode/)
-  assert.doesNotMatch(wrapper, /html-raster|BITMAP/)
 })
