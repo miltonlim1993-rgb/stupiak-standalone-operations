@@ -40,22 +40,27 @@ test('unauthenticated or unknown roles cannot mutate printer profiles', () => {
   assert.throws(() => assertDeletePermission({ role: '' }, 'PrinterProfile', {}), /Sign in as outlet staff/)
 })
 
-test('Stable Label Settings v18 uses its own responsive workspace without legacy width mutation', async () => {
+test('Stable Label Settings workspace remains available to assigned-outlet staff', async () => {
   const runtime = await source('web/src/lib/label-settings-staff-v17.js')
-  const page = await source('web/src/pages/LabelPrinterSettingsStableV18.jsx')
+  const page = await source('web/src/pages/LabelPrinterSettingsSimpleV20.jsx')
   assert.match(runtime, /querySelector\('\[data-printer-workspace\]'\)/)
   assert.match(runtime, /staffPrinterAccess/)
   assert.doesNotMatch(runtime, /classList\.add\('max-w-6xl'\)/)
   assert.match(page, /data-printer-workspace=\{SETTINGS_VERSION\}/)
-  assert.match(page, /All staff/)
-  assert.match(page, /Stable TSPL v18/)
 })
 
-test('all signed-in staff receive a visible header and desktop navigation shortcut', async () => {
+test('Food Labels exposes exactly one icon-only settings shortcut and Layout has no duplicate entry', async () => {
   const layout = await source('web/src/components/Layout.jsx')
-  assert.match(layout, /to: '\/labels\/settings', label: 'Label Printer Settings'/)
-  assert.match(layout, /title="Label Printer Settings · available to all staff"/)
-  assert.doesNotMatch(layout, /ROLE_LEVEL.*labels\/settings/)
+  const runtime = await source('web/src/lib/label-settings-staff-v17.js')
+  const labels = await source('web/src/pages/FoodLabels.jsx')
+
+  assert.doesNotMatch(layout, /label: 'Label Printer Settings'/)
+  assert.doesNotMatch(layout, /title="Label Printer Settings/)
+  assert.doesNotMatch(layout, /<Printer className=/)
+  assert.match(labels, /aria-label="Label settings"/)
+  assert.match(runtime, /a\[href="\/labels\/settings"\]/)
+  assert.match(runtime, /inline-flex h-9 w-9/)
+  assert.doesNotMatch(runtime, /link\.textContent = 'Printer Settings'/)
 })
 
 test('label pages verify the published shell instead of remaining on an old web bundle', async () => {
