@@ -2,16 +2,87 @@ name: Build and publish signed Android release
 
 on:
   workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'scripts/android-task-alarm/**'
+      - 'scripts/configure-android-*.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-apk.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'scripts/android-task-alarm/**'
+      - 'scripts/configure-android-*.mjs'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/android-apk.yml'
 
 permissions:
   contents: write
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
+      VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
+      ANDROID_VERSION_CODE: 1
+      ANDROID_VERSION_NAME: 4.5.1-validation
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate Task, SOP and direct-print source
+        run: |
+          grep -q "task-sop-alarm-v18" web/public/sw.js
+          grep -q "TaskAlarmManager" web/src/App.jsx
+          grep -q "collectTaskAlerts" web/src/lib/task-alerts.js
+          grep -q "SYNC_ALERT_SCHEDULE" web/public/sw.js
+          grep -q "TaskAlarmPlugin.class" scripts/configure-android-task-alarms.mjs
+          grep -q "setAlarmClock" scripts/android-task-alarm/TaskAlarmScheduler.java
+          grep -q "setLooping(true)" scripts/android-task-alarm/TaskAlarmService.java
+          grep -q "TaskAlarmBootReceiver" scripts/configure-android-task-alarms.mjs
+          grep -q "DirectLabelPrintPlugin.class" scripts/configure-android-direct-label-print.mjs
+          grep -q "buildTspl" scripts/configure-android-direct-label-print.mjs
+          grep -q "sendBluetooth" scripts/configure-android-direct-label-print.mjs
+          grep -q 'id="chefops-mobile-main"' web/src/components/Layout.jsx
+          grep -q 'id="chefops-mobile-nav"' web/src/components/Layout.jsx
+          grep -q 'purgeNativeServiceWorkers' web/src/main.jsx
+      - name: Build web app
+        run: npm run build -w web
+      - name: Generate and configure Android debug project
+        run: |
+          npm run mobile:init
+          node scripts/configure-android-branding.mjs
+          node scripts/configure-android-native-google-auth.mjs
+          node scripts/configure-android-direct-label-print.mjs
+          node scripts/configure-android-task-alarms.mjs
+      - name: Compile debug APK
+        run: |
+          chmod +x web/android/gradlew
+          cd web/android
+          ./gradlew assembleDebug
+
   release:
+    if: github.event_name != 'pull_request'
+    needs: validate
     runs-on: ubuntu-latest
     env:
       APK_RELEASE_TAG: android-release-latest
       APK_FILE_NAME: stupiaks-ops-release.apk
+      APK_ALARM_FILE_NAME: stupiaks-ops-task-sop-alarm.apk
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
@@ -39,35 +110,14 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Validate direct print flow v10 source
-        run: |
-          grep -q "direct-print-flow-shell-v10" web/public/sw.js
-          grep -q "direct-print-flow-shell-v10" web/src/main.jsx
-          grep -q "@/direct-print-v10.css" web/src/main.jsx
-          grep -q "DirectLabelPrint" web/src/lib/native-label-print.js
-          grep -q "printDirect" web/src/lib/native-label-print.js
-          grep -q "DirectLabelPrintPlugin.class" scripts/configure-android-direct-label-print.mjs
-          grep -q "buildTspl" scripts/configure-android-direct-label-print.mjs
-          grep -q "buildZpl" scripts/configure-android-direct-label-print.mjs
-          grep -q "buildCpcl" scripts/configure-android-direct-label-print.mjs
-          grep -q "buildEscPos" scripts/configure-android-direct-label-print.mjs
-          grep -q "sendNetwork" scripts/configure-android-direct-label-print.mjs
-          grep -q "sendBluetooth" scripts/configure-android-direct-label-print.mjs
-          grep -q "position: static !important" web/src/direct-print-v10.css
-          grep -q 'id="chefops-mobile-main"' web/src/components/Layout.jsx
-          grep -q 'id="chefops-mobile-nav"' web/src/components/Layout.jsx
-          grep -q 'refetchInterval: false' web/src/lib/query-client.js
-          grep -q 'App shell: Direct Print Flow v10' web/src/pages/More.jsx
-          grep -q 'purgeNativeServiceWorkers' web/src/main.jsx
-          ! grep -q 'installShellGuard' web/src/main.jsx
       - name: Generate and sync Capacitor Android project
         run: npm run mobile:init
-      - name: Apply Stupiak's Ops Android launcher icon
-        run: node scripts/configure-android-branding.mjs
-      - name: Configure native Google Credential Manager, system print and mobile WebView
-        run: node scripts/configure-android-native-google-auth.mjs
-      - name: Configure direct LAN and Bluetooth label printing
-        run: node scripts/configure-android-direct-label-print.mjs
+      - name: Apply Android branding and native capabilities
+        run: |
+          node scripts/configure-android-branding.mjs
+          node scripts/configure-android-native-google-auth.mjs
+          node scripts/configure-android-direct-label-print.mjs
+          node scripts/configure-android-task-alarms.mjs
       - name: Restore private release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -91,15 +141,17 @@ jobs:
         run: |
           mkdir -p release
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_FILE_NAME}"
+          cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_ALARM_FILE_NAME}"
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V10_FILE_NAME}"
           cp web/android/app/build/outputs/bundle/release/app-release.aab "release/${AAB_FILE_NAME}"
-          sha256sum "release/${APK_FILE_NAME}" "release/${APK_V10_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
+          sha256sum "release/${APK_FILE_NAME}" "release/${APK_ALARM_FILE_NAME}" "release/${APK_V10_FILE_NAME}" "release/${AAB_FILE_NAME}" | tee release/SHA256SUMS.txt
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: stupiaks-ops-signed-release
           path: |
             release/stupiaks-ops-release.apk
+            release/stupiaks-ops-task-sop-alarm.apk
             release/stupiaks-ops-direct-print-flow-v10.apk
             release/stupiaks-ops-release.aab
             release/SHA256SUMS.txt
@@ -111,13 +163,14 @@ jobs:
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
             "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
+            "release/${APK_ALARM_FILE_NAME}#Stupiak's Ops Task and SOP alarm APK" \
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Direct Print Flow v10 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Direct Print Flow v10 keeps Close Up submit controls in normal mobile document flow and sends labels directly to configured Wi-Fi/LAN or paired Bluetooth Classic printers using TSPL, ZPL, CPCL or ESC/POS without leaving the app or opening Android print preview."
+            --title "Stupiak's Ops Task & SOP Alarm ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Includes exact Task opening and deadline alarms, linked SOP reminders, reboot recovery, lock-screen full-screen alert UI, looping alarm sound and vibration until explicit acknowledgement, plus the existing direct LAN/Bluetooth label printing flow."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
-          echo "V10 APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_V10_FILE_NAME}"
+          echo "Alarm APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_ALARM_FILE_NAME}"
           echo "AAB: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${AAB_FILE_NAME}"

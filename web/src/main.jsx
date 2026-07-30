@@ -11,7 +11,7 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = 'guided-sop-responsive-v14'
+const SHELL_VERSION = 'task-sop-alarm-v18'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -60,6 +60,22 @@ function configureNativeSystemBars() {
   const systemBars = window.Capacitor?.Plugins?.SystemBars
   Promise.resolve(systemBars?.show?.()).catch(() => undefined)
   Promise.resolve(systemBars?.setStyle?.({ style: 'LIGHT' })).catch(() => undefined)
+}
+
+async function registerBackgroundAlertChecks(registration) {
+  try {
+    if ('periodicSync' in registration) {
+      await registration.periodicSync.register('chefops-task-alerts', { minInterval: 15 * 60 * 1000 })
+    }
+  } catch (error) {
+    console.info('Periodic Task alert checks are not available in this browser', error)
+  }
+
+  try {
+    if ('sync' in registration) await registration.sync.register('chefops-task-alerts-once')
+  } catch (error) {
+    console.info('One-time background Task alert check is not available', error)
+  }
 }
 
 function publishShellHealth() {
@@ -115,6 +131,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) 
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
       registration.update().catch(() => undefined)
+      registerBackgroundAlertChecks(registration)
     }).catch((error) => console.warn('Service worker registration failed', error))
   })
 }
