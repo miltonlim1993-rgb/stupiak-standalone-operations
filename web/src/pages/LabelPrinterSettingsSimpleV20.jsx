@@ -222,10 +222,11 @@ export default function LabelPrinterSettingsSimpleV20() {
     try {
       const profile = fixedProfile()
       saveWebPrinterDevice(outletId, profile)
+      const repaired = await repairSharedProfile(profile)
       if (nativeAndroid) openNativeTestLabel(outletId)
-      else await printStableLabelHtmlV20(testLabelHtml(outletId), profile)
+      else await printStableLabelHtmlV20(testLabelHtml(outletId), repaired)
       setStatus('ready')
-      setMessage('One Stable TSPL test label was sent. No browser page, Raster or shared Web connector settings were used.')
+      setMessage('One Stable TSPL test label was sent after restoring the accepted APK profile. No browser page or Raster route was used.')
     } catch (printError) {
       setStatus('error')
       setError(printError.message || 'Test label failed.')
