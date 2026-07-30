@@ -31,7 +31,7 @@ if [[ -n "$(git status --porcelain)" ]]; then
 fi
 
 printf '\n==================================================\n'
-echo "1. Pull and verify 4.6.27 restored Task and SOP UI"
+echo "1. Pull and verify 4.6.27 restored Task, Training and SOP UI"
 echo "=================================================="
 git fetch origin "$EXPECTED_BRANCH"
 git merge --ff-only "origin/$EXPECTED_BRANCH"
@@ -43,9 +43,13 @@ grep -q "$EXPECTED_WORKER_REVISION" worker/src/entry-v3.js
 grep -q "$EXPECTED_SHELL_REVISION" web/src/main.jsx
 grep -q "$EXPECTED_SW_VERSION" web/public/sw.js
 grep -q "import('@/pages/OperationalTasksV2')" web/src/App.jsx
+grep -q "import('@/pages/TrainingHubV28')" web/src/App.jsx
 grep -q "import('@/pages/GuidedSopLearning')" web/src/App.jsx
+grep -q 'path="/training" element={<TrainingHub />}' web/src/App.jsx
+grep -q 'path="/training/manage" element={<TrainingManage />}' web/src/App.jsx
 grep -q 'path="/sop/:sopId" element={<GuidedSop />}' web/src/App.jsx
 grep -q 'operationalBootstrap' web/src/pages/OperationalTasksV2.jsx
+grep -q 'data-training-hub="onboarding-responsive-v28"' web/src/pages/TrainingHubV28.jsx
 grep -q 'data-sop-standard="stupiaks-poster-v1"' web/src/pages/GuidedSopLearning.jsx
 grep -q 'handleTaskWorkflowV5(request, env, url, context, app)' worker/src/entry-v3.js
 grep -q "url.pathname.startsWith('/sop/')" worker/src/entry-v3.js
@@ -137,17 +141,20 @@ fi
 
 printf '%s\n' "$ROOT_HEADERS" | grep -Ei '^(HTTP/|x-chefops-worker-revision:|permissions-policy:)'
 printf '%s\n' "$TASK_HEADERS" | grep -Ei '^(HTTP/|cache-control:|x-chefops-shell-revision:)'
+printf '%s\n' "$TRAINING_HEADERS" | grep -Ei '^(HTTP/|cache-control:|x-chefops-shell-revision:)'
 printf '%s\n' "$SOP_HEADERS" | grep -Ei '^(HTTP/|cache-control:|x-chefops-shell-revision:)'
 printf '%s\n' "$SHELL" | grep 'const VERSION'
 printf '%s\n' "$DELETE_BODY" | python3 -m json.tool
 curl -fsS "$WORKER_URL/api/health" | python3 -m json.tool
 
 printf '\n==================================================\n'
-echo "SUCCESS: Restored Task and SOP UI 4.6.27 deployed"
+echo "SUCCESS: Restored Task, Training and SOP UI 4.6.27 deployed"
 echo "=================================================="
 echo "URL: $WORKER_URL"
 echo "Commit: $COMMIT"
 echo "Tasks: OperationalTasksV2 responsive daily workflow restored"
+echo "Training: onboarding and station Training Hub restored at /training"
+echo "Full course, quiz and assignment tools retained at /training/manage"
 echo "SOP chapters: Stupiak yellow/black/white responsive reader restored"
 echo "Task API: Worker now passes url, context and legacy app to the workflow handler"
 echo "Hard DELETE: still blocked by Worker with HTTP 405"
