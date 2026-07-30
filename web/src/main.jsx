@@ -24,10 +24,11 @@ import { installLabelSettingsStaffV17 } from '@/lib/label-settings-staff-v17'
 import { installWebShellFreshnessV17 } from '@/lib/web-shell-freshness-v17'
 import { installSupermarketBarcodeScannerV25 } from '@/lib/supermarket-barcode-scan-v25'
 import { installLabelFifoPolicyV26 } from '@/lib/install-label-fifo-policy-v26'
+import { installNoDeleteUiV27 } from '@/lib/no-delete-ui-v27'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
 
-const SHELL_VERSION = '4.6.25-label-source-fifo-v26'
+const SHELL_VERSION = '4.6.26-no-delete-task-training-package-v27'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -54,6 +55,9 @@ function markRuntime() {
     labelSettingsStaff: 'single-toolbar-icon-v25',
     barcodeScanner: 'supermarket-hid-live-camera-native-v25',
     labelFifoPolicy: 'three-stage-source-chain-v26',
+    noDeletePolicy: 'hard-delete-disabled-v27',
+    operationalContentBaseline: 'task-v4-v5-training-stations-v27',
+    dataPackageContentPolicy: 'active-linked-content-only-v27',
     webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
@@ -129,6 +133,7 @@ else installStableLabelPrintV20()
 installLabelSettingsStaffV17()
 installSupermarketBarcodeScannerV25()
 installLabelFifoPolicyV26()
+installNoDeleteUiV27()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
 applyTheme()
