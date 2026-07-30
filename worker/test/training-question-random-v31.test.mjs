@@ -11,7 +11,7 @@ const read = (path) => fs.readFileSync(new URL(`../../${path}`, import.meta.url)
 
 test('random training selector keeps up to 50 questions per quiz and renumbers them', () => {
   const rows = [
-    ...Array.from({ length: 60 }, (_, index) => ({ id: `a-${index + 1}`, quiz_id: 'quiz-a', question_order: index + 1 })),
+    ...Array.from({ length: 70 }, (_, index) => ({ id: `a-${index + 1}`, quiz_id: 'quiz-a', question_order: index + 1 })),
     ...Array.from({ length: 3 }, (_, index) => ({ id: `b-${index + 1}`, quiz_id: 'quiz-b', question_order: index + 1 })),
   ]
 
@@ -36,7 +36,7 @@ test('runtime installs randomized question loading before Training renders', () 
   assert.match(main, /installTrainingQuestionRandomV31\(\)/)
   assert.match(main, /trainingQuestionBank: 'random-up-to-50-v31'/)
   assert.equal(baseline.sop.activeStepCount, 12)
-  assert.equal(baseline.course.questionBankSize, 50)
+  assert.equal(baseline.course.questionBankSize, 70)
   assert.equal(baseline.course.questionsPerAttempt, 50)
   assert.deepEqual(baseline.visualStatus.missingNewScenarioImages, 4)
 })
