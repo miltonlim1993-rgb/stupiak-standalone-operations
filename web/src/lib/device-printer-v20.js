@@ -1,0 +1,171 @@
+export const DEVICE_PRINTER_VERSION = '4.6.18-device-printer-v20'
+export const LOCAL_CONNECTOR_URL = 'http://127.0.0.1:8788'
+
+export const STABLE_4BARCODE_MEDIA = Object.freeze({
+  brand: '4BARCODE',
+  model: '4B-2054K',
+  connection_type: 'network',
+  command_language: 'tspl',
+  network_protocol: 'raw_tcp',
+  port: 9100,
+  label_width_mm: 40,
+  label_height_mm: 30,
+  dpi: 203,
+  default_copies: 1,
+  media_sensor: 'gap',
+  gap_mm: 2,
+  gap_offset_mm: 0,
+  black_mark_mm: 2,
+  black_mark_offset_mm: 0,
+  print_speed_mm_s: 76,
+  darkness: 8,
+  x_offset_mm: 0,
+  y_offset_mm: 0,
+  connection_timeout_ms: 5000,
+  retry_limit: 3,
+  enabled: true,
+})
+
+function clean(value = '') {
+  return String(value ?? '').trim()
+}
+
+function storage() {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage : null
+  } catch {
+    return null
+  }
+}
+
+function key(outletId = '') {
+  return `stupiaks_ops.web_printer_device.v20.${clean(outletId) || 'default'}`
+}
+
+function safeJson(value = '') {
+  try {
+    const parsed = JSON.parse(String(value || ''))
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function portValue(value = 9100) {
+  const number = Number(value)
+  return Number.isFinite(number) && number >= 1 && number <= 65535 ? Math.round(number) : 9100
+}
+
+export function stablePrinterProfile(profile = {}) {
+  return {
+    ...profile,
+    ...STABLE_4BARCODE_MEDIA,
+    id: clean(profile.id),
+    outlet_id: clean(profile.outlet_id),
+    purpose: 'food_label',
+    profile_name: clean(profile.profile_name || 'Food Label Printer'),
+    ip_address: clean(profile.ip_address),
+    port: portValue(profile.port || STABLE_4BARCODE_MEDIA.port),
+    is_default: profile.is_default !== false,
+    station_mode: 'this_device',
+  }
+}
+
+export function readWebPrinterDevice(outletId = '', fallback = {}) {
+  const saved = safeJson(storage()?.getItem(key(outletId))) || {}
+  return stablePrinterProfile({
+    ...fallback,
+    ...saved,
+    outlet_id: clean(outletId || fallback.outlet_id),
+    ip_address: clean(saved.ip_address || fallback.ip_address),
+    port: portValue(saved.port || fallback.port || 9100),
+    profile_name: clean(saved.profile_name || fallback.profile_name || 'Food Label Printer'),
+  })
+}
+
+export function saveWebPrinterDevice(outletId = '', value = {}) {
+  const next = readWebPrinterDevice(outletId, value)
+  const record = {
+    version: DEVICE_PRINTER_VERSION,
+    outlet_id: clean(outletId),
+    profile_name: next.profile_name,
+    ip_address: next.ip_address,
+    port: next.port,
+    updated_at: new Date().toISOString(),
+  }
+  try { storage()?.setItem(key(outletId), JSON.stringify(record)) } catch {}
+  return stablePrinterProfile(record)
+}
+
+export function clearWebPrinterDevice(outletId = '') {
+  try { storage()?.removeItem(key(outletId)) } catch {}
+}
+
+function loopbackRequest(url, init = {}) {
+  const options = {
+    mode: 'cors',
+    cache: 'no-store',
+    credentials: 'omit',
+    ...init,
+  }
+  try {
+    return new Request(url, { ...options, targetAddressSpace: 'loopback' })
+  } catch {
+    return new Request(url, options)
+  }
+}
+
+export async function fetchLocalConnector(pathname = '/health', init = {}) {
+  const path = String(pathname || '/health').startsWith('/') ? pathname : `/${pathname}`
+  return fetch(loopbackRequest(`${LOCAL_CONNECTOR_URL}${path}`, init))
+}
+
+export async function loopbackPermissionState() {
+  if (!navigator.permissions?.query) return 'unknown'
+  for (const name of ['loopback-network', 'local-network']) {
+    try {
+      const result = await navigator.permissions.query({ name })
+      if (result?.state) return result.state
+    } catch {}
+  }
+  return 'unknown'
+}
+
+export async function describeConnectorFailure(error) {
+  const message = clean(error?.message)
+  const permission = await loopbackPermissionState()
+  if (permission === 'denied') {
+    return {
+      code: 'loopback_permission_denied',
+      title: 'Chrome blocked local printing',
+      message: 'Allow Local network access for Stupiak’s Ops in the address-bar site controls, then press Connect again.',
+    }
+  }
+  if (error?.name === 'AbortError') {
+    return {
+      code: 'connector_timeout',
+      title: 'Web print service did not respond',
+      message: 'The local print service is not responding on this computer.',
+    }
+  }
+  if (error instanceof TypeError || /failed to fetch|networkerror|load failed/i.test(message)) {
+    return {
+      code: 'connector_unreachable',
+      title: 'Web print service is not running',
+      message: 'The automatic local print service could not be reached on this computer.',
+    }
+  }
+  return {
+    code: clean(error?.code || 'connector_failed'),
+    title: 'Printer connection failed',
+    message: message || 'The printer connection could not be completed.',
+  }
+}
+
+export function localConnectorTarget(profile = {}) {
+  return {
+    mode: 'raw_tcp',
+    host: clean(profile.ip_address),
+    port: portValue(profile.port || 9100),
+  }
+}
