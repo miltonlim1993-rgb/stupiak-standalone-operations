@@ -1,10 +1,11 @@
 import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleLabelFifoV26 } from './label-fifo-v26.js'
+import { handleNoDeletePolicyV27 } from './no-delete-policy-v27.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'label-source-fifo-v26-v4.6.25'
-const SHELL_REVISION = '4.6.25-label-source-fifo-v26'
+const WORKER_REVISION = 'no-delete-task-training-package-v27-v4.6.26'
+const SHELL_REVISION = '4.6.26-no-delete-task-training-package-v27'
 
 function apiHeaders(request, response) {
   const headers = new Headers(response.headers)
@@ -18,7 +19,7 @@ function apiHeaders(request, response) {
   headers.set('Access-Control-Allow-Origin', allowed.has(origin) ? origin : 'https://stupiaks-ops.sporkburger19.workers.dev')
   headers.set('Access-Control-Allow-Credentials', 'true')
   headers.set('Access-Control-Allow-Headers', 'Authorization, Content-Type, X-ChefOps-Native, X-Requested-With')
-  headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, DELETE, OPTIONS')
+  headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
   headers.set('Access-Control-Expose-Headers', 'X-ChefOps-Worker-Revision')
   headers.set('Vary', 'Origin')
   headers.set('X-ChefOps-Worker-Revision', WORKER_REVISION)
@@ -40,7 +41,7 @@ function withShellHeaders(request, url, response) {
     || request.headers.get('Accept')?.includes('text/html')
   const isFreshnessResource = url.pathname === '/sw.js'
     || isNavigation
-    || ['/labels', '/labels/settings', '/more'].includes(url.pathname)
+    || ['/labels', '/labels/settings', '/tasks', '/training', '/more'].includes(url.pathname)
     || url.pathname.startsWith('/print-service/')
 
   if (isFreshnessResource) {
@@ -60,6 +61,14 @@ export default {
   async fetch(request, env, context) {
     try {
       const url = new URL(request.url)
+
+      if (request.method === 'OPTIONS' && url.pathname.startsWith('/api/')) {
+        return apiHeaders(request, new Response(null, { status: 204 }))
+      }
+
+      const deleteResponse = handleNoDeletePolicyV27(request)
+      if (deleteResponse) return apiHeaders(request, deleteResponse)
+
       if (url.pathname.startsWith('/api/labels/')) {
         const labelResponse = await handleLabelFifoV26(request, env, url)
         if (labelResponse) return apiHeaders(request, labelResponse)
