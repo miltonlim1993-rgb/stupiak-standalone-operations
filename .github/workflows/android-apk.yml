@@ -17,7 +17,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.6.24-supermarket-barcode-scanner-v25.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.6.26-no-delete-task-training-package-v27.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -44,12 +44,17 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate current shell, scanner and stable print boundary
+      - name: Validate held 4.6.26 shell, content and stable print boundary
         run: |
           set -Eeuo pipefail
-          grep -q '"version": "4.6.24"' package.json
-          grep -q "chefops-v4-6-24-supermarket-barcode-scanner-v25" web/public/sw.js
-          grep -q "4.6.24-supermarket-barcode-scanner-v25" web/src/main.jsx
+          grep -q '"version": "4.6.26"' package.json
+          grep -q "chefops-v4-6-26-no-delete-task-training-package-v27" web/public/sw.js
+          grep -q "4.6.26-no-delete-task-training-package-v27" web/src/main.jsx
+          grep -q "noDeletePolicy: 'hard-delete-disabled-v27'" web/src/main.jsx
+          grep -q "installNoDeleteUiV27" web/src/main.jsx
+          grep -q "lucide-trash-2" web/src/lib/no-delete-ui-v27.js
+          grep -q "hard_delete_disabled" worker/src/no-delete-policy-v27.js
+          grep -q "operational-content-baseline-v27" config/operational-content-baseline-v27.json
           grep -q "barcodeScanner: 'supermarket-hid-live-camera-native-v25'" web/src/main.jsx
           grep -q "stableTsplCore: 'v16-date-fit-v22'" web/src/main.jsx
           grep -q "androidStablePrint: 'v16-date-fit-v22'" web/src/main.jsx
@@ -62,7 +67,8 @@ jobs:
           ! grep -q "BITMAP" web/src/lib/stable-tspl-label-v16.js
           grep -q "rawCommandBase64: asciiBase64(stable.command)" web/src/lib/stable-label-print-v16.js
           ! grep -q "html-raster" web/src/lib/stable-label-print-v16.js
-          grep -q "supermarket-barcode-scanner-v25-v4.6.24" worker/src/entry-v3.js
+          grep -q "no-delete-task-training-package-v27-v4.6.26" worker/src/entry-v3.js
+          grep -q "HOLD_UNTIL_EXPLICIT_APPROVAL" config/android-production-release-baseline.json
           ! grep -q "installShellGuard" web/src/main.jsx
 
       - name: Build and run the complete validation suite
@@ -89,7 +95,7 @@ jobs:
       - name: Configure supermarket barcode scanner v25
         run: node scripts/configure-android-barcode-scanner-v25.mjs
 
-      - name: Validate generated native print and barcode paths
+      - name: Validate generated native print, scanner and no-delete paths
         run: |
           set -Eeuo pipefail
           PLUGIN=web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
@@ -110,6 +116,7 @@ jobs:
           grep -q 'Barcode.FORMAT_EAN_13' "$SCANNER"
           grep -q 'Barcode.FORMAT_CODE_128' "$SCANNER"
           grep -q 'Barcode.FORMAT_QR_CODE' "$SCANNER"
+          grep -q 'hard-delete-disabled-v27' web/dist/assets/*.js
 
       - name: Restore private release keystore
         env:
@@ -169,8 +176,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Compatibility alias for previous Direct Print Flow APK URL" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops 4.6.24 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Adds supermarket-style native barcode scanning with EAN-13, EAN-8, UPC, Code 128, Code 39 and QR auto-zoom. Existing accepted Stable TSPL v16 printing remains unchanged."
+            --title "Stupiak's Ops 4.6.26 ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Removes hard-delete controls, restores the approved Task and Kitchen Training baseline, uses the clean Data Package v2, and keeps supermarket barcode scanning. Existing physically accepted Stable TSPL v16 printing remains unchanged."
 
       - name: Show stable release URLs
         run: |
