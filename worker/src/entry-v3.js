@@ -2,7 +2,8 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'stable-tspl-v16-cross-device-v15-printer-v12-v4.6.14'
+const WORKER_REVISION = 'label-settings-staff-v17-stable-tspl-v16-v4.6.15'
+const SHELL_REVISION = '4.6.15-label-settings-staff-v17-stable-tspl-v16'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
@@ -27,6 +28,30 @@ function taskApiHeaders(request, response) {
   })
 }
 
+function withShellHeaders(request, url, response) {
+  const headers = new Headers(response.headers)
+  headers.set('X-ChefOps-Worker-Revision', WORKER_REVISION)
+  headers.set('X-ChefOps-Shell-Revision', SHELL_REVISION)
+
+  const isNavigation = request.mode === 'navigate'
+    || request.headers.get('Sec-Fetch-Mode') === 'navigate'
+    || request.headers.get('Accept')?.includes('text/html')
+  const isFreshnessResource = url.pathname === '/sw.js'
+    || ['/labels', '/labels/settings', '/more'].includes(url.pathname)
+
+  if (isNavigation || isFreshnessResource) {
+    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0')
+    headers.set('Pragma', 'no-cache')
+    headers.set('Expires', '0')
+  }
+
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
@@ -40,13 +65,7 @@ export default {
       }
     }
     const response = await app.fetch(request, env, ctx)
-    const headers = new Headers(response.headers)
-    headers.set('X-ChefOps-Worker-Revision', WORKER_REVISION)
-    return new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    })
+    return withShellHeaders(request, url, response)
   },
 
   async scheduled(event, env, ctx) {
