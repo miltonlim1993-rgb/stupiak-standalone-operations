@@ -4,7 +4,7 @@ import {
   parsePrinterProfileNotes,
 } from './label-printer-profile.js'
 
-export const PRINTER_TRANSPORT_VERSION = '4.6.12-all-device-transport-v12'
+export const PRINTER_TRANSPORT_VERSION = '4.6.16-web-direct-lan-transport-v18'
 
 export const DEFAULT_PRINTER_TRANSPORT = Object.freeze({
   bridge_url: '',
@@ -93,7 +93,7 @@ export function encodePrinterTransportNotes(profile = {}) {
   return JSON.stringify({
     ...base,
     printer_transport_v12: {
-      schema: 'stupiaks-printer-transport-v12',
+      schema: 'stupiaks-printer-transport-v18',
       bridge_url: clean(profile.bridge_url),
       bridge_token: clean(profile.bridge_token),
       bridge_transport: enumValue(profile.bridge_transport, ['queue', 'raw_tcp', 'lpr'], DEFAULT_PRINTER_TRANSPORT.bridge_transport),
@@ -148,7 +148,6 @@ export function validatePrinterTransport(profile = {}, { nativeAndroid = false }
   const language = clean(normalized.command_language).toLowerCase()
 
   if (!normalized.enabled && normalized.enabled !== undefined) throw new Error('The selected printer profile is disabled.')
-
   if (connection === 'system_print') return { normalized, connection, language: 'browser' }
 
   if (!['tspl', 'zpl', 'cpcl', 'escpos'].includes(language)) {
@@ -156,14 +155,18 @@ export function validatePrinterTransport(profile = {}, { nativeAndroid = false }
   }
 
   if (connection === 'network') {
-    if (!nativeAndroid) throw new Error('Direct Wi-Fi/LAN raw printing is available in the Android app. On Windows or macOS, choose System Print or Driver Bridge.')
     if (!clean(normalized.ip_address)) throw new Error('Enter the printer’s own IP address, not the computer IP.')
     if (normalized.network_protocol === 'lpr' && !clean(normalized.lpr_queue)) throw new Error('Enter the printer LPR queue name.')
-    return { normalized, connection, language }
+    if (!nativeAndroid) {
+      if (!normalizeBridgeUrl(normalized.bridge_url)) throw new Error('Web Direct Wi-Fi/LAN requires the Local Print Connector URL, normally http://127.0.0.1:8787.')
+      if (!clean(normalized.bridge_token)) throw new Error('Enter the Local Print Connector pairing token.')
+      return { normalized, connection, language, viaConnector: true }
+    }
+    return { normalized, connection, language, viaConnector: false }
   }
 
   if (connection === 'bluetooth') {
-    if (!nativeAndroid) throw new Error('Bluetooth Classic printing is available in the Android app.')
+    if (!nativeAndroid) throw new Error('Bluetooth Classic RAW TSPL is available in the Android app. Web browsers must use Direct LAN through the Local Connector or PC/Mac Bridge.')
     if (clean(normalized.bluetooth_mode).toLowerCase() !== 'classic') {
       throw new Error('BLE and vendor-driver Bluetooth printers must use Device System Print. Raw Bluetooth supports paired Bluetooth Classic printers only.')
     }
@@ -172,12 +175,12 @@ export function validatePrinterTransport(profile = {}, { nativeAndroid = false }
   }
 
   if (connection === 'driver_bridge') {
-    if (!normalizeBridgeUrl(normalized.bridge_url)) throw new Error('Enter the Windows/macOS Print Bridge URL, for example http://192.168.1.20:8787.')
+    if (!normalizeBridgeUrl(normalized.bridge_url)) throw new Error('Enter the Windows/macOS Print Bridge URL, for example http://127.0.0.1:8787.')
     if (!clean(normalized.bridge_token)) throw new Error('Enter the pairing token shown by the Print Bridge computer.')
-    if (normalized.bridge_transport === 'queue' && !clean(normalized.bridge_queue)) throw new Error('Load and select an installed printer queue from the bridge computer.')
+    if (normalized.bridge_transport === 'queue' && !clean(normalized.bridge_queue)) throw new Error('Enter the installed RAW printer queue name.')
     if (normalized.bridge_transport !== 'queue' && !clean(normalized.bridge_printer_ip)) throw new Error('Enter the printer IP used by the bridge computer.')
     return { normalized, connection, language }
   }
 
-  throw new Error('Choose Device System Print, Direct Wi-Fi/LAN, Driver Bridge, or Bluetooth Classic.')
+  throw new Error('Choose Direct Wi-Fi/LAN, PC/Mac Bridge, or Bluetooth Classic.')
 }
