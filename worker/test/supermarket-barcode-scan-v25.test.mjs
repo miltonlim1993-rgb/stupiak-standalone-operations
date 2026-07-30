@@ -23,7 +23,7 @@ test('scanner input recognises fast keyboard-wedge barcode data', () => {
   assert.equal(isLikelyHardwareScannerInput('9551234567890', 2400), false)
 })
 
-test('web scanner is live and submits immediately without photo upload when supported', async () => {
+test('web scanner reads HID keyboard wedges and live video immediately', async () => {
   const scanner = await source('web/src/lib/supermarket-barcode-scan-v25.js')
   assert.match(scanner, /getUserMedia/)
   assert.match(scanner, /BarcodeDetector/)
@@ -32,6 +32,8 @@ test('web scanner is live and submits immediately without photo upload when supp
   assert.match(scanner, /Point at the barcode — it reads automatically/)
   assert.match(scanner, /NativeBarcodeScanner/)
   assert.match(scanner, /document\.addEventListener\('keydown', hardwareKeydown, true\)/)
+  assert.match(scanner, /event\.key === 'Enter' \|\| event\.key === 'Tab'/)
+  assert.match(scanner, /now - lastCodeAt < 1200/)
 })
 
 test('Android configuration installs Google Code Scanner with auto zoom', async () => {
