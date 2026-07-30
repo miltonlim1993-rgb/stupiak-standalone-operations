@@ -5,6 +5,7 @@ import {
   readWebPrinterDevice,
   saveWebPrinterDevice,
   stablePrinterProfile,
+  webPrinterRouteLabel,
 } from '@/lib/device-printer-v20'
 import {
   asciiBase64,
@@ -14,7 +15,7 @@ import {
 import { fitStableTsplDateBoxes } from '@/lib/stable-tspl-date-box-v21'
 import { showPrinterMessage } from '@/lib/native-label-print'
 
-export const STABLE_WEB_LABEL_PRINT_VERSION = '4.6.19-stable-web-label-print-v21-date-fit'
+export const STABLE_WEB_LABEL_PRINT_VERSION = '4.6.20-stable-web-label-print-v22-two-route'
 const CONNECTOR_TIMEOUT_MS = 12000
 
 function clean(value = '') {
@@ -74,7 +75,13 @@ async function sendWebStableLabel(html, requestedProfile = null) {
     outletId,
     requestedProfile || readWebPrinterDevice(outletId),
   )
-  if (!clean(profile.ip_address)) {
+  const queueRoute = profile.web_transport === 'queue'
+  if (queueRoute && !clean(profile.web_queue)) {
+    const error = new Error('Select a Windows printer queue for this computer before printing.')
+    error.code = 'web_printer_queue_missing'
+    throw error
+  }
+  if (!queueRoute && !clean(profile.ip_address)) {
     const error = new Error('Set the printer IP for this computer before printing.')
     error.code = 'web_printer_ip_missing'
     throw error
@@ -101,12 +108,14 @@ async function sendWebStableLabel(html, requestedProfile = null) {
       throw error
     }
 
+    const routeLabel = webPrinterRouteLabel(profile)
     const detail = {
       jobName: extractJobName(html),
       copies: stable.copies,
       dpi: stable.dpi,
-      route: 'Web device-local RAW TCP',
-      direct: true,
+      route: routeLabel,
+      direct: !queueRoute,
+      queue: queueRoute ? profile.web_queue : '',
       render_mode: stable.mode,
       version: STABLE_WEB_LABEL_PRINT_VERSION,
       result: data,
@@ -118,7 +127,7 @@ async function sendWebStableLabel(html, requestedProfile = null) {
       device_local: true,
       size_contract: {
         version: STABLE_WEB_LABEL_PRINT_VERSION,
-        source: 'stable-tspl-core-v16-web-device-v21-date-fit',
+        source: 'stable-tspl-core-v16-web-device-v22-two-route',
         physical_width_mm: stable.widthMm,
         physical_height_mm: stable.heightMm,
         created_canvas_width_mm: stable.widthMm,
@@ -129,7 +138,7 @@ async function sendWebStableLabel(html, requestedProfile = null) {
         raster_height_dots: stable.report.heightDots,
         native_command_width_mm: stable.widthMm,
         native_command_height_mm: stable.heightMm,
-        signature: `${stable.widthMm}x${stable.heightMm}@${stable.dpi}:stable-web-v21-date-fit`,
+        signature: `${stable.widthMm}x${stable.heightMm}@${stable.dpi}:stable-web-v22-two-route`,
       },
     }
     window.__chefopsLastCreatedLabelSizeContract = detail.size_contract
@@ -138,7 +147,7 @@ async function sendWebStableLabel(html, requestedProfile = null) {
     window.__chefopsLastStableTsplPayload = stable.command
     window.dispatchEvent(new CustomEvent('chefops:native-print-started', { detail }))
     showPrinterMessage(
-      `RAW TSPL sent · ${profile.ip_address}:${profile.port} · fixed 40×30 mm · date boxes fitted · ${stable.copies} copy.`,
+      `RAW TSPL sent · ${routeLabel} · fixed 40×30 mm · date boxes fitted · ${stable.copies} copy.`,
       'success',
     )
     return detail
