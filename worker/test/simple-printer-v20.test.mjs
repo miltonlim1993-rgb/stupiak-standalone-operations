@@ -51,13 +51,13 @@ test('accepted APK media values are locked to the proven 4BARCODE setup', () => 
   assert.equal(repaired.ip_address, '192.168.0.211')
 })
 
-test('Android installs the accepted stable v16 route while Web installs isolated v20', async () => {
+test('Android stays on stable v16 while Web uses isolated two-route printing', async () => {
   const main = await source('web/src/main.jsx')
   assert.match(main, /if \(isNativeAndroid\(\)\) installStableLabelPrintV16\(\)/)
   assert.match(main, /else installStableLabelPrintV20\(\)/)
-  assert.match(main, /androidStablePrint: 'frozen-v16'/)
-  assert.match(main, /webStablePrint: 'device-local-v20-date-fit-v21'/)
-  assert.match(main, /labelDateBoxes: 'narrow-1x2-centered-2-dot-safe-area'/)
+  assert.match(main, /androidStablePrint: 'v16-date-fit-v22'/)
+  assert.match(main, /webStablePrint: 'device-local-v22-windows-queue-direct-ip'/)
+  assert.match(main, /labelSettingsStaff: 'two-route-v23'/)
   assert.doesNotMatch(main, /installStableLabelPrintV19\(\)/)
 })
 
