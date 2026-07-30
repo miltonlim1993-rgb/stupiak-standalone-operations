@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-22-windows-queue-kitchen-ip-service-v24'
+const VERSION = 'chefops-v4-6-23-windows-installer-startup-v25'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -36,7 +36,11 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return
 
-  if (request.mode === 'navigate' || ['/labels', '/labels/settings', '/more', '/sw.js'].includes(url.pathname)) {
+  const alwaysFresh = request.mode === 'navigate'
+    || ['/labels', '/labels/settings', '/more', '/sw.js'].includes(url.pathname)
+    || url.pathname.startsWith('/print-service/')
+
+  if (alwaysFresh) {
     event.respondWith(fetch(request, { cache: 'no-store' }).catch(() => caches.match(request).then((cached) => cached || caches.match('/'))))
     return
   }
