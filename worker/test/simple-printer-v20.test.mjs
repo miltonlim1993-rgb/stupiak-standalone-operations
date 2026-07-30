@@ -57,8 +57,8 @@ test('Android stays on stable v16 while Web uses isolated two-route printing', a
   assert.match(main, /if \(isNativeAndroid\(\)\) installStableLabelPrintV16\(\)/)
   assert.match(main, /else installStableLabelPrintV20\(\)/)
   assert.match(main, /androidStablePrint: 'v16-date-fit-v22'/)
-  assert.match(main, /webStablePrint: 'device-local-v24-windows-queue-kitchen-ip'/)
-  assert.match(main, /labelSettingsStaff: 'two-route-service-v24'/)
+  assert.match(main, /webStablePrint: 'device-local-v25-windows-queue-kitchen-ip'/)
+  assert.match(main, /labelSettingsStaff: 'single-toolbar-icon-v25'/)
   assert.doesNotMatch(main, /installStableLabelPrintV19\(\)/)
 })
 
@@ -127,12 +127,18 @@ test('standalone Windows service supports queue and Raw TCP without Node or pair
   assert.match(service, /queue_accepted/)
   assert.match(service, /raw_tcp_data_sent/)
   assert.doesNotMatch(service, /node\.exe/)
-  assert.match(installer, /schtasks\.exe \/Create/)
-  assert.match(installer, /Stupiaks Print Service/)
+  assert.match(installer, /GetFolderPath\('Startup'\)/)
+  assert.match(installer, /Copy-Item -Path \$StartFile -Destination \$StartupFile -Force/)
+  assert.match(installer, /Their absence must never stop installation/)
+  assert.doesNotMatch(installer, /schtasks\.exe \/Create/)
   assert.match(launcher, /ExecutionPolicy Bypass/)
+  assert.match(launcher, /v=4\.6\.23/)
 })
 
-test('production shell explicitly permits loopback/local network permission prompts', async () => {
+test('production shell explicitly permits loopback/local network permission prompts and refreshes installer files', async () => {
   const worker = await source('worker/src/entry-v3.js')
+  const sw = await source('web/public/sw.js')
   assert.match(worker, /Permissions-Policy', 'local-network=\(self\), loopback-network=\(self\)'/)
+  assert.match(worker, /url\.pathname\.startsWith\('\/print-service\/'\)/)
+  assert.match(sw, /url\.pathname\.startsWith\('\/print-service\/'\)/)
 })
