@@ -1,4 +1,4 @@
-export const DEVICE_PRINTER_VERSION = '4.6.18-device-printer-v20'
+export const DEVICE_PRINTER_VERSION = '4.6.20-device-printer-v22'
 export const LOCAL_CONNECTOR_URL = 'http://127.0.0.1:8788'
 
 export const STABLE_4BARCODE_MEDIA = Object.freeze({
@@ -56,7 +56,12 @@ function portValue(value = 9100) {
   return Number.isFinite(number) && number >= 1 && number <= 65535 ? Math.round(number) : 9100
 }
 
+function routeValue(value = '') {
+  return clean(value).toLowerCase() === 'queue' ? 'queue' : 'raw_tcp'
+}
+
 export function stablePrinterProfile(profile = {}) {
+  const webTransport = routeValue(profile.web_transport || profile.webTransport)
   return {
     ...profile,
     ...STABLE_4BARCODE_MEDIA,
@@ -66,6 +71,8 @@ export function stablePrinterProfile(profile = {}) {
     profile_name: clean(profile.profile_name || 'Food Label Printer'),
     ip_address: clean(profile.ip_address),
     port: portValue(profile.port || STABLE_4BARCODE_MEDIA.port),
+    web_transport: webTransport,
+    web_queue: clean(profile.web_queue || profile.queue),
     is_default: profile.is_default !== false,
     station_mode: 'this_device',
   }
@@ -79,6 +86,8 @@ export function readWebPrinterDevice(outletId = '', fallback = {}) {
     outlet_id: clean(outletId || fallback.outlet_id),
     ip_address: clean(saved.ip_address || fallback.ip_address),
     port: portValue(saved.port || fallback.port || 9100),
+    web_transport: routeValue(saved.web_transport || fallback.web_transport),
+    web_queue: clean(saved.web_queue || fallback.web_queue),
     profile_name: clean(saved.profile_name || fallback.profile_name || 'Food Label Printer'),
   })
 }
@@ -91,6 +100,8 @@ export function saveWebPrinterDevice(outletId = '', value = {}) {
     profile_name: next.profile_name,
     ip_address: next.ip_address,
     port: next.port,
+    web_transport: next.web_transport,
+    web_queue: next.web_queue,
     updated_at: new Date().toISOString(),
   }
   try { storage()?.setItem(key(outletId), JSON.stringify(record)) } catch {}
@@ -163,9 +174,22 @@ export async function describeConnectorFailure(error) {
 }
 
 export function localConnectorTarget(profile = {}) {
+  const route = routeValue(profile.web_transport)
+  if (route === 'queue') {
+    return {
+      mode: 'queue',
+      queue: clean(profile.web_queue),
+    }
+  }
   return {
     mode: 'raw_tcp',
     host: clean(profile.ip_address),
     port: portValue(profile.port || 9100),
   }
+}
+
+export function webPrinterRouteLabel(profile = {}) {
+  return routeValue(profile.web_transport) === 'queue'
+    ? `Windows Queue · ${clean(profile.web_queue) || 'Not selected'}`
+    : `Direct IP · ${clean(profile.ip_address) || 'Not set'}:${portValue(profile.port || 9100)}`
 }
