@@ -4,7 +4,6 @@ let installed = false
 let scheduled = false
 
 function applyLatestWorkspaceLayout() {
-  scheduled = false
   const workspace = document.querySelector('[data-printer-workspace]')
   if (!workspace) return
 
@@ -26,10 +25,32 @@ function applyLatestWorkspaceLayout() {
   }
 }
 
+function exposeFoodLabelShortcut() {
+  if (window.location.pathname !== '/labels') return
+  const toolbar = document.querySelector('.chefops-labels-toolbar')
+  if (!toolbar || toolbar.querySelector('[data-staff-label-settings-link]')) return
+  const actionRow = toolbar.querySelector(':scope > div:first-child > div:last-child')
+  if (!actionRow) return
+
+  const link = document.createElement('a')
+  link.href = '/labels/settings'
+  link.dataset.staffLabelSettingsLink = 'true'
+  link.className = 'inline-flex h-9 items-center justify-center rounded-md border border-input bg-background px-3 text-xs font-semibold shadow-sm hover:bg-accent hover:text-accent-foreground'
+  link.setAttribute('aria-label', 'Open Label Printer Settings')
+  link.textContent = 'Printer Settings'
+  actionRow.insertBefore(link, actionRow.firstChild)
+}
+
+function apply() {
+  scheduled = false
+  applyLatestWorkspaceLayout()
+  exposeFoodLabelShortcut()
+}
+
 function schedule() {
   if (scheduled) return
   scheduled = true
-  window.requestAnimationFrame(applyLatestWorkspaceLayout)
+  window.requestAnimationFrame(apply)
 }
 
 export function installLabelSettingsStaffV17() {
