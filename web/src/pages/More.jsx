@@ -18,9 +18,9 @@ import { useAuth } from "@/lib/AuthContext";
 import { ROLE_LEVEL } from "@/lib/ops-helpers";
 
 const commonOperations = [
+  { to: "/labels/settings", label: "Label Printer Settings", desc: "All staff can choose, test and tune this device + outlet printer", icon: Printer },
   { to: "/inventory", label: "Outlet Stock List", desc: "View this outlet's enabled list and minimums", icon: Boxes },
   { to: "/training", label: "SOP & Training", desc: "Read SOPs, complete courses and track progress", icon: GraduationCap },
-  { to: "/labels/settings", label: "Label Printer Settings", desc: "Choose and tune the printer used by this device and outlet", icon: Printer },
 ];
 
 const mobileOnlyOperations = [
@@ -53,13 +53,13 @@ export default function More() {
         <p className="mt-0.5 text-xs text-muted-foreground">Operations, device and system tools.</p>
       </div>
 
-      <MenuSection title="Operations" items={commonOperations} />
+      <MenuSection title="Operations & device" items={commonOperations} />
       <div className="chefops-more-mobile-only">
         <MenuSection title="Mobile shortcuts" items={mobileOnlyOperations} />
       </div>
       <MenuSection title="Management" items={managementItems} />
       <MenuSection title="System" items={systemItems} />
-      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Direct Print Flow v10 · Data Package v2 preview</p>
+      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Staff Label Settings v17 · Stable TSPL v16</p>
     </div>
   );
 }
