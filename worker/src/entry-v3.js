@@ -2,8 +2,8 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'web-direct-lan-stable-tspl-v18-v4.6.16'
-const SHELL_REVISION = '4.6.16-web-direct-lan-stable-tspl-v18'
+const WORKER_REVISION = 'auto-web-direct-lan-stable-tspl-v19-v4.6.17'
+const SHELL_REVISION = '4.6.17-auto-web-direct-lan-stable-tspl-v19'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
