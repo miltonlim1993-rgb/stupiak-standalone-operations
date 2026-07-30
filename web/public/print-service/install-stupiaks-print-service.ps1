@@ -9,16 +9,31 @@ $InstallDir = Join-Path $env:LOCALAPPDATA "StupiaksPrintService"
 $ServicePath = Join-Path $InstallDir "stupiaks-print-service.ps1"
 $StartFile = Join-Path $InstallDir "start.cmd"
 $LogFile = Join-Path $InstallDir "service.log"
-$ServiceUrl = "https://stupiaks-ops.sporkburger19.workers.dev/print-service/stupiaks-print-service.ps1"
+$StartupFolder = [Environment]::GetFolderPath('Startup')
+$StartupFile = Join-Path $StartupFolder "Stupiaks Print Service.cmd"
+$ServiceUrl = "https://stupiaks-ops.sporkburger19.workers.dev/print-service/stupiaks-print-service.ps1?v=4.6.23"
 $HealthUrl = "http://127.0.0.1:8788/health"
 $Origin = "https://stupiaks-ops.sporkburger19.workers.dev"
 
+function Remove-LegacyScheduledTask([string]$Name) {
+  try {
+    $Task = Get-ScheduledTask -TaskName $Name -ErrorAction SilentlyContinue
+    if ($Task) {
+      Unregister-ScheduledTask -TaskName $Name -Confirm:$false -ErrorAction SilentlyContinue
+    }
+  } catch {
+    # Old tasks are optional. Their absence must never stop installation.
+  }
+}
+
 function Stop-OldPrintProcesses {
+  $ExpectedServicePath = [IO.Path]::GetFullPath($ServicePath)
   Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $CommandLine = [string]$_.CommandLine
     $_.Name -match '^(node|powershell|pwsh)\.exe$' -and (
-      $_.CommandLine -like '*StupiaksPrintBridge*' -or
-      $_.CommandLine -like '*automatic-local-web-v19*' -or
-      $_.CommandLine -like '*stupiaks-print-service.ps1*'
+      $CommandLine -like '*StupiaksPrintBridge*' -or
+      $CommandLine -like '*automatic-local-web-v19*' -or
+      $CommandLine.IndexOf($ExpectedServicePath, [StringComparison]::OrdinalIgnoreCase) -ge 0
     )
   } | ForEach-Object {
     Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
@@ -26,9 +41,10 @@ function Stop-OldPrintProcesses {
 }
 
 if ($Remove) {
-  schtasks.exe /Delete /TN $TaskName /F 2>$null | Out-Null
-  schtasks.exe /Delete /TN $OldTaskName /F 2>$null | Out-Null
+  Remove-LegacyScheduledTask $TaskName
+  Remove-LegacyScheduledTask $OldTaskName
   Stop-OldPrintProcesses
+  Remove-Item $StartupFile -Force -ErrorAction SilentlyContinue
   Remove-Item $InstallDir -Recurse -Force -ErrorAction SilentlyContinue
   Write-Host "Stupiak's Print Service was removed."
   exit 0
@@ -36,6 +52,7 @@ if ($Remove) {
 
 New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 $ProgressPreference = 'SilentlyContinue'
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Invoke-WebRequest -UseBasicParsing -Uri $ServiceUrl -OutFile $ServicePath
 
 $StartContent = @"
@@ -44,16 +61,16 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$Se
 "@
 Set-Content -Path $StartFile -Value $StartContent -Encoding ASCII
 
-schtasks.exe /Delete /TN $TaskName /F 2>$null | Out-Null
-schtasks.exe /Delete /TN $OldTaskName /F 2>$null | Out-Null
+Remove-LegacyScheduledTask $TaskName
+Remove-LegacyScheduledTask $OldTaskName
 Stop-OldPrintProcesses
 
-$TaskCommand = "`"$StartFile`""
-schtasks.exe /Create /TN $TaskName /SC ONLOGON /RL LIMITED /TR $TaskCommand /F | Out-Null
+# Per-user Startup Folder is more reliable than Task Scheduler on outlet PCs and needs no admin rights.
+Copy-Item -Path $StartFile -Destination $StartupFile -Force
 Start-Process -FilePath $StartFile -WindowStyle Hidden
 
 $Health = $null
-$Deadline = (Get-Date).AddSeconds(15)
+$Deadline = (Get-Date).AddSeconds(20)
 do {
   Start-Sleep -Milliseconds 500
   try {
@@ -73,7 +90,7 @@ Write-Host "Stupiak's Print Service is installed and running." -ForegroundColor 
 Write-Host "Windows Printer Queue: ready" -ForegroundColor Green
 Write-Host "Kitchen Direct IP / RAW TCP: ready" -ForegroundColor Green
 Write-Host "Pairing token: NOT REQUIRED" -ForegroundColor Green
-Write-Host "Starts automatically when this Windows user signs in."
+Write-Host "Starts automatically from the Windows Startup Folder."
 Write-Host "Log: $LogFile"
 Write-Host "============================================================" -ForegroundColor Yellow
 Write-Host ""
