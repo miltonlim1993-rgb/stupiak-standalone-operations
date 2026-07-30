@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-29-compact-sop-detail-v30'
+const VERSION = 'chefops-v4-6-30-food-label-deep-training-v31'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
