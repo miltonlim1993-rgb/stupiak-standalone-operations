@@ -40,11 +40,15 @@ test('unauthenticated or unknown roles cannot mutate printer profiles', () => {
   assert.throws(() => assertDeletePermission({ role: '' }, 'PrinterProfile', {}), /Sign in as outlet staff/)
 })
 
-test('latest workspace compatibility targets the stable data attribute and restores responsive class', async () => {
+test('Stable Label Settings v18 uses its own responsive workspace without legacy width mutation', async () => {
   const runtime = await source('web/src/lib/label-settings-staff-v17.js')
+  const page = await source('web/src/pages/LabelPrinterSettingsStableV18.jsx')
   assert.match(runtime, /querySelector\('\[data-printer-workspace\]'\)/)
-  assert.match(runtime, /classList\.add\('max-w-6xl'\)/)
-  assert.match(runtime, /All staff access · Stable TSPL v16/)
+  assert.match(runtime, /staffPrinterAccess/)
+  assert.doesNotMatch(runtime, /classList\.add\('max-w-6xl'\)/)
+  assert.match(page, /data-printer-workspace=\{SETTINGS_VERSION\}/)
+  assert.match(page, /All staff/)
+  assert.match(page, /Stable TSPL v18/)
 })
 
 test('all signed-in staff receive a visible header and desktop navigation shortcut', async () => {
