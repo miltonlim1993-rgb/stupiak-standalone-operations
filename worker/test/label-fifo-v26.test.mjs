@@ -19,7 +19,7 @@ async function source(path) {
 
 test('expiry actions are forced into the three required source stages', () => {
   assert.equal(LABEL_FIFO_POLICY_VERSION, '4.6.25-label-source-fifo-v26')
-  for (const action of ['Prepare', 'Prepared', 'Freeze', 'Frozen', 'Received']) {
+  for (const action of ['Prepare', 'Prepared', 'Freeze', 'Frozen', 'Received', 'Prepare / Freeze']) {
     assert.equal(labelSourceTier(action), 1)
     assert.equal(labelSourceStage(action), 'first_hand')
   }
@@ -31,30 +31,43 @@ test('expiry actions are forced into the three required source stages', () => {
 })
 
 test('Sheet requiresSource values cannot override the operational hierarchy', () => {
-  const first = applyHierarchyToRule({ action: 'Prepare', requiresSource: true, sourceExpiryMode: 'source' })
+  const first = applyHierarchyToRule({ action: 'Prepare', productId: 'sauce', productName: 'Sauce', requiresSource: true, sourceExpiryMode: 'source' })
   assert.equal(first.requiresSource, false)
   assert.equal(first.requiredSourceTier, 0)
   assert.equal(first.sourceUsageMode, 'tracked')
 
-  const second = applyHierarchyToRule({ action: 'Open', requiresSource: false, allowedSourceActions: '' })
+  const second = applyHierarchyToRule({ action: 'Open', productId: 'sauce', productName: 'Sauce', requiresSource: false, allowedSourceActions: '' })
   assert.equal(second.requiresSource, true)
   assert.equal(second.requiredSourceTier, 1)
   assert.match(second.allowedSourceActions, /prepare/)
   assert.match(second.allowedSourceActions, /received/)
   assert.equal(second.sourceExpiryMode, 'min')
+  assert.equal(second.sourceProductId, 'sauce')
+  assert.equal(second.sourceProductName, 'Sauce')
 
-  const third = applyHierarchyToRule({ action: 'Cooked', requiresSource: false })
+  const third = applyHierarchyToRule({ action: 'Cooked', productId: 'patty', productName: 'Patty', requiresSource: false })
   assert.equal(third.requiresSource, true)
   assert.equal(third.requiredSourceTier, 2)
   assert.match(third.allowedSourceActions, /open/)
   assert.equal(third.sourceExpiryMode, 'min')
+  assert.equal(third.sourceProductId, 'patty')
+
+  const explicitSource = applyHierarchyToRule({
+    action: 'Cooked',
+    productId: 'tea',
+    productName: 'Tea',
+    sourceProductId: 'tea-leaves',
+    sourceProductName: 'Tea Leaves',
+  })
+  assert.equal(explicitSource.sourceProductId, 'tea-leaves')
+  assert.equal(explicitSource.sourceProductName, 'Tea Leaves')
 })
 
 test('first-hand and second-hand labels are print-once records', () => {
   assert.equal(fifoReprintLocked(1), true)
   assert.equal(fifoReprintLocked(2), true)
   assert.equal(fifoReprintLocked(3), false)
-  const catalog = applyHierarchyToCatalog({ rules: [{ action: 'Open' }] })
+  const catalog = applyHierarchyToCatalog({ rules: [{ action: 'Open', productId: 'sauce' }] })
   assert.equal(catalog.rules[0].fifoReprintLocked, true)
   assert.equal(catalog.fifoPolicy.firstSecondReprintLocked, true)
 })
