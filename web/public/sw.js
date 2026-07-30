@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-6-17-auto-web-direct-lan-stable-tspl-v19'
+const VERSION = 'chefops-v4-6-18-apk-v16-web-device-v20-simple-settings'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
