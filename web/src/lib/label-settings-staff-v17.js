@@ -1,4 +1,4 @@
-export const LABEL_SETTINGS_STAFF_VERSION = '4.6.16-label-settings-staff-v18'
+export const LABEL_SETTINGS_STAFF_VERSION = '4.6.17-label-settings-staff-v19'
 
 let installed = false
 let scheduled = false
@@ -15,7 +15,7 @@ function markCurrentWorkspace() {
   const badge = document.createElement('span')
   badge.dataset.labelSettingsStaffBadge = 'true'
   badge.className = 'inline-flex items-center rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-  badge.textContent = 'All staff access · Web Direct LAN · Stable TSPL v18'
+  badge.textContent = 'All staff access · Automatic Web LAN · Stable TSPL v19'
   heading.parentElement?.appendChild(badge)
 }
 
