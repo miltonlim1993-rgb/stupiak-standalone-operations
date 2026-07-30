@@ -27,8 +27,9 @@ import { installLabelFifoPolicyV26 } from '@/lib/install-label-fifo-policy-v26'
 import { installNoDeleteUiV27 } from '@/lib/no-delete-ui-v27'
 import { installTaskBilingualShell } from '@/lib/task-bilingual-shell'
 import { installTaskTemplateRefreshV6 } from '@/lib/task-template-refresh-v6'
+import { installTrainingQuestionRandomV31 } from '@/lib/training-question-random-v31'
 
-const SHELL_VERSION = '4.6.29-compact-sop-detail-v30'
+const SHELL_VERSION = '4.6.30-food-label-deep-training-v31'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -61,6 +62,8 @@ function markRuntime() {
     taskUi: 'operational-tasks-v2',
     trainingHub: 'ops-compact-v29',
     sopReader: 'ops-compact-guided-v30',
+    foodLabelTraining: 'deep-bilingual-12-step-v31',
+    trainingQuestionBank: 'random-up-to-50-v31',
     webShellFreshness: 'v17',
     printOutcomeIntegrity: 'v13',
     labelSizeContract: 'v14',
@@ -137,6 +140,7 @@ installLabelSettingsStaffV17()
 installSupermarketBarcodeScannerV25()
 installLabelFifoPolicyV26()
 installNoDeleteUiV27()
+installTrainingQuestionRandomV31()
 installTaskTemplateRefreshV6()
 installTaskBilingualShell()
 applyTheme()
