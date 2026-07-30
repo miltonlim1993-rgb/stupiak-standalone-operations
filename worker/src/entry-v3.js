@@ -2,8 +2,8 @@ import app from './entry.js'
 import { errorResponse } from './http.js'
 import { handleTaskWorkflowV5 } from './task-workflow-v5.js'
 
-const WORKER_REVISION = 'auto-web-direct-lan-stable-tspl-v19-v4.6.17'
-const SHELL_REVISION = '4.6.17-auto-web-direct-lan-stable-tspl-v19'
+const WORKER_REVISION = 'apk-v16-web-device-v20-simple-settings-v4.6.18'
+const SHELL_REVISION = '4.6.18-apk-v16-web-device-v20-simple-settings'
 
 function taskApiHeaders(request, response) {
   const headers = new Headers(response.headers)
@@ -32,6 +32,7 @@ function withShellHeaders(request, url, response) {
   const headers = new Headers(response.headers)
   headers.set('X-ChefOps-Worker-Revision', WORKER_REVISION)
   headers.set('X-ChefOps-Shell-Revision', SHELL_REVISION)
+  headers.set('Permissions-Policy', 'local-network=(self), loopback-network=(self)')
 
   const isNavigation = request.mode === 'navigate'
     || request.headers.get('Sec-Fetch-Mode') === 'navigate'
