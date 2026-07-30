@@ -53,6 +53,13 @@ export function fifoReprintLocked(value = '') {
   return tier === 1 || tier === 2
 }
 
+function sourceProductDefaults(rule = {}) {
+  return {
+    sourceProductId: rule.sourceProductId || rule.productId || '',
+    sourceProductName: rule.sourceProductName || rule.productName || '',
+  }
+}
+
 export function applyHierarchyToRule(rule = {}) {
   const tier = labelSourceTier(rule.action)
   if (!tier) return { ...rule, sourceTier: 0, sourceStage: 'unclassified', fifoReprintLocked: false }
@@ -75,6 +82,7 @@ export function applyHierarchyToRule(rule = {}) {
   if (tier === 2) {
     return {
       ...rule,
+      ...sourceProductDefaults(rule),
       requiresSource: true,
       allowedSourceActions: FIRST_HAND_SOURCE_ACTIONS,
       sourceExpiryMode: 'min',
@@ -89,6 +97,7 @@ export function applyHierarchyToRule(rule = {}) {
 
   return {
     ...rule,
+    ...sourceProductDefaults(rule),
     requiresSource: true,
     allowedSourceActions: SECOND_HAND_SOURCE_ACTIONS,
     sourceExpiryMode: 'min',
