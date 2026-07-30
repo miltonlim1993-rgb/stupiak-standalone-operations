@@ -62,7 +62,8 @@ jobs:
           grep -q 'installTrainingQuestionRandomV31' web/src/main.jsx
           grep -q '4.6.30-random-50-v31' web/src/lib/training-question-random-core-v31.js
           grep -q '"activeStepCount": 12' config/training-content-baseline-v31.json
-          grep -q '"questionBankSize": 50' config/training-content-baseline-v31.json
+          grep -q '"questionBankSize": 70' config/training-content-baseline-v31.json
+          grep -q '"questionsPerAttempt": 50' config/training-content-baseline-v31.json
           grep -q "noDeletePolicy: 'hard-delete-disabled-v27'" web/src/main.jsx
           grep -q "installNoDeleteUiV27" web/src/main.jsx
           grep -q "lucide-trash-2" web/src/lib/no-delete-ui-v27.js
@@ -194,7 +195,7 @@ jobs:
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
             --title "Stupiak's Ops 4.6.30 ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Includes the 12-step bilingual Food Label, FIFO and traceability training with randomized 50-question certification, compact Training and SOP interfaces, no-delete, FIFO and supermarket scanning, while preserving the physically accepted Stable TSPL v16 printing route."
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Includes the 12-step bilingual Food Label, FIFO and traceability training with a 70-question bank and 50 randomly selected per attempt, compact Training and SOP interfaces, no-delete, FIFO and supermarket scanning, while preserving the physically accepted Stable TSPL v16 printing route."
 
       - name: Show stable release URLs
         run: |
