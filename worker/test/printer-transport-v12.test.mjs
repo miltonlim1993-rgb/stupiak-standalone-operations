@@ -48,7 +48,7 @@ test('bridge transport settings round-trip through existing notes JSON', () => {
   assert.equal(normalizeBridgeUrl(normalized.bridge_url), 'http://192.168.1.20:8787')
 })
 
-test('direct network is rejected in a desktop browser and accepted in Android', () => {
+test('direct network uses Android native sockets or Web Local Print Connector', () => {
   const profile = {
     ...base,
     connection_type: 'network',
@@ -58,9 +58,21 @@ test('direct network is rejected in a desktop browser and accepted in Android', 
   }
   assert.throws(
     () => validatePrinterTransport(profile, { nativeAndroid: false }),
-    /available in the Android app/i,
+    /Local Print Connector URL/i,
   )
-  assert.equal(validatePrinterTransport(profile, { nativeAndroid: true }).connection, 'network')
+
+  const webProfile = {
+    ...profile,
+    bridge_url: 'http://127.0.0.1:8787',
+    bridge_token: 'pairing-token',
+  }
+  const validatedWeb = validatePrinterTransport(webProfile, { nativeAndroid: false })
+  assert.equal(validatedWeb.connection, 'network')
+  assert.equal(validatedWeb.viaConnector, true)
+
+  const validatedAndroid = validatePrinterTransport(profile, { nativeAndroid: true })
+  assert.equal(validatedAndroid.connection, 'network')
+  assert.equal(validatedAndroid.viaConnector, false)
   assert.match(printerRouteLabel(profile), /Direct Raw TCP/)
 })
 
@@ -103,5 +115,5 @@ test('Bluetooth Classic remains an Android raw route', () => {
     bluetooth_device_name: 'XP-365B',
   }
   assert.equal(validatePrinterTransport(profile, { nativeAndroid: true }).connection, 'bluetooth')
-  assert.throws(() => validatePrinterTransport(profile, { nativeAndroid: false }), /available in the Android app/i)
+  assert.throws(() => validatePrinterTransport(profile, { nativeAndroid: false }), /Android app/i)
 })
