@@ -8,6 +8,7 @@ import ScrollToTop from '@/components/ScrollToTop'
 import MobileNavigation from '@/components/MobileNavigation'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
+import TaskAlarmManager from '@/components/TaskAlarmManager'
 
 const PageNotFound = lazy(() => import('@/lib/PageNotFound'))
 const Login = lazy(() => import('@/pages/Login'))
@@ -86,6 +87,7 @@ export default function App() {
           <MobileNavigation />
           <ScrollToTop />
           <AppRoutes />
+          <TaskAlarmManager />
         </Router>
         <Toaster />
       </QueryClientProvider>
