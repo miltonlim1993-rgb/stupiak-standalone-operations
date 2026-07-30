@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-07-31T06:55:00+08:00",
+  "recordedAt": "2026-07-31T07:25:00+08:00",
   "spreadsheetId": "1oljGV1NxJyGbFQoxkrzHeVBGCK7zs3r8x3jphe0HQAs",
   "sop": {
     "id": "sop-food-labels",
@@ -26,7 +26,7 @@
   "course": {
     "id": "course-food-label-fifo",
     "quizId": "quiz-food-label",
-    "questionBankSize": 50,
+    "questionBankSize": 70,
     "questionsPerAttempt": 50,
     "randomizeEachLoad": true,
     "passingScore": 80,
