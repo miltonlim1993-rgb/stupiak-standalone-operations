@@ -11,9 +11,10 @@ import {
   buildStableTsplLabelCommand,
   countStableLabelCopies,
 } from '@/lib/stable-tspl-label-v16'
+import { fitStableTsplDateBoxes } from '@/lib/stable-tspl-date-box-v21'
 import { showPrinterMessage } from '@/lib/native-label-print'
 
-export const STABLE_WEB_LABEL_PRINT_VERSION = '4.6.18-stable-web-label-print-v20'
+export const STABLE_WEB_LABEL_PRINT_VERSION = '4.6.19-stable-web-label-print-v21-date-fit'
 const CONNECTOR_TIMEOUT_MS = 12000
 
 function clean(value = '') {
@@ -50,7 +51,7 @@ function extractJobName(html) {
 
 function stableCommand(html, profile) {
   const fixed = stablePrinterProfile(profile)
-  return buildStableTsplLabelCommand(html, {
+  const base = buildStableTsplLabelCommand(html, {
     commandLanguage: 'tspl',
     widthMm: fixed.label_width_mm,
     heightMm: fixed.label_height_mm,
@@ -64,6 +65,7 @@ function stableCommand(html, profile) {
     xOffsetMm: fixed.x_offset_mm,
     yOffsetMm: fixed.y_offset_mm,
   })
+  return fitStableTsplDateBoxes(base)
 }
 
 async function sendWebStableLabel(html, requestedProfile = null) {
@@ -116,7 +118,7 @@ async function sendWebStableLabel(html, requestedProfile = null) {
       device_local: true,
       size_contract: {
         version: STABLE_WEB_LABEL_PRINT_VERSION,
-        source: 'stable-tspl-core-v16-web-device-v20',
+        source: 'stable-tspl-core-v16-web-device-v21-date-fit',
         physical_width_mm: stable.widthMm,
         physical_height_mm: stable.heightMm,
         created_canvas_width_mm: stable.widthMm,
@@ -127,7 +129,7 @@ async function sendWebStableLabel(html, requestedProfile = null) {
         raster_height_dots: stable.report.heightDots,
         native_command_width_mm: stable.widthMm,
         native_command_height_mm: stable.heightMm,
-        signature: `${stable.widthMm}x${stable.heightMm}@${stable.dpi}:stable-web-v20`,
+        signature: `${stable.widthMm}x${stable.heightMm}@${stable.dpi}:stable-web-v21-date-fit`,
       },
     }
     window.__chefopsLastCreatedLabelSizeContract = detail.size_contract
@@ -136,7 +138,7 @@ async function sendWebStableLabel(html, requestedProfile = null) {
     window.__chefopsLastStableTsplPayload = stable.command
     window.dispatchEvent(new CustomEvent('chefops:native-print-started', { detail }))
     showPrinterMessage(
-      `RAW TSPL sent · ${profile.ip_address}:${profile.port} · fixed 40×30 mm · ${stable.copies} copy.`,
+      `RAW TSPL sent · ${profile.ip_address}:${profile.port} · fixed 40×30 mm · date boxes fitted · ${stable.copies} copy.`,
       'success',
     )
     return detail
