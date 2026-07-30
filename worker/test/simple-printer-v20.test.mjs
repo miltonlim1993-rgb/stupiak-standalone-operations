@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises'
 
 import {
   STABLE_4BARCODE_MEDIA,
+  localConnectorTarget,
   stablePrinterProfile,
 } from '../../web/src/lib/device-printer-v20.js'
 
@@ -60,18 +61,29 @@ test('Android installs the accepted stable v16 route while Web installs isolated
   assert.doesNotMatch(main, /installStableLabelPrintV19\(\)/)
 })
 
-test('Web printer target is stored on this computer and uses loopback permission annotation', async () => {
+test('Web printer route is device-local and supports Windows queue plus direct IP', async () => {
   const device = await source('web/src/lib/device-printer-v20.js')
   assert.match(device, /stupiaks_ops\.web_printer_device\.v20/)
+  assert.match(device, /web_transport/)
+  assert.match(device, /web_queue/)
   assert.match(device, /targetAddressSpace: 'loopback'/)
-  assert.match(device, /loopback-network/)
   assert.match(device, /Chrome blocked local printing/)
+
+  assert.deepEqual(localConnectorTarget({ web_transport: 'queue', web_queue: 'Kitchen Label Printer' }), {
+    mode: 'queue',
+    queue: 'Kitchen Label Printer',
+  })
+  assert.deepEqual(localConnectorTarget({ web_transport: 'raw_tcp', ip_address: '192.168.0.211', port: 9100 }), {
+    mode: 'raw_tcp',
+    host: '192.168.0.211',
+    port: 9100,
+  })
 })
 
-test('Web labels send one stable TSPL document without changing APK profiles', async () => {
+test('Web labels send one stable TSPL document through the selected local route', async () => {
   const printer = await source('web/src/lib/stable-label-print-v20.js')
   assert.match(printer, /payloadBase64: asciiBase64\(stable\.command\)/)
-  assert.match(printer, /Web device-local RAW TCP/)
+  assert.match(printer, /webPrinterRouteLabel/)
   assert.match(printer, /fixed 40×30 mm/)
   assert.match(printer, /fitStableTsplDateBoxes/)
   assert.doesNotMatch(printer, /html-raster/)
@@ -79,20 +91,19 @@ test('Web labels send one stable TSPL document without changing APK profiles', a
   assert.doesNotMatch(printer, /opsClient/)
 })
 
-test('staff settings show only printer IP, stable values, connect, test and save', async () => {
+test('staff settings expose only two understandable routes and keep them device-local', async () => {
   const settings = await source('web/src/pages/LabelPrinterSettingsSimpleV20.jsx')
+  assert.match(settings, /Windows Printer/)
+  assert.match(settings, /Direct IP/)
+  assert.match(settings, /Kitchen Label Printer/)
   assert.match(settings, /Printer IP/)
   assert.match(settings, /40 × 30 mm/)
   assert.match(settings, /Stable TSPL v16/)
-  assert.match(settings, /DPI \/ Gap/)
-  assert.match(settings, /203 \/ 2 mm/)
   assert.match(settings, /Connect/)
   assert.match(settings, /Test label/)
   assert.match(settings, /Save/)
-  assert.match(settings, /bridge_url: ''/)
-  assert.doesNotMatch(settings, /Advanced Bridge/)
+  assert.match(settings, /Android and other devices were not changed/)
   assert.doesNotMatch(settings, /Pairing token/)
-  assert.doesNotMatch(settings, /RAW Queue/)
   assert.doesNotMatch(settings, /LPR queue/)
 })
 
