@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "recordedAt": "2026-07-30T21:42:00+08:00",
+  "recordedAt": "2026-07-30T22:25:00+08:00",
   "releasePolicy": {
     "status": "HOLD_UNTIL_EXPLICIT_APPROVAL",
     "releaseTag": "android-release-latest",
@@ -23,7 +23,7 @@
     ]
   },
   "heldChangesForNextSignedApk": {
-    "minimumSourceVersion": "4.6.28",
+    "minimumSourceVersion": "4.6.29",
     "sourceBranch": "feature/task-workflow-v3-apk",
     "fifoBaselineCommit": "2f53469f76b378c6d1882bc8adf8f8121b4bced5",
     "noDeleteAndContentBaselineCommit": "3b85198ac5095b9538ee363a67e838d692b30cd9",
@@ -38,23 +38,23 @@
       "restored OperationalTasksV2 daily task interface",
       "correct Kitchen Station SOP and Training baseline",
       "compact Ops-aligned Training Hub v29",
-      "responsive Stupiak poster-standard GuidedSopLearning reader",
+      "compact Ops-aligned Guided SOP detail reader v30",
       "clean active-linked-content-only Data Package v2",
       "latest Web/API compatibility"
     ],
-    "workstreamReleaseState": "No signed APK was published or replaced by the 4.6.24 through 4.6.28 work in this PR. Existing installed APK remains the production baseline until an explicitly approved signed release."
+    "workstreamReleaseState": "No signed APK was published or replaced by the 4.6.24 through 4.6.29 work in this PR. Existing installed APK remains the production baseline until an explicitly approved signed release."
   },
   "futureReleaseChecklist": [
-    "Deploy and accept Web/Worker 4.6.28 first",
+    "Deploy and accept Web/Worker 4.6.29 first",
     "Publish and install the clean Data Package v2",
-    "Build from a 4.6.28-or-later reviewed commit",
+    "Build from a 4.6.29-or-later reviewed commit",
     "Use the existing production keystore and alias",
     "Verify APK certificate and SHA-256",
     "Confirm no Delete/Trash controls are visible",
     "Confirm stable TSPL output on the outlet printer",
     "Test first-hand, Open, and Refill/Cooked FIFO flows",
     "Test restored OperationalTasksV2 and compact Training Hub",
-    "Test the responsive Stupiak poster-standard SOP reader on phone, tablet and desktop",
+    "Test the compact Guided SOP detail reader on phone, tablet and desktop",
     "Test native barcode scanner",
     "Only then replace android-release-latest"
   ]
