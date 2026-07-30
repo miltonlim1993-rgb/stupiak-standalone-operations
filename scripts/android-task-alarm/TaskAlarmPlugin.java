@@ -50,7 +50,7 @@ public class TaskAlarmPlugin extends Plugin {
     @PluginMethod
     public void openSettings(PluginCall call) {
         JSObject result = openRequiredSetting();
-        if (!result.getBool("settingsOpened", false)) {
+        if (!result.optBoolean("settingsOpened", false)) {
             try {
                 Intent intent = new Intent(Settings.ACTION_CHANNEL_NOTIFICATION_SETTINGS)
                     .putExtra(Settings.EXTRA_APP_PACKAGE, getContext().getPackageName())
