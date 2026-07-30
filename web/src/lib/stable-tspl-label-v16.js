@@ -1,6 +1,6 @@
 const CRLF = '\r\n'
 
-export const STABLE_TSPL_LABEL_VERSION = '4.6.14-stable-tspl-core-v16'
+export const STABLE_TSPL_LABEL_VERSION = '4.6.20-stable-tspl-core-v16-date-fit-v22'
 
 function cleanHtmlText(value = '') {
   return String(value ?? '')
@@ -150,6 +150,18 @@ function centeredX(text, widthDots, charWidth, minimum = 8) {
   return Math.max(minimum, Math.round((widthDots - (printerText(text).length * charWidth)) / 2))
 }
 
+function fittedDateCommand(boxLeft, boxRight, y, value) {
+  const date = printerText(value)
+  const charWidth = FONT[1].charWidth
+  const safePadding = 2
+  const textWidth = date.length * charWidth
+  const innerLeft = boxLeft + safePadding
+  const innerRight = boxRight - safePadding
+  const centered = Math.round((boxLeft + boxRight - textWidth) / 2)
+  const x = Math.max(innerLeft, Math.min(centered, innerRight - textWidth))
+  return textCommand(x, y, '1', date, 0, 1, 2)
+}
+
 function stableError(message, code, details = {}) {
   const error = new Error(message)
   error.code = code
@@ -253,7 +265,6 @@ export function buildStableTsplLabelCommand(html, options = {}) {
     const gap = String(options.mediaSensor || 'gap') === 'continuous' ? 0 : numberValue(options.gapMm, 2, 0, 20)
     lines.push(`GAP ${formatMm(gap)} mm,${formatMm(numberValue(options.gapOffsetMm, 0, -20, 20))} mm`)
   }
-  // Proven SP Label Printing defaults. Every RAW transport receives this same document.
   lines.push('DENSITY 8')
   lines.push('SPEED 4')
   lines.push('DIRECTION 1')
@@ -283,9 +294,9 @@ export function buildStableTsplLabelCommand(html, options = {}) {
   const madeHead = [job.made?.label || 'MADE', job.made?.time].filter(Boolean).join(' ')
   const useHead = [job.useBy?.label || 'USE BY', job.useBy?.time].filter(Boolean).join(' ')
   lines.push(textCommand(left + 4, timeTop + 4, '1', madeHead))
-  lines.push(textCommand(left + 4, timeTop + 22, '2', job.made?.date || ''))
+  lines.push(fittedDateCommand(left, leftBoxRight, timeTop + 20, job.made?.date || ''))
   lines.push(textCommand(rightBoxLeft + 4, timeTop + 4, '1', useHead))
-  lines.push(textCommand(rightBoxLeft + 4, timeTop + 22, '2', job.useBy?.date || ''))
+  lines.push(fittedDateCommand(rightBoxLeft, right, timeTop + 20, job.useBy?.date || ''))
 
   const operatorLine = [job.operator, job.quantity].filter(Boolean).join(' | ')
   const operatorY = timeBottom + 5
@@ -320,12 +331,11 @@ export function buildStableTsplLabelCommand(html, options = {}) {
     )
   }
 
-  // Match the stable APK: horizontal copies first, set count second.
   lines.push(`PRINT ${copies},1`)
 
   return {
     command: `${lines.join(CRLF)}${CRLF}`,
-    mode: 'tspl-stable-v16',
+    mode: 'tspl-stable-v16-date-fit-v22',
     version: STABLE_TSPL_LABEL_VERSION,
     job,
     widthMm,
@@ -339,6 +349,9 @@ export function buildStableTsplLabelCommand(html, options = {}) {
       heightDots,
       finalY,
       bottom,
+      date_boxes_fitted: true,
+      date_box_padding_dots: 2,
+      date_font: '1x2',
     },
   }
 }
