@@ -98,6 +98,6 @@ test('entry keeps label create, catalog and reprint behind FIFO after no-delete 
   assert.match(entry, /handleNoDeletePolicyV27/)
   assert.match(entry, /handleLabelFifoV26/)
   assert.match(entry, /url\.pathname\.startsWith\('\/api\/labels\/'\)/)
-  assert.match(entry, /no-delete-task-training-package-v27-v4\.6\.26/)
+  assert.match(entry, /restored-task-sop-ui-v28-v4\.6\.27/)
   assert.ok(entry.indexOf('handleNoDeletePolicyV27(request)') < entry.indexOf("url.pathname.startsWith('/api/labels/')"))
 })
