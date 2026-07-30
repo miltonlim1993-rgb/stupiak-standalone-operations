@@ -58,27 +58,23 @@ if ! command -v openssl >/dev/null 2>&1; then
 fi
 
 PUBLISH_SECRET="$(openssl rand -hex 32)"
-TMP_ENV="$(mktemp)"
-trap 'rm -f "$TMP_ENV"; unset PUBLISH_SECRET' EXIT
-
-if [[ -f .dev.vars ]]; then
-  awk '!/^APP_PACK_WEBHOOK_SECRET=/' .dev.vars > "$TMP_ENV"
-fi
-printf 'APP_PACK_WEBHOOK_SECRET=%s\n' "$PUBLISH_SECRET" >> "$TMP_ENV"
-chmod 600 "$TMP_ENV"
-mv "$TMP_ENV" .dev.vars
-chmod 600 .dev.vars
+trap 'unset PUBLISH_SECRET APP_PACK_WEBHOOK_SECRET' EXIT
 
 printf '%s' "$PUBLISH_SECRET" \
   | npx wrangler secret put DATA_PACKAGE_PUBLISH_SECRET --config "$CONFIG"
-unset PUBLISH_SECRET
 
 SECRET_LIST="$(npx wrangler secret list --config "$CONFIG")"
 printf '%s\n' "$SECRET_LIST" | grep -Fq 'DATA_PACKAGE_PUBLISH_SECRET'
 
+# The existing publisher currently reads the legacy variable name. Supply the
+# dedicated publisher value only to this process; do not write or replace the
+# existing APP_PACK_WEBHOOK_SECRET in .dev.vars or Cloudflare.
+export APP_PACK_WEBHOOK_SECRET="$PUBLISH_SECRET"
+unset PUBLISH_SECRET
+
 echo
-echo "Dedicated Data Package publisher secret is configured."
-echo "Existing APP_PACK_WEBHOOK_SECRET in Cloudflare was not read, replaced or rotated."
+echo "Dedicated Data Package publisher secret is configured for this one run."
+echo "Existing APP_PACK_WEBHOOK_SECRET was not read, written, replaced or rotated."
 echo
 
 bash scripts/rebuild-clean-data-package-4.6.26-local.sh
