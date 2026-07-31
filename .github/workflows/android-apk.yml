@@ -35,7 +35,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.9-validation
+      ANDROID_VERSION_NAME: 4.5.10-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,9 +51,14 @@ jobs:
       - name: Validate Task, update and package source
         run: |
           grep -q "opening-checklist-feedback-v21" web/public/sw.js
-          grep -q '"apk_version": "4.5.9"' web/public/app-release.json
+          grep -q '"apk_version": "4.5.10"' web/public/app-release.json
           grep -q "RosterTaskAssignmentManager" web/src/App.jsx
           grep -q "configureRosterTaskAssignment" web/src/components/RosterTaskAssignmentManager.jsx
+          grep -q "warmRosterTaskAssignmentCache" web/src/components/RosterTaskAssignmentManager.jsx
+          grep -q "TASK_STORAGE_PREFIX" web/src/lib/roster-task-assignment.js
+          grep -q "cache_mode: 'instant-local'" web/src/lib/roster-task-assignment.js
+          grep -q "cache_mode: 'warming'" web/src/lib/roster-task-assignment.js
+          grep -q "buildFreshAssignedData" web/src/lib/roster-task-assignment.js
           grep -q "CASHIER_POSITION_CODES = \['C', 'CA'\]" web/src/lib/roster-task-assignment.js
           grep -q "KITCHEN_POSITION_CODES = \['P', 'G', 'DF'\]" web/src/lib/roster-task-assignment.js
           grep -q "LEADERSHIP_ROLES" web/src/lib/roster-task-assignment.js
@@ -134,7 +139,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.9.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.10.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -216,8 +221,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Position Assigned Tasks ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Cashier Tasks are assigned only to Duty Roster C/CA staff for the Task time, while Kitchen Tasks are assigned only to P/G/DF staff. Leadership roster rows are excluded from automatic assignment and Task alarms; Manager and Owner accounts retain review access. Retains live Task refresh, authenticated APK photo loading, opening-checklist feedback, stock visibility, mandatory APK/data-package updates, exact alarms, and LAN/Bluetooth label printing."
+            --title "Stupiak's Ops Instant Assigned Tasks ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Assigned Tasks no longer block the page while Duty Roster is loading. The app warms and stores the latest assigned Task snapshot locally, displays it immediately, and verifies current roster assignments silently in the background. Cashier C/CA and Kitchen P/G/DF assignment, leadership exclusions, live Task refresh, authenticated APK photo loading, opening-checklist feedback, stock visibility, mandatory updates, exact alarms, and LAN/Bluetooth printing remain enabled."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
