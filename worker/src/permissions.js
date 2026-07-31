@@ -156,8 +156,9 @@ export function assertDeletePermission(user, entity, existing) {
     'TrainingLesson', 'TrainingAssignment', 'TrainingQuiz', 'TrainingQuestion',
   ].includes(entity) && userLevel < LEVEL.supervisor) deny('Supervisor access required')
   if (entity === 'PrinterProfile' && userLevel < LEVEL.manager) deny('Manager access required')
-  if (entity === 'TaskPhoto' && userLevel < LEVEL.supervisor && existing.uploaded_by_email !== user.email) {
-    deny('You can only delete photos you uploaded')
+  if (entity === 'TaskPhoto' && userLevel < LEVEL.supervisor) {
+    assertOutletAccess(user, existing.outlet_id)
+    return
   }
   if (TRAINING_USER_RECORDS.has(entity) && userLevel < LEVEL.supervisor && existing.user_email !== user.email) {
     deny('You can only delete your own training records')

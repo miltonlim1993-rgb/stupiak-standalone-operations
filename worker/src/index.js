@@ -8,6 +8,7 @@ import { downloadDriveFile, uploadDriveFile } from './drive.js'
 import { configuredOperationYears } from './storage.js'
 import { applySourceTraceability, buildAutomaticLabelInput, finishSourceBatchPatch, getLabelCatalog, sourceConsumptionPatch } from './labels.js'
 import { OPERATIONAL_TEMPLATE_SEEDS } from './operational-defaults.js'
+import { applyOpeningChecklistFeedback } from './opening-checklist-feedback.js'
 import { getAppPackModule, getOrBuildAppPack, getPublishedAppPack, markAppPackDirty, POSITION_MASTER_SEEDS, rebuildAllAppPacks } from './app-pack.js'
 import { syncCloseUpToSalesTemplate } from './closeup-sync.js'
 import { MEDIA_RULE_SEEDS, ensureMediaRules, getMediaRule, mediaKind, allowedMediaKinds } from './media-rules.js'
@@ -529,7 +530,7 @@ function parseOperationalChecklist(template) {
   if (!raw.startsWith(OPERATIONAL_CHECKLIST_PREFIX)) return null
   try {
     const config = JSON.parse(raw.slice(OPERATIONAL_CHECKLIST_PREFIX.length))
-    return config?.kind === 'operational_checklist' ? config : null
+    return config?.kind === 'operational_checklist' ? applyOpeningChecklistFeedback(template, config) : null
   } catch {
     return null
   }
