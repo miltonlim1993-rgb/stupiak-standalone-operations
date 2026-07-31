@@ -1,0 +1,164 @@
+/* Mobile-readable SOP visual rules.
+   Focused crops use the existing approved source images, but render the
+   operational control at full phone width so staff never need pinch zoom. */
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[loading="lazy"]) > div.relative {
+  overflow: hidden;
+  background: #fff;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="选择准确产品"]) > div.relative { aspect-ratio: 0.9095; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="选择准确产品"] {
+  position: absolute !important;
+  left: -45.14% !important;
+  top: -22.95% !important;
+  width: 145.14% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="选择实际 Action"]) > div.relative { aspect-ratio: 0.9899; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="选择实际 Action"] {
+  position: absolute !important;
+  left: -75.91% !important;
+  top: -53.76% !important;
+  width: 183.07% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="连接最旧合格 Source"]) > div.relative { aspect-ratio: 0.9906; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="连接最旧合格 Source"] {
+  position: absolute !important;
+  left: -90.38% !important;
+  top: -71.72% !important;
+  width: 197.79% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="核对 Storage"]) > div.relative { aspect-ratio: 0.9905; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="核对 Storage"] {
+  position: absolute !important;
+  left: -95.83% !important;
+  top: -76.03% !important;
+  width: 200.96% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="确认后建立正确数量"]) > div.relative { aspect-ratio: 0.9152; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="确认后建立正确数量"] {
+  position: absolute !important;
+  left: 0 !important;
+  top: -54.51% !important;
+  width: 184.41% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="检查首次打印结果"]) > div.relative { aspect-ratio: 0.9516; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="检查首次打印结果"] {
+  position: absolute !important;
+  left: -72.49% !important;
+  top: -25.52% !important;
+  width: 172.49% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="标签贴在正确"]) > div.relative { aspect-ratio: 0.9217; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="标签贴在正确"] {
+  position: absolute !important;
+  left: -33.12% !important;
+  top: -14.29% !important;
+  width: 133.12% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="确认标签清晰"]) > div.relative { aspect-ratio: 0.8108; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="确认标签清晰"] {
+  position: absolute !important;
+  left: 0 !important;
+  top: -24.77% !important;
+  width: 174.17% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="使用或储存前检查标签"]) > div.relative { aspect-ratio: 0.9941; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="使用或储存前检查标签"] {
+  position: absolute !important;
+  left: -12.87% !important;
+  top: -23.43% !important;
+  width: 124.16% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+[data-sop-standard="stupiaks-poster-v1"] button:has(> div.relative > img[alt^="最终标签必须完整可追溯"]) > div.relative { aspect-ratio: 0.9020; }
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="最终标签必须完整可追溯"] {
+  position: absolute !important;
+  left: -53.11% !important;
+  top: -28.63% !important;
+  width: 153.11% !important;
+  max-width: none !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+/* The four exception/audit diagrams are already portrait phone cards. */
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="错误标签先隔离"],
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="标签缺失或损坏"],
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="系统异常不要绕过"],
+[data-sop-standard="stupiaks-poster-v1"] img[alt^="最终审计与交接"] {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  max-height: none !important;
+  height: auto !important;
+  margin: 0 !important;
+}
+
+@media (max-width: 1023px) {
+  [data-sop-standard="stupiaks-poster-v1"] div.grid:has(> button > div.relative > img[loading="lazy"]) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  [data-sop-standard="stupiaks-poster-v1"] button:has(img[loading="lazy"]) > span.block {
+    padding: .7rem .8rem !important;
+    font-size: .8rem !important;
+    line-height: 1.25rem !important;
+  }
+}
+
+@media (max-width: 767px) {
+  [data-sop-standard="stupiaks-poster-v1"] button:has(img[loading="lazy"]) > div.relative > span.absolute {
+    display: none !important;
+  }
+
+  [data-sop-standard="stupiaks-poster-v1"] section:has(img[loading="lazy"]) {
+    padding-left: .75rem !important;
+    padding-right: .75rem !important;
+  }
+}
