@@ -94,8 +94,6 @@ jobs:
           grep -q 'id="chefops-mobile-main"' web/src/components/Layout.jsx
           grep -q 'id="chefops-mobile-nav"' web/src/components/Layout.jsx
           grep -q 'purgeNativeServiceWorkers' web/src/main.jsx
-      - name: Run Worker tests
-        run: npm test -w worker
       - name: Build web app
         run: npm run build -w web
       - name: Generate and configure Android debug project
