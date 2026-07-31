@@ -33,7 +33,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.3-validation
+      ANDROID_VERSION_NAME: 4.5.4-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -49,7 +49,10 @@ jobs:
       - name: Validate Task, update and package source
         run: |
           grep -q "task-badge-forced-updates-v20" web/public/sw.js
-          grep -q '"apk_version": "4.5.3"' web/public/app-release.json
+          grep -q '"apk_version": "4.5.4"' web/public/app-release.json
+          grep -q 'path="/data-package"' web/src/App.jsx
+          grep -q "Permanent package status" web/src/pages/DataPackage.jsx
+          grep -q 'label: "Data Package"' web/src/pages/More.jsx
           grep -q "TaskAlarmManager" web/src/App.jsx
           grep -q "TaskBadgeManager" web/src/App.jsx
           grep -q "chefops:task-badge" web/src/components/Layout.jsx
@@ -97,7 +100,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.3.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.4.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -179,8 +182,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Mandatory Update ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Adds new Task red-dot detection, mandatory APK update gating with installed-version checks, mandatory atomic data-pack updates, obsolete package cleanup, Task/SOP exact alarms, and direct LAN/Bluetooth label printing."
+            --title "Stupiak's Ops Data Package Restore ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Restores Data Package as a permanent standalone screen under More, keeps the active package visible after updates, and retains mandatory APK updates, atomic data-pack verification, obsolete-hash cleanup, Task/SOP alarms, Task red-dot detection, and direct LAN/Bluetooth label printing."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
