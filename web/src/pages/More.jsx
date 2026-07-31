@@ -5,6 +5,7 @@ import {
   Boxes,
   ChevronRight,
   Clock,
+  DatabaseZap,
   Download,
   GraduationCap,
   Printer,
@@ -29,7 +30,8 @@ const mobileOnlyOperations = [
 
 const systemItems = [
   { to: "/notifications", label: "Notifications", desc: "Updates sent to your user ID", icon: Bell },
-  { to: "/install", label: "Install App", desc: "PWA, operational patch and Android status", icon: Download },
+  { to: "/data-package", label: "Data Package", desc: "View the active package, update status and old-data cleanup", icon: DatabaseZap },
+  { to: "/install", label: "Install App", desc: "PWA and Android installation status", icon: Download },
   { to: "/settings", label: "Settings", desc: "Profile and standalone connection", icon: Settings },
 ];
 

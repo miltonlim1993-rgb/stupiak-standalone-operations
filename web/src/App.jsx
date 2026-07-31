@@ -31,6 +31,7 @@ const GuidedSop = lazy(() => import('@/pages/GuidedSopLearning'))
 const ProfileSetup = lazy(() => import('@/pages/ProfileSetup'))
 const CloseUp = lazy(() => import('@/pages/CloseUp'))
 const InstallApp = lazy(() => import('@/pages/InstallApp'))
+const DataPackage = lazy(() => import('@/pages/DataPackage'))
 const Notifications = lazy(() => import('@/pages/Notifications'))
 
 function RouteFallback() {
@@ -59,6 +60,7 @@ function AppRoutes() {
               <Route path="/urgent" element={<UrgentIssues />} />
               <Route path="/close-up" element={<CloseUp />} />
               <Route path="/notifications" element={<Notifications />} />
+              <Route path="/data-package" element={<DataPackage />} />
               <Route path="/install" element={<InstallApp />} />
               <Route path="/more" element={<More />} />
               <Route path="/inventory" element={<Inventory />} />
