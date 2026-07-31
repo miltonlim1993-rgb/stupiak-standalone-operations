@@ -6,6 +6,7 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'worker/**'
       - 'scripts/android-task-alarm/**'
       - 'scripts/android-app-update/**'
       - 'scripts/configure-android-*.mjs'
@@ -16,6 +17,7 @@ on:
     branches: [main]
     paths:
       - 'web/**'
+      - 'worker/**'
       - 'scripts/android-task-alarm/**'
       - 'scripts/android-app-update/**'
       - 'scripts/configure-android-*.mjs'
@@ -33,7 +35,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.6-validation
+      ANDROID_VERSION_NAME: 4.5.7-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,8 +50,18 @@ jobs:
         run: npm ci
       - name: Validate Task, update and package source
         run: |
-          grep -q "task-badge-forced-updates-v20" web/public/sw.js
-          grep -q '"apk_version": "4.5.6"' web/public/app-release.json
+          grep -q "opening-checklist-feedback-v21" web/public/sw.js
+          grep -q '"apk_version": "4.5.7"' web/public/app-release.json
+          grep -q "applyOpeningChecklistFeedback" worker/src/index.js
+          grep -q "op-29-description" worker/src/opening-checklist-feedback.js
+          grep -q "due_time: '12:00'" worker/src/opening-checklist-feedback.js
+          grep -q "lock_time: '12:15'" worker/src/opening-checklist-feedback.js
+          grep -q "max_photos = 4" worker/src/opening-checklist-feedback.js
+          grep -q "max_photos = 3" worker/src/opening-checklist-feedback.js
+          grep -q "type==='TEXT'" web/src/pages/OperationalTasksV2.jsx
+          grep -q "已完成 ·" web/src/pages/OperationalTasksV2.jsx
+          grep -q "删除这张照片并重新拍摄" web/src/pages/OperationalTasksV2.jsx
+          grep -q "assertOutletAccess(user, existing.outlet_id)" worker/src/permissions.js
           grep -q "RosterGatedTaskAlarmManager" web/src/App.jsx
           grep -q "Attendance.filter" web/src/components/RosterGatedTaskAlarmManager.jsx
           grep -q "buildScheduledRosterKeys" web/src/components/RosterGatedTaskAlarmManager.jsx
@@ -82,6 +94,8 @@ jobs:
           grep -q 'id="chefops-mobile-main"' web/src/components/Layout.jsx
           grep -q 'id="chefops-mobile-nav"' web/src/components/Layout.jsx
           grep -q 'purgeNativeServiceWorkers' web/src/main.jsx
+      - name: Run Worker tests
+        run: npm test -w worker
       - name: Build web app
         run: npm run build -w web
       - name: Generate and configure Android debug project
@@ -109,7 +123,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.6.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.7.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -191,8 +205,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Roster-Gated Alarms ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Task, SOP and training alarms are installed only when the signed-in employee matches a Scheduled Duty Roster row for the alarm date and outlet. Off-duty, leave, cancelled and unmatched accounts receive no alarm. Roster-read failures cancel alarms rather than risk false ringing. Retains stock visibility, mandatory APK/data-package updates, Task red-dot detection, exact alarms, and LAN/Bluetooth label printing."
+            --title "Stupiak's Ops Opening Checklist Feedback ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Opening Checklist now stays open until noon, supports clearer multi-photo evidence, reliable photo deletion and retaking, and a required written tea quantity and standby description. Retains roster-gated Task/SOP alarms, stock visibility, mandatory APK/data-package updates, Task red-dot detection, exact alarms, and LAN/Bluetooth label printing."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
