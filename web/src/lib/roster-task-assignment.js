@@ -174,10 +174,6 @@ function storageSet(key, value) {
   try { localStorage.setItem(key, JSON.stringify(value)) } catch {}
 }
 
-function storageRemove(key) {
-  try { localStorage.removeItem(key) } catch {}
-}
-
 function rosterKey(outletId, date) {
   return `${String(outletId || '')}|${String(date || '')}`
 }
@@ -247,8 +243,20 @@ function persistTaskSnapshot(args, user, data) {
   return previous?.signature !== signature
 }
 
-function invalidateTaskSnapshot(args = {}, user = currentUser || {}) {
-  storageRemove(taskStorageKey({ outletId: args.outlet_id || args.outletId, date: args.date || args.due_date }, user))
+function updateTaskSnapshotAfterAction(args = {}, actionResult = {}, user = currentUser || {}) {
+  const snapshotArgs = { outletId: args.outlet_id || args.outletId, date: args.date || args.due_date }
+  const stored = readTaskSnapshot(snapshotArgs, user)
+  if (!stored?.data || !actionResult?.task) return actionResult
+
+  const rosterRows = readCachedRoster(snapshotArgs.outletId, snapshotArgs.date)
+  const assignment = taskRosterAssignment(actionResult.task, rosterRows, user)
+  const decoratedTask = decorateTask(actionResult.task, assignment)
+  const nextData = {
+    ...stored.data,
+    tasks: (stored.data.tasks || []).map((task) => task.id === decoratedTask.id ? decoratedTask : task),
+  }
+  persistTaskSnapshot(snapshotArgs, user, nextData)
+  return { ...actionResult, task: decoratedTask }
 }
 
 function composeAssignedData(data, rosterRows, user, extra = {}) {
@@ -369,8 +377,7 @@ export function configureRosterTaskAssignment(user = null) {
   opsClient.tasks.operationalBootstrap = assignedOperationalBootstrap
   opsClient.tasks.operationalAction = async (args = {}) => {
     const result = await originalOperationalAction(args)
-    invalidateTaskSnapshot(args, currentUser || {})
-    return result
+    return updateTaskSnapshotAfterAction(args, result, currentUser || {})
   }
   installed = true
 }
