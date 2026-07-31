@@ -3,6 +3,8 @@ const BLOCKED_ROSTER_STATUSES = [
   'cancelled', 'canceled', 'rest day', 'not scheduled', 'unavailable',
 ]
 
+const LEADERSHIP_ROSTER_ROLES = new Set(['leader', 'supervisor', 'manager', 'owner'])
+
 function normalized(value = '') {
   return String(value || '')
     .normalize('NFKD')
@@ -27,6 +29,7 @@ function meaningfulTokens(value = '') {
 export function isScheduledRosterRow(row = {}) {
   const name = normalized(row.staff_name)
   if (!name) return false
+  if (LEADERSHIP_ROSTER_ROLES.has(normalized(row.staff_role))) return false
   const status = normalized(row.status)
   if (BLOCKED_ROSTER_STATUSES.some((blocked) => status === blocked || status.includes(blocked))) return false
   return status === 'scheduled' || Boolean(row.clock_in || row.clock_out || !status)
@@ -68,6 +71,7 @@ export function rosterNameMatchesUser(staffName, user = {}, scheduledNames = [])
 
 export function buildScheduledRosterKeys({ rosterGroups = [], user = {} } = {}) {
   const keys = new Set()
+  if (LEADERSHIP_ROSTER_ROLES.has(normalized(user.role))) return keys
   for (const group of rosterGroups || []) {
     const scheduledRows = (group.rows || []).filter(isScheduledRosterRow)
     const scheduledNames = scheduledRows.map((row) => row.staff_name)
