@@ -6,5 +6,5 @@
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
   "release_notes": "Daily Tasks are now assigned from the Duty Roster position segments for the Task time. Cashier Tasks go only to Cashier or Cashier Assistant staff; Kitchen Tasks go only to Packaging, Grill or Deep Fryer staff. Leader, Supervisor, Manager and Owner roster rows are excluded from automatic assignment and Task alarms, while Manager and Owner accounts can still review all Tasks.",
-  "release_trigger": "2026-07-31-position-assigned-tasks-production"
+  "release_trigger": "2026-07-31-position-assigned-tasks-production-release"
 }
