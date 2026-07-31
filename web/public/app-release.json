@@ -1,10 +1,9 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.5",
-  "minimum_apk_version": "4.5.5",
+  "apk_version": "4.5.6",
+  "minimum_apk_version": "4.5.6",
   "force_update": true,
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Upgrades Outlet Stock List with low-stock visibility, latest counted quantity, last count date and counter, as-of date history, outlet/section/status filters, and low-stock-first sorting.",
-  "release_trigger": "2026-07-31-stock-visibility"
+  "release_notes": "Task, SOP and training alarms are now installed only for employees matched to a Scheduled row in the correct outlet's Duty Roster on the alarm date. Off-duty, leave, cancelled and unmatched accounts receive no ringing alarm; roster-read failures cancel alarms rather than risk false alerts."
 }
