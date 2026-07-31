@@ -697,7 +697,7 @@ function operationalPhotoRequirement(group, config, state, dateText) {
 }
 
 function operationalPhotoCount(taskPhotos, groupId) {
-  return taskPhotos.filter((row) => String(row.photo_type || '') === `checklist:${groupId}` && !row.deleted_at).length
+  return taskPhotos.filter((row) => String(row.photo_type || '') === `checklist:${groupId}` && !row.deleted_at && String(row.status || 'active').toLowerCase() !== 'deleted').length
 }
 
 function operationalResponseArray(state) {
