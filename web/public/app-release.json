@@ -6,5 +6,5 @@
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
   "release_notes": "Task screens now force a fresh operational bootstrap on entry and automatically resync while active, so newly published templates and today's generated tasks appear without a manual refresh. Task evidence photos are downloaded with the authenticated session and displayed from local Blob URLs, fixing photos that appeared on web but not in the Android APK.",
-  "release_trigger": "2026-07-31-live-task-photo-refresh"
+  "release_trigger": "2026-07-31-live-task-photo-refresh-production"
 }
