@@ -1,3 +1,4 @@
+// Production release refresh: 4.5.2 / PWA v19
 const VERSION = 'chefops-v4-5-2-task-sop-alarm-v19'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
