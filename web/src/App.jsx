@@ -8,7 +8,7 @@ import ScrollToTop from '@/components/ScrollToTop'
 import MobileNavigation from '@/components/MobileNavigation'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
-import TaskAlarmManager from '@/components/TaskAlarmManager'
+import RosterGatedTaskAlarmManager from '@/components/RosterGatedTaskAlarmManager'
 import TaskBadgeManager from '@/components/TaskBadgeManager'
 
 const PageNotFound = lazy(() => import('@/lib/PageNotFound'))
@@ -90,7 +90,7 @@ export default function App() {
           <MobileNavigation />
           <ScrollToTop />
           <AppRoutes />
-          <TaskAlarmManager />
+          <RosterGatedTaskAlarmManager />
           <TaskBadgeManager />
         </Router>
         <Toaster />

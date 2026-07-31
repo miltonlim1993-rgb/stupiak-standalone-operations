@@ -33,7 +33,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.5-validation
+      ANDROID_VERSION_NAME: 4.5.6-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -49,14 +49,20 @@ jobs:
       - name: Validate Task, update and package source
         run: |
           grep -q "task-badge-forced-updates-v20" web/public/sw.js
-          grep -q '"apk_version": "4.5.5"' web/public/app-release.json
+          grep -q '"apk_version": "4.5.6"' web/public/app-release.json
+          grep -q "RosterGatedTaskAlarmManager" web/src/App.jsx
+          grep -q "Attendance.filter" web/src/components/RosterGatedTaskAlarmManager.jsx
+          grep -q "buildScheduledRosterKeys" web/src/components/RosterGatedTaskAlarmManager.jsx
+          grep -q "alertAllowedByRoster" web/src/components/RosterGatedTaskAlarmManager.jsx
+          grep -q "isScheduledRosterRow" web/src/lib/roster-alert-gate.js
+          grep -q "rosterNameMatchesUser" web/src/lib/roster-alert-gate.js
+          grep -q "strict: true" web/src/components/RosterGatedTaskAlarmManager.jsx
           grep -q "Stock as of date" web/src/pages/Inventory.jsx
           grep -q "latest_count_date" web/src/pages/Inventory.jsx
           grep -q 'label: "Low stock"' web/src/pages/Inventory.jsx
           grep -q 'path="/data-package"' web/src/App.jsx
           grep -q "Permanent package status" web/src/pages/DataPackage.jsx
           grep -q 'label: "Data Package"' web/src/pages/More.jsx
-          grep -q "TaskAlarmManager" web/src/App.jsx
           grep -q "TaskBadgeManager" web/src/App.jsx
           grep -q "chefops:task-badge" web/src/components/Layout.jsx
           grep -q "pruneStaleAppPackData" web/src/lib/app-pack.js
@@ -103,7 +109,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.5.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.6.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -185,8 +191,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Stock Visibility ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Upgrades Outlet Stock List with low-stock visibility, latest counted quantity, last count date and counter, as-of date history, outlet/section/status filters, and low-stock-first sorting. Retains mandatory APK updates, atomic data-pack verification, obsolete-hash cleanup, Task/SOP alarms, Task red-dot detection, and direct LAN/Bluetooth label printing."
+            --title "Stupiak's Ops Roster-Gated Alarms ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Task, SOP and training alarms are installed only when the signed-in employee matches a Scheduled Duty Roster row for the alarm date and outlet. Off-duty, leave, cancelled and unmatched accounts receive no alarm. Roster-read failures cancel alarms rather than risk false ringing. Retains stock visibility, mandatory APK/data-package updates, Task red-dot detection, exact alarms, and LAN/Bluetooth label printing."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
