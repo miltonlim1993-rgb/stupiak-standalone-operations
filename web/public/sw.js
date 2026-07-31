@@ -1,5 +1,5 @@
-// Production release refresh: 4.5.3 / PWA v20
-const VERSION = 'chefops-v4-5-3-task-badge-forced-updates-v20'
+// Production release refresh: 4.5.7 / PWA v21
+const VERSION = 'chefops-v4-5-7-opening-checklist-feedback-v21'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
