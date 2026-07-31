@@ -1,0 +1,32 @@
+name: Apply opening checklist feedback
+
+on:
+  push:
+    branches: [agent/opening-checklist-feedback-4-5-7]
+    paths:
+      - '.github/workflows/apply-opening-checklist-feedback.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[opening-feedback-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/opening-checklist-feedback-4-5-7
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply source patches
+        run: node scripts/apply-opening-checklist-feedback.mjs
+      - name: Commit patched source
+        run: |
+          git config user.name "stupiaks-ops-release-bot"
+          git config user.email "stupiaks-ops-release-bot@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply opening checklist test feedback [opening-feedback-applied]"
+          git push origin HEAD:agent/opening-checklist-feedback-4-5-7
