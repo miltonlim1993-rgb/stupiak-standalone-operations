@@ -1,4 +1,4 @@
-const VERSION = 'chefops-v4-5-1-task-sop-alarm-v18'
+const VERSION = 'chefops-v4-5-2-task-sop-alarm-v19'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
