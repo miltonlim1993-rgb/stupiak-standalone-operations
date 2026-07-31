@@ -41,14 +41,15 @@ export default function DataPackage() {
   const [busy, setBusy] = useState(false)
 
   useEffect(() => {
-    const update = (event) => setStatus(event.detail || getAppPackStatus())
-    window.addEventListener('chefops:pack-status', update)
-    window.addEventListener('chefops:data-pack-updated', update)
-    window.addEventListener('chefops:data-pack-update-required', update)
+    const updateStatus = (event) => setStatus(event.detail || getAppPackStatus())
+    const refreshStatus = () => setStatus(getAppPackStatus())
+    window.addEventListener('chefops:pack-status', updateStatus)
+    window.addEventListener('chefops:data-pack-updated', refreshStatus)
+    window.addEventListener('chefops:data-pack-update-required', refreshStatus)
     return () => {
-      window.removeEventListener('chefops:pack-status', update)
-      window.removeEventListener('chefops:data-pack-updated', update)
-      window.removeEventListener('chefops:data-pack-update-required', update)
+      window.removeEventListener('chefops:pack-status', updateStatus)
+      window.removeEventListener('chefops:data-pack-updated', refreshStatus)
+      window.removeEventListener('chefops:data-pack-update-required', refreshStatus)
     }
   }, [])
 
@@ -56,7 +57,7 @@ export default function DataPackage() {
     if (!outletId || busy || !navigator.onLine) return
     setBusy(true)
     try {
-      await syncAppPack({ outletId, force: true })
+      await syncAppPack({ outletId, force: false })
     } catch {
       // The permanent status panel below displays the exact package error.
     } finally {
