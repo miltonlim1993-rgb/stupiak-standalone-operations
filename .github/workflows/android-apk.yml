@@ -31,7 +31,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.1-validation
+      ANDROID_VERSION_NAME: 4.5.2-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -46,7 +46,7 @@ jobs:
         run: npm ci
       - name: Validate Task, SOP and direct-print source
         run: |
-          grep -q "task-sop-alarm-v18" web/public/sw.js
+          grep -q "task-sop-alarm-v19" web/public/sw.js
           grep -q "TaskAlarmManager" web/src/App.jsx
           grep -q "collectTaskAlerts" web/src/lib/task-alerts.js
           grep -q "SYNC_ALERT_SCHEDULE" web/public/sw.js
@@ -86,7 +86,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.1.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.2.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
