@@ -29,7 +29,7 @@ jobs:
             exit 0
           fi
           node scripts/apply-opening-checklist-feedback.mjs
-          git restore --source=HEAD -- .github/workflows/android-apk.yml .github/workflows/apply-opening-checklist-feedback.yml
+          git restore --source=HEAD -- .github/workflows/android-apk.yml
           git config user.name "stupiaks-ops-release-bot"
           git config user.email "stupiaks-ops-release-bot@users.noreply.github.com"
           git add -A
@@ -37,5 +37,5 @@ jobs:
             echo "No changes to commit."
             exit 0
           fi
-          git commit -m "Apply opening checklist test feedback [opening-feedback-applied]"
+          git commit -m "Apply final opening checklist feedback fix [opening-feedback-applied]"
           git push origin HEAD:${{ github.head_ref }}
