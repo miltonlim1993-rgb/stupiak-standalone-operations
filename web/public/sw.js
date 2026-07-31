@@ -1,12 +1,12 @@
-// Production release refresh: 4.5.2 / PWA v19
-const VERSION = 'chefops-v4-5-2-task-sop-alarm-v19'
+// Production release refresh: 4.5.3 / PWA v20
+const VERSION = 'chefops-v4-5-3-task-badge-forced-updates-v20'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
 const ALERT_DB = 'chefops-task-alerts-v1'
 const ALERT_STORE = 'alerts'
 const FIRED_STORE = 'fired'
-const SHELL = ['/', '/manifest.webmanifest', '/stupiaks-ops-192.png', '/stupiaks-ops-512.png', '/apple-touch-icon.png', '/favicon-32.png']
+const SHELL = ['/', '/manifest.webmanifest', '/app-release.json', '/stupiaks-ops-192.png', '/stupiaks-ops-512.png', '/apple-touch-icon.png', '/favicon-32.png']
 
 self.addEventListener('install', (event) => {
   event.waitUntil(caches.open(SHELL_CACHE).then((cache) => cache.addAll(SHELL)).catch(() => undefined))
@@ -67,6 +67,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
 
   if (request.mode === 'navigate') {
+    event.respondWith(networkFirst(request, SHELL_CACHE))
+    return
+  }
+  if (url.pathname === '/app-release.json') {
     event.respondWith(networkFirst(request, SHELL_CACHE))
     return
   }
