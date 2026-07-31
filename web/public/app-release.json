@@ -1,9 +1,9 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.4",
-  "minimum_apk_version": "4.5.4",
+  "apk_version": "4.5.5",
+  "minimum_apk_version": "4.5.5",
   "force_update": true,
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Restores Data Package as a permanent standalone page under More, keeps the active package visible after updates, and preserves mandatory package verification and obsolete-hash cleanup."
+  "release_notes": "Upgrades Outlet Stock List with low-stock visibility, latest counted quantity, last count date and counter, as-of date history, outlet/section/status filters, and low-stock-first sorting."
 }
