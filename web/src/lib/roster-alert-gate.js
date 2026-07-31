@@ -71,6 +71,7 @@ export function rosterNameMatchesUser(staffName, user = {}, scheduledNames = [])
 
 export function buildScheduledRosterKeys({ rosterGroups = [], user = {} } = {}) {
   const keys = new Set()
+  if (LEADERSHIP_ROSTER_ROLES.has(normalized(user.role))) return keys
   for (const group of rosterGroups || []) {
     const scheduledRows = (group.rows || []).filter(isScheduledRosterRow)
     const scheduledNames = scheduledRows.map((row) => row.staff_name)
