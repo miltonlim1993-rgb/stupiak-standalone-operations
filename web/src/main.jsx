@@ -6,12 +6,13 @@ import '@/viewport.css'
 import '@/panels-v8.css'
 import '@/direct-print-v10.css'
 import '@/guided-sop-media.css'
+import '@/guided-sop-mobile-readable.css'
 import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = 'task-sop-alarm-v18'
+const SHELL_VERSION = 'mobile-readable-sop-v19'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
