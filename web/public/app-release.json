@@ -5,5 +5,6 @@
   "force_update": true,
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Upgrades Outlet Stock List with low-stock visibility, latest counted quantity, last count date and counter, as-of date history, outlet/section/status filters, and low-stock-first sorting."
+  "release_notes": "Upgrades Outlet Stock List with low-stock visibility, latest counted quantity, last count date and counter, as-of date history, outlet/section/status filters, and low-stock-first sorting.",
+  "release_trigger": "2026-07-31-stock-visibility"
 }
