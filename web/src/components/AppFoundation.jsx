@@ -5,25 +5,24 @@ import { getDeviceId, platformName, showSystemNotification } from '@/lib/app-dev
 import { hasUsableAppPack, syncAppPack } from '@/lib/app-pack'
 import { queryClientInstance } from '@/lib/query-client'
 
-const VERSION = '4.5.1-direct-print-flow-v10'
+const VERSION = '4.5.3-task-badge-forced-apk-pack-cleanup'
 const BOOTSTRAP_KEY = 'chefops.v4.bootstrap.public'
 const LAST_PACK_CHECK_KEY = 'chefops.data-pack.last-background-check'
-const PACK_RECHECK_MS = 30 * 60_000
+const PACK_RECHECK_MS = 5 * 60_000
 const NOTIFICATION_CHECK_MS = 120_000
 
 function currentYear() { return new Date().getFullYear() }
 
-function editingSurfaceOpen() {
-  const active = document.activeElement
-  const tag = String(active?.tagName || '').toUpperCase()
-  if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag) || active?.isContentEditable) return true
-
-  return Boolean(document.querySelector([
-    '[role="dialog"]',
-    '.chefops-mobile-sheet',
-    '.chefops-drawer-overlay',
-    '[data-chefops-editing="true"]',
-  ].join(', ')))
+async function actualAppVersion() {
+  try {
+    const result = await window.Capacitor?.Plugins?.AppUpdate?.getInstalledVersion?.()
+    if (result?.versionName) return String(result.versionName)
+  } catch {}
+  try {
+    const result = await window.Capacitor?.Plugins?.App?.getInfo?.()
+    if (result?.version) return String(result.version)
+  } catch {}
+  return VERSION
 }
 
 export default function AppFoundation() {
@@ -38,6 +37,8 @@ export default function AppFoundation() {
 
     let cancelled = false
     let notificationTimer = null
+    let booting = false
+    let booted = false
     const outletId = String(user.outlet_id || '').trim()
     localStorage.setItem('chefops.data-pack.outlet', outletId)
 
@@ -45,13 +46,8 @@ export default function AppFoundation() {
       queryClientInstance.invalidateQueries({ refetchType: 'none' }).catch(() => undefined)
     }
 
-    const updatePack = async ({ ignoreAge = false, allowWhileEditing = false } = {}) => {
+    const updatePack = async ({ ignoreAge = false } = {}) => {
       if (!hasUsableAppPack(outletId)) return null
-      if (!allowWhileEditing && editingSurfaceOpen()) {
-        localStorage.setItem('chefops.data-pack.pending-background-check', '1')
-        return null
-      }
-
       const lastCheckedAt = Number(localStorage.getItem(LAST_PACK_CHECK_KEY) || 0)
       if (!ignoreAge && Date.now() - lastCheckedAt < PACK_RECHECK_MS) return null
 
@@ -59,11 +55,10 @@ export default function AppFoundation() {
         const manifest = await syncAppPack({ outletId, force: false })
         if (cancelled) return null
         localStorage.setItem(LAST_PACK_CHECK_KEY, String(Date.now()))
-        localStorage.removeItem('chefops.data-pack.pending-background-check')
         localStorage.setItem('chefops.data.version', manifest.data_version || manifest.version || VERSION)
         return manifest
       } catch (error) {
-        console.warn('ChefOps data patch is using the last downloaded version', error)
+        console.warn('ChefOps requires the published package update before continuing', error)
         return null
       }
     }
@@ -92,7 +87,6 @@ export default function AppFoundation() {
           } catch {}
         }
 
-        // Mark cached queries stale, but never refetch an active page while a user is working.
         if (shouldInvalidateData) markQueriesStaleWithoutRefresh()
         if (shouldRefreshPack) await updatePack({ ignoreAge: true })
 
@@ -103,75 +97,85 @@ export default function AppFoundation() {
       } catch {}
     }
 
-    const boot = async () => {
-      if (!hasUsableAppPack(outletId)) return
-      const manifest = await updatePack({ ignoreAge: true, allowWhileEditing: true })
-
-      try {
-        const payload = await opsClient.app.bootstrap({ year: currentYear() })
-        if (cancelled) return
-        localStorage.setItem(BOOTSTRAP_KEY, JSON.stringify({
-          app_version: payload.app_version,
-          data_version: payload.data_version,
-          data_pack_version: payload.data_pack?.version || manifest?.version || '',
-          payment_methods: payload.payment_methods || [],
-          settings: payload.settings || {},
-          notification_mode: payload.notification_mode,
-          cached_at: new Date().toISOString(),
-        }))
-        window.dispatchEvent(new CustomEvent('chefops:bootstrap', { detail: payload }))
-      } catch (error) {
-        console.warn('ChefOps bootstrap is using the downloaded data patch', error)
-      }
-
-      await publishNotifications()
-
+    const registerDevice = async () => {
       const deviceStampKey = `chefops.device.registered.${userKey}`
       const lastRegistered = Number(localStorage.getItem(deviceStampKey) || 0)
-      if (Date.now() - lastRegistered > 12 * 60 * 60_000) {
+      if (Date.now() - lastRegistered <= 12 * 60 * 60_000) return
+      try {
+        await opsClient.app.registerDevice({
+          device_id: getDeviceId(),
+          platform: platformName(),
+          app_version: await actualAppVersion(),
+          notification_permission: 'Notification' in window ? Notification.permission : 'unsupported',
+        })
+        localStorage.setItem(deviceStampKey, String(Date.now()))
+      } catch (error) {
+        console.warn('Unable to register this device', error)
+      }
+    }
+
+    const boot = async () => {
+      if (booting || booted || !hasUsableAppPack(outletId)) return
+      booting = true
+      try {
+        const manifest = await updatePack({ ignoreAge: true })
+        if (cancelled) return
+
         try {
-          await opsClient.app.registerDevice({
-            device_id: getDeviceId(),
-            platform: platformName(),
-            app_version: VERSION,
-            notification_permission: 'Notification' in window ? Notification.permission : 'unsupported',
-          })
-          localStorage.setItem(deviceStampKey, String(Date.now()))
+          const payload = await opsClient.app.bootstrap({ year: currentYear() })
+          if (cancelled) return
+          localStorage.setItem(BOOTSTRAP_KEY, JSON.stringify({
+            app_version: payload.app_version,
+            data_version: payload.data_version,
+            data_pack_version: payload.data_pack?.version || manifest?.version || '',
+            payment_methods: payload.payment_methods || [],
+            settings: payload.settings || {},
+            notification_mode: payload.notification_mode,
+            cached_at: new Date().toISOString(),
+          }))
+          window.dispatchEvent(new CustomEvent('chefops:bootstrap', { detail: payload }))
         } catch (error) {
-          console.warn('Unable to register this device', error)
+          console.warn('ChefOps bootstrap is using the downloaded data patch', error)
         }
+
+        await publishNotifications()
+        await registerDevice()
+        booted = true
+      } finally {
+        booting = false
       }
     }
 
     const resume = () => {
       if (document.visibilityState === 'hidden') return
+      boot()
       publishNotifications()
       updatePack()
     }
 
     const onPackReady = (event) => {
       const manifest = event?.detail?.manifest
-      if (manifest) {
-        localStorage.setItem('chefops.data.version', manifest.data_version || manifest.version || VERSION)
-      }
-      // The current screen remains untouched. New configuration is used on the
-      // next page entry or explicit refresh instead of remounting active forms.
+      if (manifest) localStorage.setItem('chefops.data.version', manifest.data_version || manifest.version || VERSION)
       markQueriesStaleWithoutRefresh()
       window.dispatchEvent(new CustomEvent('chefops:configuration-ready', { detail: event?.detail || null }))
+      boot()
     }
 
     const onVisible = () => {
       if (document.visibilityState === 'visible') resume()
     }
 
-    if (hasUsableAppPack(outletId)) boot()
+    boot()
     window.addEventListener('chefops:data-pack-updated', onPackReady)
     window.addEventListener('online', resume)
     document.addEventListener('visibilitychange', onVisible)
     navigator.storage?.persist?.().catch(() => undefined)
 
     notificationTimer = window.setInterval(() => {
-      if (hasUsableAppPack(outletId) && document.visibilityState !== 'hidden') publishNotifications()
+      if (hasUsableAppPack(outletId) && document.visibilityState !== 'hidden') {
+        publishNotifications()
+        updatePack()
+      }
     }, NOTIFICATION_CHECK_MS)
 
     return () => {
