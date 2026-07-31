@@ -1,0 +1,40 @@
+name: Patch opening feedback branch
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'agent/opening-checklist-feedback-4-5-7'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          ref: ${{ github.head_ref }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Apply source patches once
+        run: |
+          if [ ! -f scripts/apply-opening-checklist-feedback.mjs ]; then
+            echo "Opening feedback patch already applied."
+            exit 0
+          fi
+          node scripts/apply-opening-checklist-feedback.mjs
+          git config user.name "stupiaks-ops-release-bot"
+          git config user.email "stupiaks-ops-release-bot@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+          git commit -m "Apply opening checklist test feedback [opening-feedback-applied]"
+          git push origin HEAD:${{ github.head_ref }}
