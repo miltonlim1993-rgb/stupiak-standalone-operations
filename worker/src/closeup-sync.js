@@ -1,6 +1,6 @@
 import { googleFetch } from './google.js'
 
-const APP_VERSION = '4.3.0-ops-insights-data-gate'
+const APP_VERSION = '4.3.1-closeup-daily-row-fix'
 const DEFAULT_REGISTRY_SHEET = 'Outlet Reports'
 const RELATION_SHEET = '_RelationDaily'
 const LOG_SHEET = '_CashShiftLog'
@@ -88,12 +88,59 @@ function columnName(indexOneBased) {
   return result
 }
 
+const MONTH_NUMBERS = new Map([
+  ['jan', 1], ['january', 1],
+  ['feb', 2], ['february', 2],
+  ['mar', 3], ['march', 3],
+  ['apr', 4], ['april', 4],
+  ['may', 5],
+  ['jun', 6], ['june', 6],
+  ['jul', 7], ['july', 7],
+  ['aug', 8], ['august', 8],
+  ['sep', 9], ['sept', 9], ['september', 9],
+  ['oct', 10], ['october', 10],
+  ['nov', 11], ['november', 11],
+  ['dec', 12], ['december', 12],
+])
+
 function dateKey(value) {
   const raw = text(value)
+  if (!raw) return ''
+
+  const serial = typeof value === 'number'
+    ? value
+    : (/^\d+(?:\.\d+)?$/.test(raw) ? Number(raw) : Number.NaN)
+  if (Number.isFinite(serial) && serial >= 20000 && serial <= 80000) {
+    const date = new Date(Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000)
+    return date.toISOString().slice(0, 10)
+  }
+
   let match = raw.match(/^(\d{4})-(\d{2})-(\d{2})/)
   if (match) return `${match[1]}-${match[2]}-${match[3]}`
+
+  match = raw.match(/^(\d{1,2})[-\s]([a-zA-Z]{3,9})[-\s](\d{2}|\d{4})$/)
+  if (match) {
+    const month = MONTH_NUMBERS.get(match[2].toLowerCase())
+    if (month) {
+      const shortYear = Number(match[3])
+      const year = match[3].length === 2
+        ? (shortYear >= 70 ? 1900 + shortYear : 2000 + shortYear)
+        : shortYear
+      return `${year}-${String(month).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`
+    }
+  }
+
   match = raw.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/)
-  if (match) return `${match[3]}-${String(match[2]).padStart(2, '0')}-${String(match[1]).padStart(2, '0')}`
+  if (match) {
+    const first = Number(match[1])
+    const second = Number(match[2])
+    const day = first > 12 && second <= 12 ? first : (second > 12 && first <= 12 ? second : first)
+    const month = first > 12 && second <= 12 ? second : (second > 12 && first <= 12 ? first : second)
+    return `${match[3]}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
+  const parsed = Date.parse(raw)
+  if (!Number.isNaN(parsed)) return new Date(parsed).toISOString().slice(0, 10)
   return raw
 }
 
@@ -436,8 +483,6 @@ async function writeRelation(env, target, relation, rowNumber, record) {
     updateCell(updates, relation, rowNumber, 'Handover In', number(record.incoming_cash || record.actual_cash))
     updateCell(updates, relation, rowNumber, 'From Staff', text(record.from_staff))
     updateCell(updates, relation, rowNumber, 'To Staff', text(record.to_staff))
-    const amounts = amountMap(record)
-    PAYMENT_HEADERS.forEach((mapping) => updateCell(updates, relation, rowNumber, mapping.header, paymentValue(amounts, mapping.aliases)))
   } else if (phase === 'closing') {
     updateCell(updates, relation, rowNumber, 'Night Closing Actual', number(record.actual_cash))
     updateCell(updates, relation, rowNumber, 'Prepared By', text(record.submitted_by_name || record.submitted_by_email || record.created_by))
