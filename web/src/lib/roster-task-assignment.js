@@ -34,11 +34,14 @@ function isAssignableRosterRow(row = {}) {
 
 function localDateTime(dateText, timeText, rollover = false) {
   if (!dateText || !timeText) return null
-  const [year, month, day] = String(dateText).slice(0, 10).split('-').map(Number)
-  const [hour, minute] = String(timeText).split(':').map(Number)
-  if (![year, month, day, hour, minute].every(Number.isFinite)) return null
-  const value = new Date(year, month - 1, day + (rollover ? 1 : 0), hour, minute, 0, 0)
-  return Number.isNaN(value.getTime()) ? null : value
+  const date = String(dateText).slice(0, 10)
+  const match = String(timeText).match(/^(\d{1,2}):(\d{2})$/)
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !match) return null
+  const hour = String(Number(match[1])).padStart(2, '0')
+  const minute = match[2]
+  const value = new Date(`${date}T${hour}:${minute}:00+08:00`)
+  if (Number.isNaN(value.getTime())) return null
+  return rollover ? new Date(value.getTime() + 86_400_000) : value
 }
 
 function taskWindow(task = {}) {
