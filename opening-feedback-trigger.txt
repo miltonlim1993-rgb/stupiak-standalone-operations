@@ -1,1 +1,0 @@
-Trigger same-repository opening checklist feedback patch for PR #11.
