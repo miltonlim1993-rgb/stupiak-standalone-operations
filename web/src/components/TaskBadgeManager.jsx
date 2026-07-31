@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/AuthContext'
 import { getPackedEntity } from '@/lib/app-pack'
@@ -59,7 +59,6 @@ function publish(ids) {
 export default function TaskBadgeManager() {
   const { user } = useAuth()
   const location = useLocation()
-  const running = useRef(false)
 
   useEffect(() => {
     if (!user) return undefined
@@ -70,8 +69,7 @@ export default function TaskBadgeManager() {
     let cancelled = false
 
     const inspect = async ({ markSeen = false } = {}) => {
-      if (running.current || cancelled) return
-      running.current = true
+      if (cancelled) return
       try {
         const rows = await getPackedEntity('TaskTemplate', {
           sort: 'display_order,name',
@@ -99,8 +97,6 @@ export default function TaskBadgeManager() {
       } catch (error) {
         console.warn('Unable to inspect newly published tasks', error)
         publish(readArray(unreadKey))
-      } finally {
-        running.current = false
       }
     }
 
