@@ -94,10 +94,10 @@ function taskPositionCodes(task = {}) {
     config.checklist_key,
   ].filter(Boolean).join(' '))
 
-  if (/cashier|cash|counter|payment|receipt|front counter|close up/.test(source)) {
+  if (/cashier|cash|counter|payment|receipt|front counter|close up|toilet|restroom|washroom|guest area|front of house|foh/.test(source)) {
     return { group: 'cashier', codes: CASHIER_POSITION_CODES }
   }
-  if (/kitchen|preparation|prepare|packaging|grill|fryer|food|cooking|opening/.test(source)) {
+  if (/kitchen|preparation|prepare|packaging|grill|fryer|food|cooking|opening|whole outlet|daily standards|outlet standards/.test(source)) {
     return { group: 'kitchen', codes: KITCHEN_POSITION_CODES }
   }
   return { group: 'frontline', codes: FRONTLINE_POSITION_CODES }
