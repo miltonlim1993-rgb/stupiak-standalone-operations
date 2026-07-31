@@ -5,6 +5,7 @@ import {
   Boxes,
   ChevronRight,
   Clock,
+  Database,
   Download,
   GraduationCap,
   Printer,
@@ -39,6 +40,7 @@ export default function More() {
   const managementItems = [
     ...(canUseControl ? [
       { to: "/ops-control", label: "Ops Control", desc: "Approve access, assign outlets and send updates", icon: ShieldCheck },
+      { to: "/data-packages", label: "Data Packages", desc: "Preview, publish, install and roll back offline Task, SOP, Stock and Label releases", icon: Database },
       { to: "/labels/settings", label: "Label Printer Settings", desc: "Direct Wi-Fi/LAN or paired Bluetooth printing, printer language and label size", icon: Printer },
     ] : []),
     { to: "/reports", label: "Reports", desc: "Export operations, stock, photo and training reports", icon: BarChart3 },
@@ -57,7 +59,7 @@ export default function More() {
       </div>
       <MenuSection title="Management" items={managementItems} />
       <MenuSection title="System" items={systemItems} />
-      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Direct Print Flow v10</p>
+      <p className="pb-2 text-center text-[11px] font-medium text-muted-foreground">App shell: Direct Print Flow v10 · Data Package v2 preview</p>
     </div>
   );
 }

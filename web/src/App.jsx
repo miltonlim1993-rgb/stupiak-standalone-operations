@@ -25,6 +25,7 @@ const LabelSettings = lazy(() => import('@/pages/LabelPrinterSettings'))
 const Reports = lazy(() => import('@/pages/Reports'))
 const Settings = lazy(() => import('@/pages/Settings'))
 const OpsControl = lazy(() => import('@/pages/OpsControl'))
+const DataPackages = lazy(() => import('@/pages/DataPackages'))
 const Training = lazy(() => import('@/pages/Training'))
 const GuidedSop = lazy(() => import('@/pages/GuidedSopLearning'))
 const ProfileSetup = lazy(() => import('@/pages/ProfileSetup'))
@@ -68,6 +69,7 @@ function AppRoutes() {
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="/ops-control" element={<OpsControl />} />
+              <Route path="/data-packages" element={<DataPackages />} />
               <Route path="/training" element={<Training />} />
               <Route path="/sop/:sopId" element={<GuidedSop />} />
             </Route>

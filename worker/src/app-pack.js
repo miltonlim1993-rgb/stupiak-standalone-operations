@@ -1,9 +1,13 @@
 import { ensureEntitySheet, listRecords } from './sheets.js'
 import { getLabelCatalog } from './labels.js'
 import { ensureMediaRules } from './media-rules.js'
+import {
+  getDataPackageModuleObject,
+  getLatestDataPackageManifest,
+  markDataPackageDirty,
+} from './data-package-v2-store.js'
 
 const PACK_SCHEMA_VERSION = 2
-const PACK_MAX_AGE_MS = 15 * 60 * 1000
 const DEFAULT_PAYMENT_METHODS = [
   { id: 'payment-cash', code: 'cash', name: 'Cash', icon: 'banknote', color: 'emerald', category: 'cash', display_order: 10, active: true, requires_reference: false },
   { id: 'payment-duitnow', code: 'duitnow', name: 'DuitNow', icon: 'qr-code', color: 'violet', category: 'cashless', display_order: 20, active: true, requires_reference: false },
@@ -208,46 +212,31 @@ async function persistPack(env, outletId, modules) {
   return manifest
 }
 
-async function rebuildTargets(env, targets) {
-  const shared = await sharedData(env)
-  const results = []
-  for (const target of targets) {
-    try {
-      results.push(await getOrBuildAppPack(env, target, { force: true, shared }))
-    } catch (error) {
-      console.error('App pack rebuild failed', target, error)
-    }
-  }
-  return results
-}
-
-function queueRebuild(env, outletId) {
-  const task = outletId
-    ? rebuildTargets(env, new Set(['global', outletKey(outletId)]))
-    : rebuildAllAppPacks(env)
-  const guarded = task.catch((error) => console.error('Queued app pack rebuild failed', error))
-  if (env.__CHEFOPS_CTX?.waitUntil) env.__CHEFOPS_CTX.waitUntil(guarded)
-  else void guarded
-}
-
 export async function markAppPackDirty(env, outletId = '', { modules = [] } = {}) {
   const targets = new Set(['global'])
   if (outletId) targets.add(outletKey(outletId))
   const changedAt = new Date().toISOString()
-  await Promise.all([...targets].map((target) => storePut(env, keyFor('dirty', target), {
-    dirty_at: changedAt,
-    modules: [...new Set((modules || []).map((value) => String(value || '').trim()).filter(Boolean))],
-  }, { ttl: 7 * 24 * 60 * 60 })))
-  queueRebuild(env, outletId)
-}
+  const normalizedModules = [...new Set((modules || []).map((value) => String(value || '').trim()).filter(Boolean))]
 
-async function isDirty(env, outletId, manifest) {
-  const raw = await storeGet(env, keyFor('dirty', outletId))
-  if (!raw) return false
-  try {
-    const dirty = JSON.parse(raw)
-    return Boolean(dirty.dirty_at && (!manifest?.generated_at || dirty.dirty_at > manifest.generated_at))
-  } catch { return false }
+  await Promise.all([...targets].flatMap((target) => [
+    storePut(env, keyFor('dirty', target), {
+      dirty_at: changedAt,
+      modules: normalizedModules,
+      publish_required: true,
+    }, { ttl: 90 * 24 * 60 * 60 }),
+    markDataPackageDirty(env, target === 'global' ? '' : target, {
+      modules: normalizedModules,
+      reason: 'Static configuration changed',
+      actor: 'app-write',
+    }),
+  ]))
+
+  return {
+    dirty_at: changedAt,
+    modules: normalizedModules,
+    publish_required: true,
+    auto_rebuild: false,
+  }
 }
 
 export async function getPublishedAppPack(env, outletId = '') {
@@ -257,16 +246,9 @@ export async function getPublishedAppPack(env, outletId = '') {
   try { return JSON.parse(manifestRaw) } catch { return null }
 }
 
-export async function getOrBuildAppPack(env, outletId = '', { force = false, shared = null } = {}) {
+export async function buildSourceAppPack(env, outletId = '', { shared = null } = {}) {
   const target = outletKey(outletId)
-  const manifestRaw = await storeGet(env, keyFor('manifest', target))
-  let manifest = null
-  try { manifest = manifestRaw ? JSON.parse(manifestRaw) : null } catch {}
-  const stale = !manifest || Date.now() - Date.parse(manifest.generated_at || 0) > PACK_MAX_AGE_MS
-  const dirty = manifest ? await isDirty(env, target, manifest) : true
-  if (!force && manifest && !stale && !dirty) return manifest
-
-  const inflightKey = `${target}:${force ? 'force' : 'normal'}`
+  const inflightKey = `${target}:source-build`
   if (BUILD_INFLIGHT.has(inflightKey)) return BUILD_INFLIGHT.get(inflightKey)
   const promise = (async () => {
     const modules = await buildModules(env, target, shared)
@@ -276,18 +258,35 @@ export async function getOrBuildAppPack(env, outletId = '', { force = false, sha
   try { return await promise } finally { BUILD_INFLIGHT.delete(inflightKey) }
 }
 
+export async function getOrBuildAppPack(env, outletId = '', { force = false, shared = null } = {}) {
+  if (force) return buildSourceAppPack(env, outletId, { shared })
+  const published = await getLatestDataPackageManifest(env, outletId)
+  if (published) return published
+  return getPublishedAppPack(env, outletId)
+}
+
 export async function getAppPackModule(env, outletId, name, hash) {
   const target = outletKey(outletId)
-  const manifest = await getPublishedAppPack(env, target)
-  if (!manifest) return null
-  const info = manifest.modules?.[name]
-  if (!info) return null
-  if (hash && String(hash) !== String(info.hash)) return null
-  const raw = await storeGet(env, keyFor('module', target, `${name}:${info.hash}`))
+  const published = await getLatestDataPackageManifest(env, target)
+  const publishedInfo = published?.modules?.[name]
+  if (publishedInfo && (!hash || String(hash) === String(publishedInfo.hash))) {
+    return getDataPackageModuleObject(env, target, name, publishedInfo.hash)
+  }
+
+  const legacy = await getPublishedAppPack(env, target)
+  const legacyInfo = legacy?.modules?.[name]
+  if (!legacyInfo) return null
+  if (hash && String(hash) !== String(legacyInfo.hash)) return null
+  const raw = await storeGet(env, keyFor('module', target, `${name}:${legacyInfo.hash}`))
   return raw ? JSON.parse(raw) : null
 }
 
-export async function rebuildAllAppPacks(env) {
+export async function rebuildAllAppPacks(env, { force = false } = {}) {
+  if (!force) {
+    const current = await getPublishedAppPack(env, 'global')
+    return current ? [current] : []
+  }
+
   const shared = await sharedData(env)
   const outlets = shared.outlets || []
   const targets = new Set(['global'])
@@ -298,9 +297,9 @@ export async function rebuildAllAppPacks(env) {
   const results = []
   for (const target of targets) {
     try {
-      results.push(await getOrBuildAppPack(env, target, { force: true, shared }))
+      results.push(await buildSourceAppPack(env, target, { shared }))
     } catch (error) {
-      console.error('App pack rebuild failed', target, error)
+      console.error('App pack source build failed', target, error)
     }
   }
   return results

@@ -16,6 +16,8 @@
     "deploy:secrets": "node scripts/push-worker-secrets.mjs",
     "audit:base44": "node scripts/audit-base44.mjs",
     "package:zip": "node scripts/package-project.mjs",
+    "package:publish-drive": "node scripts/publish-drive-data-package.mjs",
+    "package:verify-rc": "node scripts/verify-data-package-release-candidate.mjs",
     "deploy": "npm run build -w web && npm run deploy -w worker",
     "sheets:upgrade": "node scripts/upgrade-sheet-layout.mjs",
     "sheets:create-year": "node scripts/create-operations-year.mjs",
