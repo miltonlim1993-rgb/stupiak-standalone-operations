@@ -1,10 +1,10 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.7",
-  "minimum_apk_version": "4.5.7",
+  "apk_version": "4.5.8",
+  "minimum_apk_version": "4.5.8",
   "force_update": true,
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Opening Checklist now stays open until 12:00 and locks at 12:15. Patty and frozen evidence supports up to four photos, drink evidence supports up to three, photo progress labels are clear, mistaken photos can be deleted and retaken, and tea preparation requires a written quantity and standby description together with the yellow tea-pot photo.",
-  "release_trigger": "2026-07-31-opening-checklist-production-release"
+  "release_notes": "Task screens now force a fresh operational bootstrap on entry and automatically resync while active, so newly published templates and today's generated tasks appear without a manual refresh. Task evidence photos are downloaded with the authenticated session and displayed from local Blob URLs, fixing photos that appeared on web but not in the Android APK.",
+  "release_trigger": "2026-07-31-live-task-photo-refresh"
 }
