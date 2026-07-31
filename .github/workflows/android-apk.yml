@@ -7,6 +7,7 @@ on:
     paths:
       - 'web/**'
       - 'scripts/android-task-alarm/**'
+      - 'scripts/android-app-update/**'
       - 'scripts/configure-android-*.mjs'
       - 'package.json'
       - 'package-lock.json'
@@ -16,6 +17,7 @@ on:
     paths:
       - 'web/**'
       - 'scripts/android-task-alarm/**'
+      - 'scripts/android-app-update/**'
       - 'scripts/configure-android-*.mjs'
       - 'package.json'
       - 'package-lock.json'
@@ -31,7 +33,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.2-validation
+      ANDROID_VERSION_NAME: 4.5.3-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -44,10 +46,18 @@ jobs:
           java-version: 21
       - name: Install dependencies
         run: npm ci
-      - name: Validate Task, SOP and direct-print source
+      - name: Validate Task, update and package source
         run: |
-          grep -q "task-sop-alarm-v19" web/public/sw.js
+          grep -q "task-badge-forced-updates-v20" web/public/sw.js
+          grep -q '"apk_version": "4.5.3"' web/public/app-release.json
           grep -q "TaskAlarmManager" web/src/App.jsx
+          grep -q "TaskBadgeManager" web/src/App.jsx
+          grep -q "chefops:task-badge" web/src/components/Layout.jsx
+          grep -q "pruneStaleAppPackData" web/src/lib/app-pack.js
+          grep -q "data-pack-update-required" web/src/lib/app-pack.js
+          grep -q "AppUpdatePlugin.class" scripts/configure-android-app-update.mjs
+          grep -q "getInstalledVersion" scripts/android-app-update/AppUpdatePlugin.java
+          grep -q "openDownload" scripts/android-app-update/AppUpdatePlugin.java
           grep -q "collectTaskAlerts" web/src/lib/task-alerts.js
           grep -q "SYNC_ALERT_SCHEDULE" web/public/sw.js
           grep -q "TaskAlarmPlugin.class" scripts/configure-android-task-alarms.mjs
@@ -69,6 +79,7 @@ jobs:
           node scripts/configure-android-native-google-auth.mjs
           node scripts/configure-android-direct-label-print.mjs
           node scripts/configure-android-task-alarms.mjs
+          node scripts/configure-android-app-update.mjs
       - name: Compile debug APK
         run: |
           chmod +x web/android/gradlew
@@ -86,7 +97,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.2.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.3.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -118,6 +129,7 @@ jobs:
           node scripts/configure-android-native-google-auth.mjs
           node scripts/configure-android-direct-label-print.mjs
           node scripts/configure-android-task-alarms.mjs
+          node scripts/configure-android-app-update.mjs
       - name: Restore private release keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -167,8 +179,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Task & SOP Alarm ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Includes exact Task opening and deadline alarms, linked SOP reminders, reboot recovery, lock-screen full-screen alert UI, looping alarm sound and vibration until explicit acknowledgement, plus the existing direct LAN/Bluetooth label printing flow."
+            --title "Stupiak's Ops Mandatory Update ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Adds new Task red-dot detection, mandatory APK update gating with installed-version checks, mandatory atomic data-pack updates, obsolete package cleanup, Task/SOP exact alarms, and direct LAN/Bluetooth label printing."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"

@@ -57,10 +57,20 @@ function navClass({ isActive }) {
   return `chefops-sidebar-link flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${isActive ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`
 }
 
+function NavIcon({ Icon, showTaskDot = false, className = 'h-4 w-4 shrink-0' }) {
+  return (
+    <span className="relative inline-flex shrink-0">
+      <Icon className={className} />
+      {showTaskDot ? <span className="absolute -right-1.5 -top-1.5 h-2.5 w-2.5 rounded-full border-2 border-background bg-red-600" aria-label="New task" /> : null}
+    </span>
+  )
+}
+
 export default function Layout() {
   const { user } = useAuth()
   const [mode, setMode] = useState(initialMode)
   const [online, setOnline] = useState(() => navigator.onLine)
+  const [taskBadgeCount, setTaskBadgeCount] = useState(() => Number(window.__chefopsTaskBadgeCount || 0))
 
   useEffect(() => {
     if (!nativeAndroid()) return
@@ -79,13 +89,16 @@ export default function Layout() {
       const next = String(event?.detail || localStorage.getItem(MODE_KEY) || 'auto')
       setMode(next)
     }
+    const taskBadgeHandler = (event) => setTaskBadgeCount(Number(event?.detail?.count || 0))
     window.addEventListener('online', onlineHandler)
     window.addEventListener('offline', offlineHandler)
     window.addEventListener('chefops:display-mode', modeHandler)
+    window.addEventListener('chefops:task-badge', taskBadgeHandler)
     return () => {
       window.removeEventListener('online', onlineHandler)
       window.removeEventListener('offline', offlineHandler)
       window.removeEventListener('chefops:display-mode', modeHandler)
+      window.removeEventListener('chefops:task-badge', taskBadgeHandler)
     }
   }, [])
 
@@ -112,7 +125,12 @@ export default function Layout() {
             <div className="chefops-sidebar-copy min-w-0"><p className="truncate text-lg font-bold">Stupiak’s Ops</p><p className="text-xs text-muted-foreground">Operations workspace</p></div>
           </div>
           <nav className="mt-6 space-y-1.5">
-            {desktopNav.map(({ to, label, icon: Icon, end }) => <NavLink key={to} to={to} end={end} className={navClass} title={label}><Icon className="h-4 w-4 shrink-0" /><span className="chefops-sidebar-label">{label}</span></NavLink>)}
+            {desktopNav.map(({ to, label, icon: Icon, end }) => (
+              <NavLink key={to} to={to} end={end} className={navClass} title={label}>
+                <NavIcon Icon={Icon} showTaskDot={to === '/tasks' && taskBadgeCount > 0} />
+                <span className="chefops-sidebar-label">{label}</span>
+              </NavLink>
+            ))}
           </nav>
           <div className="chefops-sidebar-user mt-auto rounded-2xl border border-border bg-muted/50 p-3">
             <div className="chefops-sidebar-user-copy"><p className="truncate text-sm font-semibold">{user?.full_name || user?.email}</p><p className="mt-1 text-xs text-muted-foreground">{ROLE_LABELS[user?.role] || user?.role}</p></div>
@@ -126,7 +144,7 @@ export default function Layout() {
               <div className="chefops-mobile-brand flex min-w-0 items-center gap-2.5">
                 <Logo />
                 <span className="truncate text-lg font-bold tracking-tight">Stupiak’s Ops</span>
-                <span className="rounded-md bg-black px-1.5 py-0.5 text-[9px] font-bold text-white">v10</span>
+                <span className="rounded-md bg-black px-1.5 py-0.5 text-[9px] font-bold text-white">v11</span>
               </div>
               <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{user?.outlet_id || 'All assigned outlets'}</p></div>
               <div className="flex items-center gap-2">
@@ -144,7 +162,8 @@ export default function Layout() {
             <div className="flex h-16 items-center justify-around">
               {primaryNav.map(({ to, label, icon: Icon, end }) => (
                 <NavLink key={to} to={to} end={end} className={({ isActive }) => `flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1.5 text-[10px] font-medium ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
-                  <Icon className="h-5 w-5" /><span className="truncate">{label}</span>
+                  <NavIcon Icon={Icon} showTaskDot={to === '/tasks' && taskBadgeCount > 0} className="h-5 w-5" />
+                  <span className="truncate">{label}</span>
                 </NavLink>
               ))}
             </div>

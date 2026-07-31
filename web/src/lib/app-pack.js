@@ -6,6 +6,7 @@ const DB_VERSION = 1
 const MANIFEST_STORE = 'manifests'
 const MODULE_STORE = 'modules'
 const STATUS_KEY = 'chefops.data-pack.status'
+const BLOCKING_STATES = new Set(['update_required', 'downloading', 'saving', 'cleaning', 'error'])
 
 let dbPromise = null
 let activeSync = null
@@ -47,6 +48,49 @@ async function dbPut(storeName, key, value) {
     tx.objectStore(storeName).put(value, key)
     tx.oncomplete = resolve
     tx.onerror = resolve
+    tx.onabort = resolve
+  })
+}
+
+async function dbEntries(storeName) {
+  const db = await openDb()
+  if (!db) return []
+  return new Promise((resolve) => {
+    const rows = []
+    const tx = db.transaction(storeName, 'readonly')
+    const request = tx.objectStore(storeName).openCursor()
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) {
+        resolve(rows)
+        return
+      }
+      rows.push([String(cursor.key), cursor.value])
+      cursor.continue()
+    }
+    request.onerror = () => resolve(rows)
+  })
+}
+
+async function dbDeleteWhere(storeName, predicate) {
+  const db = await openDb()
+  if (!db) return 0
+  return new Promise((resolve) => {
+    let deleted = 0
+    const tx = db.transaction(storeName, 'readwrite')
+    const request = tx.objectStore(storeName).openCursor()
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return
+      if (predicate(String(cursor.key), cursor.value)) {
+        cursor.delete()
+        deleted += 1
+      }
+      cursor.continue()
+    }
+    tx.oncomplete = () => resolve(deleted)
+    tx.onerror = () => resolve(deleted)
+    tx.onabort = () => resolve(deleted)
   })
 }
 
@@ -71,7 +115,7 @@ export function hasUsableAppPack(outletId = '') {
   const status = getAppPackStatus()
   const expected = outletKey(outletId)
   const actual = outletKey(status.outlet_id || '')
-  return status.state === 'ready' && Boolean(status.version) && expected === actual
+  return Boolean(status.version) && expected === actual && !BLOCKING_STATES.has(String(status.state || ''))
 }
 
 async function hydrate(outletId) {
@@ -102,50 +146,176 @@ function moduleSnapshot(outletId, manifest) {
 }
 
 async function fetchJson(url, options) {
-  const response = await fetch(`${PACK_API_BASE_URL}${url}`, { credentials: 'include', ...options })
+  const response = await fetch(`${PACK_API_BASE_URL}${url}`, {
+    credentials: 'include',
+    cache: 'no-store',
+    ...options,
+  })
   const data = await response.json().catch(() => ({}))
   if (!response.ok) throw new Error(data.error || data.message || `Data pack request failed (${response.status})`)
   return data
 }
 
+export async function pruneStaleAppPackData() {
+  const manifests = await dbEntries(MANIFEST_STORE)
+  const allowedModules = new Set()
+  for (const [storedKey, manifest] of manifests) {
+    const storedOutlet = storedKey.replace(/^manifest:/, '') || 'global'
+    for (const [name, info] of Object.entries(manifest?.modules || {})) {
+      if (!info?.hash) continue
+      allowedModules.add(`module:${storedOutlet}:${name}:${info.hash}`)
+    }
+  }
+
+  const deleted = await dbDeleteWhere(MODULE_STORE, (key) => !allowedModules.has(key))
+  for (const key of [...memoryModules.keys()]) {
+    if (!allowedModules.has(key)) memoryModules.delete(key)
+  }
+  return deleted
+}
+
+async function ensureManifestModules(outletId, manifest) {
+  for (const [name, info] of Object.entries(manifest.modules || {})) {
+    const key = moduleKey(outletId, name, info.hash)
+    if (memoryModules.has(key)) continue
+    const module = await dbGet(MODULE_STORE, key)
+    if (!module) throw new Error(`Downloaded data pack is incomplete: ${name}`)
+    memoryModules.set(key, module)
+  }
+}
+
 export async function syncAppPack({ outletId = '', force = false } = {}) {
-  if (activeSync && !force) return activeSync
+  if (activeSync) return activeSync
   const run = (async () => {
     const localManifest = await hydrate(outletId)
-    setStatus({ state: 'checking', outlet_id: outletId || '', error: '' })
-    const params = new URLSearchParams()
-    if (outletId) params.set('outlet_id', outletId)
-    if (force) { params.set('refresh', '1'); params.set('_', String(Date.now())) }
-    const manifest = await fetchJson(`/api/app/v4/pack/manifest?${params}`)
-    const changed = []
-    for (const [name, info] of Object.entries(manifest.modules || {})) {
-      if (localManifest?.modules?.[name]?.hash !== info.hash) changed.push(name)
-    }
-    if (!changed.length && localManifest?.version === manifest.version) {
-      setStatus({ state: 'ready', outlet_id: outletId || '', version: manifest.version, data_version: manifest.data_version, total_bytes: manifest.total_bytes, generated_at: manifest.generated_at, last_checked_at: new Date().toISOString(), changed_modules: [] })
-      return manifest
+    let updateDetected = false
+    if (!localManifest) {
+      setStatus({ state: 'checking', outlet_id: outletId || '', error: '', warning: '' })
+    } else {
+      setStatus({
+        state: 'checking',
+        outlet_id: outletId || '',
+        version: localManifest.version,
+        data_version: localManifest.data_version,
+        error: '',
+        warning: '',
+      })
     }
 
-    setStatus({ state: 'downloading', outlet_id: outletId || '', version: manifest.version, total_bytes: manifest.total_bytes, changed_modules: changed })
-    for (const name of changed) {
-      const info = manifest.modules[name]
-      const moduleParams = new URLSearchParams({ hash: info.hash })
-      if (outletId) moduleParams.set('outlet_id', outletId)
-      const module = await fetchJson(`/api/app/v4/pack/module/${encodeURIComponent(name)}?${moduleParams}`)
-      const key = moduleKey(outletId, name, info.hash)
-      memoryModules.set(key, module)
-      await dbPut(MODULE_STORE, key, module)
+    try {
+      const params = new URLSearchParams()
+      if (outletId) params.set('outlet_id', outletId)
+      if (force) params.set('refresh', '1')
+      params.set('_', String(Date.now()))
+      const manifest = await fetchJson(`/api/app/v4/pack/manifest?${params}`)
+      const changed = []
+      const removed = Object.keys(localManifest?.modules || {}).filter((name) => !manifest.modules?.[name])
+      for (const [name, info] of Object.entries(manifest.modules || {})) {
+        if (localManifest?.modules?.[name]?.hash !== info.hash) changed.push(name)
+      }
+
+      if (!changed.length && !removed.length && localManifest?.version === manifest.version) {
+        setStatus({
+          state: 'ready',
+          outlet_id: outletId || '',
+          version: manifest.version,
+          data_version: manifest.data_version,
+          total_bytes: manifest.total_bytes,
+          generated_at: manifest.generated_at,
+          last_checked_at: new Date().toISOString(),
+          changed_modules: [],
+          removed_modules: [],
+          completed_modules: 0,
+          total_modules: 0,
+          error: '',
+          warning: '',
+        })
+        return manifest
+      }
+
+      updateDetected = true
+      setStatus({
+        state: 'update_required',
+        outlet_id: outletId || '',
+        current_version: localManifest?.version || '',
+        version: manifest.version,
+        data_version: manifest.data_version,
+        total_bytes: manifest.total_bytes,
+        changed_modules: changed,
+        removed_modules: removed,
+        completed_modules: 0,
+        total_modules: changed.length,
+        error: '',
+        warning: '',
+      })
+      window.dispatchEvent(new CustomEvent('chefops:data-pack-update-required', {
+        detail: { outlet_id: outletId || '', manifest, changed_modules: changed, removed_modules: removed },
+      }))
+
+      setStatus({ state: 'downloading', completed_modules: 0, total_modules: changed.length })
+      let completed = 0
+      for (const name of changed) {
+        const info = manifest.modules[name]
+        const moduleParams = new URLSearchParams({ hash: info.hash, _: String(Date.now()) })
+        if (outletId) moduleParams.set('outlet_id', outletId)
+        const module = await fetchJson(`/api/app/v4/pack/module/${encodeURIComponent(name)}?${moduleParams}`)
+        const key = moduleKey(outletId, name, info.hash)
+        memoryModules.set(key, module)
+        await dbPut(MODULE_STORE, key, module)
+        completed += 1
+        setStatus({ state: 'downloading', completed_modules: completed, total_modules: changed.length })
+      }
+
+      await ensureManifestModules(outletId, manifest)
+      setStatus({ state: 'saving', completed_modules: completed, total_modules: changed.length })
+      memoryManifests.set(manifestKey(outletId), manifest)
+      await dbPut(MANIFEST_STORE, manifestKey(outletId), manifest)
+
+      setStatus({ state: 'cleaning', completed_modules: completed, total_modules: changed.length })
+      const deleted_modules = await pruneStaleAppPackData()
+      window.__chefopsDataPack = { outlet_id: outletId || '', manifest, modules: moduleSnapshot(outletId, manifest) }
+      setStatus({
+        state: 'ready',
+        outlet_id: outletId || '',
+        version: manifest.version,
+        data_version: manifest.data_version,
+        total_bytes: manifest.total_bytes,
+        generated_at: manifest.generated_at,
+        last_checked_at: new Date().toISOString(),
+        last_downloaded_at: new Date().toISOString(),
+        changed_modules: changed,
+        removed_modules: removed,
+        deleted_modules,
+        completed_modules: completed,
+        total_modules: changed.length,
+        error: '',
+        warning: '',
+      })
+      navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
+      window.dispatchEvent(new CustomEvent('chefops:data-pack-updated', { detail: window.__chefopsDataPack }))
+      return manifest
+    } catch (error) {
+      if (localManifest && !updateDetected) {
+        setStatus({
+          state: 'ready',
+          outlet_id: outletId || '',
+          version: localManifest.version,
+          data_version: localManifest.data_version,
+          warning: error.message || 'Unable to check for a new data pack',
+          last_checked_at: new Date().toISOString(),
+          error: '',
+        })
+        return localManifest
+      }
+      setStatus({
+        state: 'error',
+        outlet_id: outletId || '',
+        error: error.message || 'Unable to download required data patch',
+        last_checked_at: new Date().toISOString(),
+      })
+      throw error
     }
-    memoryManifests.set(manifestKey(outletId), manifest)
-    await dbPut(MANIFEST_STORE, manifestKey(outletId), manifest)
-    window.__chefopsDataPack = { outlet_id: outletId || '', manifest, modules: moduleSnapshot(outletId, manifest) }
-    setStatus({ state: 'ready', outlet_id: outletId || '', version: manifest.version, data_version: manifest.data_version, total_bytes: manifest.total_bytes, generated_at: manifest.generated_at, last_checked_at: new Date().toISOString(), last_downloaded_at: new Date().toISOString(), changed_modules: changed })
-    window.dispatchEvent(new CustomEvent('chefops:data-pack-updated', { detail: window.__chefopsDataPack }))
-    return manifest
-  })().catch((error) => {
-    setStatus({ state: 'error', error: error.message || 'Unable to download data patch', last_checked_at: new Date().toISOString() })
-    throw error
-  })
+  })()
   activeSync = run
   try { return await run } finally { if (activeSync === run) activeSync = null }
 }
