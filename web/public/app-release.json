@@ -6,5 +6,5 @@
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
   "release_notes": "Opening Checklist now stays open until 12:00 and locks at 12:15. Patty and frozen evidence supports up to four photos, drink evidence supports up to three, photo progress labels are clear, mistaken photos can be deleted and retaken, and tea preparation requires a written quantity and standby description together with the yellow tea-pot photo.",
-  "release_trigger": "2026-07-31-opening-checklist-final-validation"
+  "release_trigger": "2026-07-31-opening-checklist-production-release"
 }
