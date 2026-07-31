@@ -32,10 +32,6 @@ function compareVersions(left, right) {
   return 0
 }
 
-function newestVersion(...values) {
-  return values.filter(Boolean).reduce((latest, value) => compareVersions(value, latest) > 0 ? value : latest, '0')
-}
-
 async function installedVersion() {
   const plugins = window.Capacitor?.Plugins || {}
   try {
@@ -50,7 +46,7 @@ async function installedVersion() {
 }
 
 async function remoteReleaseManifest() {
-  const response = await fetch(`${opsClient.apiBaseUrl}/app-release.json?_=${Date.now()}`, {
+  const response = await fetch(`${opsClient.apiBaseUrl}/app-release.json`, {
     cache: 'no-store',
     credentials: 'omit',
   })
@@ -76,10 +72,7 @@ async function verifiedRelease(manifest, targetVersion) {
       title: release.name || `Stupiak's Ops ${targetVersion}`,
     }
   } catch {
-    return {
-      url: manifest.apk_url || DEFAULT_APK_URL,
-      title: `Stupiak's Ops ${targetVersion}`,
-    }
+    return null
   }
 }
 
@@ -135,17 +128,16 @@ export default function AppUpdateBanner() {
       checkingRef.current = true
       if (userRequested) setChecking(true)
       try {
-        const [installed, manifest, apiVersion] = await Promise.all([
+        const [installed, manifest] = await Promise.all([
           installedVersion(),
           remoteReleaseManifest(),
-          opsClient.app.version().catch(() => ({})),
         ])
         if (cancelled) return
-        const targetVersion = newestVersion(
-          manifest.minimum_apk_version,
-          manifest.apk_version,
-          apiVersion.apk_version,
-        )
+        const targetVersion = String(
+          manifest.minimum_apk_version
+          || manifest.apk_version
+          || CURRENT_RELEASE,
+        ).trim()
         const updateRequired = Boolean(manifest.force_update !== false) && compareVersions(installed, targetVersion) < 0
         if (!updateRequired) {
           setApkUpdate(null)
@@ -154,8 +146,9 @@ export default function AppUpdateBanner() {
         }
 
         const release = await verifiedRelease(manifest, targetVersion)
-        if (cancelled || !release) {
-          setStatusText('新版本正在完成签名发布，完成后会自动再次检查。')
+        if (cancelled) return
+        if (!release) {
+          setStatusText(`版本 ${targetVersion} 正在完成签名发布，完成后会自动再次检查。`)
           return
         }
         const update = {
@@ -163,7 +156,7 @@ export default function AppUpdateBanner() {
           targetVersion,
           apkUrl: release.url,
           releaseTitle: release.title,
-          releaseNotes: manifest.release_notes || apiVersion.release_notes || 'This version is required to continue using OPS.',
+          releaseNotes: manifest.release_notes || 'This version is required to continue using OPS.',
         }
         setApkUpdate(update)
         setStatusText('')
