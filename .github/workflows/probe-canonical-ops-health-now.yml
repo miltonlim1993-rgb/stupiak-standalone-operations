@@ -1,0 +1,58 @@
+name: Probe canonical OPS production health now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/probe-canonical-ops-health-now.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Probe canonical production origin
+        shell: bash
+        run: |
+          set +e
+          origin='https://stupiaks-ops.sporkburger19.workers.dev'
+          response=$(curl -fsS --max-time 30 "$origin/api/health" 2>/tmp/ops-health-error.log)
+          status=$?
+          set -e
+
+          marker=false
+          max_age=false
+          service=false
+          if grep -q 'stale-aware-v1' <<<"$response"; then marker=true; fi
+          if grep -q '120000' <<<"$response"; then max_age=true; fi
+          if grep -q 'chefops-api' <<<"$response"; then service=true; fi
+
+          mkdir -p .deployments
+          {
+            echo "canonical_origin=$origin"
+            echo "curl_status=$status"
+            echo "service_marker_present=$service"
+            echo "stale_aware_marker_present=$marker"
+            echo "pack_max_age_120000_present=$max_age"
+            echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "health_response=$response"
+            if [[ -s /tmp/ops-health-error.log ]]; then
+              echo "curl_error=$(tr '\n' ' ' < /tmp/ops-health-error.log)"
+            fi
+          } > .deployments/canonical-ops-health-current.txt
+
+      - name: Record result and remove one-time probe
+        shell: bash
+        run: |
+          git config user.name "stupiaks-ops-release"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/workflows/probe-canonical-ops-health-now.yml
+          git add .deployments/canonical-ops-health-current.txt
+          git commit -m "Record canonical OPS production health"
+          git push origin HEAD:main
