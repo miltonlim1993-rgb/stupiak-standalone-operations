@@ -39,7 +39,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.13-validation
+      ANDROID_VERSION_NAME: 4.5.14-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -54,18 +54,18 @@ jobs:
         run: npm ci
       - name: Validate closed-loop Task and update source
         run: |
-          grep -q '"apk_version": "4.5.13"' web/public/app-release.json
-          grep -q '"minimum_apk_version": "4.5.13"' web/public/app-release.json
-          grep -q "CURRENT_RELEASE = '4.5.13'" web/src/components/AppUpdateBanner.jsx
+          grep -q '"apk_version": "4.5.14"' web/public/app-release.json
+          grep -q '"minimum_apk_version": "4.5.14"' web/public/app-release.json
           grep -q "AUTO_OPEN_COOLDOWN_MS" web/src/components/AppUpdateBanner.jsx
-          grep -q "sw-v23.js" web/src/main.jsx
-          grep -q "closed-loop-v23" web/public/sw-v23.js
+          grep -q "sw-v24.js" web/src/main.jsx
+          grep -q "exact-on-shift-v24" web/public/sw-v24.js
           grep -q "open_time: night ? '21:00' : '10:00'" worker/src/opening-checklist-feedback.js
           grep -q "due_time: night ? '00:00' : '17:30'" worker/src/opening-checklist-feedback.js
           grep -q "due_day_offset: night ? 1 : 0" worker/src/opening-checklist-feedback.js
           grep -q "WINDOW_PREFIX" web/src/lib/roster-alert-gate.js
           grep -q "parseDutySegments" web/src/lib/roster-alert-gate.js
-          grep -q "triggerAt >= Number(startAt)" web/src/lib/roster-alert-gate.js
+          grep -q "Exact time-window gating applies to Task, SOP and Training alerts" web/src/lib/roster-alert-gate.js
+          grep -q "return alertInsideWindow(alert, encodedWindows(scheduledKeys))" web/src/lib/roster-alert-gate.js
           grep -q "RosterGatedTaskAlarmManager" web/src/App.jsx
           grep -q "syncAppPack({ outletId, force: true })" web/src/pages/DataPackage.jsx
           grep -q "A usable local package no longer stops update checks" web/src/components/DataPackGate.jsx
@@ -99,7 +99,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.13.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.14.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -174,5 +174,5 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Closed Loop ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME}. Morning operational Tasks run 10:00-17:30 and night Tasks run 21:00-00:00. Task alarms are installed only when the signed-in employee is inside the matching Duty Roster time window. Android, web and installed PWA clients enforce the latest shell, data package and mandatory APK release automatically."
+            --title "Stupiak's Ops Exact On-Shift Alerts ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME}. Morning operational Tasks run 10:00-17:30 and night Tasks run 21:00-00:00. Every Task, SOP and Training alarm is installed only when its trigger time is inside the signed-in employee's exact Duty Roster window, including overnight shifts. Android, web and installed PWA clients enforce the latest shell, data package and mandatory APK release automatically."
