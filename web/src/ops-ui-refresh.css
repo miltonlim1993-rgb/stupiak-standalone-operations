@@ -1,0 +1,365 @@
+/*
+ * OPS responsive UI refresh
+ *
+ * This stylesheet intentionally changes presentation only. Existing page
+ * components, handlers, API calls, form fields, filters and realtime behavior
+ * remain untouched.
+ */
+
+:root {
+  --ops-page-max: 1480px;
+  --ops-panel-radius: 22px;
+  --ops-panel-border: hsl(var(--border));
+  --ops-panel-bg: hsl(var(--card));
+  --ops-soft-bg: hsl(var(--muted) / 0.42);
+  --ops-panel-shadow: 0 10px 30px rgba(15, 23, 42, 0.045);
+}
+
+/* Pages shown in the supplied desktop screenshots. */
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page),
+#chefops-mobile-main > .chefops-stock-page,
+#chefops-mobile-main > .labels-page,
+#chefops-mobile-main > .urgent-page,
+#chefops-mobile-main > .training-page {
+  width: 100%;
+  max-width: var(--ops-page-max) !important;
+  margin-inline: auto !important;
+}
+
+/* Keep header controls neat instead of stretching across a wide desktop. */
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > .flex.items-start.justify-between.gap-3,
+.chefops-stock-page > .flex.items-start.justify-between.gap-3,
+.urgent-page > .flex.items-center.justify-between.gap-3,
+.training-page > .flex.items-start.justify-between.gap-3 {
+  border: 1px solid var(--ops-panel-border);
+  border-radius: var(--ops-panel-radius);
+  background: linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--muted) / 0.3) 100%);
+  padding: 18px;
+  box-shadow: var(--ops-panel-shadow);
+}
+
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) h1,
+.chefops-stock-page h1,
+.labels-page h1,
+.urgent-page h1,
+.training-page h1 {
+  letter-spacing: -0.025em;
+}
+
+/* ---------- Task list ---------- */
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > select,
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > input[type='date'] {
+  display: inline-block;
+  height: 46px;
+  vertical-align: top;
+  border-radius: 14px;
+  background: hsl(var(--card));
+}
+
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > select {
+  width: min(100%, 390px);
+}
+
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > input[type='date'] {
+  width: min(100%, 240px);
+}
+
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > .flex.gap-2.overflow-auto {
+  display: inline-flex;
+  width: auto;
+  max-width: 100%;
+  vertical-align: top;
+  align-items: center;
+  border: 1px solid var(--ops-panel-border);
+  border-radius: 999px;
+  background: hsl(var(--card));
+  padding: 5px;
+}
+
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > .flex.gap-2.overflow-auto > button {
+  min-height: 34px;
+  padding-inline: 14px;
+  transition: transform 160ms ease, box-shadow 160ms ease, background-color 160ms ease;
+}
+
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > section {
+  border: 1px solid var(--ops-panel-border);
+  border-radius: var(--ops-panel-radius);
+  background: hsl(var(--card));
+  padding: 16px;
+  box-shadow: var(--ops-panel-shadow);
+}
+
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > section > button {
+  min-height: 132px;
+  border-radius: 18px;
+  box-shadow: none;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > section > button:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--primary) / 0.55);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+}
+
+/* Prevent the status chip from becoming the tall oval shown in the screenshot. */
+#chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > section > button > .flex.gap-3 > span:last-child {
+  align-self: flex-start;
+  flex: 0 0 auto;
+  min-width: max-content;
+  white-space: nowrap;
+  line-height: 1rem;
+}
+
+/* ---------- Stock Count ---------- */
+.chefops-stock-page > input[type='date'] {
+  display: inline-block;
+  width: min(100%, 250px);
+  height: 46px;
+  vertical-align: top;
+  border-radius: 14px;
+}
+
+.chefops-stock-page > section.rounded-2xl,
+.chefops-stock-page > div.rounded-xl.border.border-border.bg-card {
+  display: inline-block;
+  width: min(100%, 390px);
+  vertical-align: top;
+}
+
+.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center {
+  gap: 12px;
+}
+
+.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div {
+  min-height: 92px;
+  border: 1px solid var(--ops-panel-border);
+  border-radius: 18px;
+  background: hsl(var(--card));
+  padding: 15px;
+  text-align: left;
+  box-shadow: var(--ops-panel-shadow);
+}
+
+.chefops-stock-toolbar,
+.chefops-labels-toolbar,
+.chefops-issues-toolbar,
+.chefops-training-toolbar {
+  border: 1px solid var(--ops-panel-border) !important;
+  border-radius: 18px;
+  background: hsl(var(--background) / 0.96) !important;
+  padding: 13px !important;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06) !important;
+  backdrop-filter: blur(14px);
+}
+
+.chefops-stock-toolbar {
+  margin-inline: 0 !important;
+}
+
+.chefops-stock-page > .space-y-5 > section {
+  border: 1px solid var(--ops-panel-border);
+  border-radius: var(--ops-panel-radius);
+  background: hsl(var(--card));
+  padding: 16px;
+  box-shadow: var(--ops-panel-shadow);
+}
+
+.chefops-stock-page > .space-y-5 > section > div.rounded-xl.border {
+  min-height: 170px;
+  border-radius: 17px;
+  padding: 15px;
+}
+
+/* ---------- Food Labels ---------- */
+.labels-page .chefops-labels-toolbar {
+  position: sticky;
+  top: 10px;
+  z-index: 45;
+}
+
+.labels-page .chefops-labels-toolbar > .flex.items-center.justify-between.gap-3 {
+  border-bottom: 1px solid hsl(var(--border));
+  padding-bottom: 12px;
+}
+
+.labels-page > .space-y-2 > div.rounded-lg.border {
+  min-height: 132px;
+  border-radius: 18px;
+  padding: 16px;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.labels-page > .space-y-2 > div.rounded-lg.border:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow: var(--ops-panel-shadow);
+}
+
+/* ---------- Urgent Issues ---------- */
+.urgent-page .chefops-issues-toolbar {
+  position: sticky;
+  top: 10px;
+  z-index: 45;
+}
+
+.urgent-page > .space-y-3 > div.rounded-2xl.border {
+  min-height: 180px;
+  padding: 16px;
+  box-shadow: var(--ops-panel-shadow);
+}
+
+/* ---------- Training ---------- */
+.training-page > .grid.grid-cols-3.gap-2 {
+  gap: 12px;
+}
+
+.training-page > .grid.grid-cols-3.gap-2 > div {
+  min-height: 112px;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: var(--ops-panel-shadow);
+}
+
+.training-page .chefops-training-toolbar {
+  position: sticky;
+  top: 10px;
+  z-index: 45;
+}
+
+.training-page > .space-y-3 > button {
+  min-height: 150px;
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: var(--ops-panel-shadow);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.training-page > .space-y-3 > button:hover {
+  transform: translateY(-1px);
+  border-color: hsl(var(--primary) / 0.5);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.08);
+}
+
+/* ---------- Desktop layout ---------- */
+@media (min-width: 900px) {
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page),
+  #chefops-mobile-main > .chefops-stock-page,
+  #chefops-mobile-main > .labels-page,
+  #chefops-mobile-main > .urgent-page,
+  #chefops-mobile-main > .training-page {
+    padding: 26px 28px 40px !important;
+  }
+
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) h1,
+  .chefops-stock-page h1,
+  .labels-page h1,
+  .urgent-page h1,
+  .training-page h1 {
+    font-size: 1.65rem;
+    line-height: 2rem;
+  }
+
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > select,
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > input[type='date'],
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > .flex.gap-2.overflow-auto,
+  .chefops-stock-page > input[type='date'],
+  .chefops-stock-page > section.rounded-2xl,
+  .chefops-stock-page > div.rounded-xl.border.border-border.bg-card {
+    margin-right: 10px;
+  }
+
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > section {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > section > .border-b {
+    grid-column: 1 / -1;
+    margin: 0 !important;
+  }
+
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > section > button {
+    margin-top: 0 !important;
+  }
+
+  .chefops-stock-page > .grid.grid-cols-2.gap-2.text-center {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .chefops-stock-page > .space-y-5 > section {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .chefops-stock-page > .space-y-5 > section > .flex.items-center.justify-between.border-b {
+    grid-column: 1 / -1;
+    margin: 0 !important;
+  }
+
+  .chefops-stock-page > .space-y-5 > section > div.rounded-xl.border {
+    margin-top: 0 !important;
+  }
+
+  .labels-page > .space-y-2,
+  .urgent-page > .space-y-3,
+  .training-page > .space-y-3 {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px;
+  }
+
+  .labels-page > .space-y-2 > *,
+  .urgent-page > .space-y-3 > *,
+  .training-page > .space-y-3 > * {
+    margin-top: 0 !important;
+  }
+}
+
+@media (min-width: 1320px) {
+  .labels-page > .space-y-2 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Mobile safeguards ---------- */
+@media (max-width: 899px) {
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page),
+  #chefops-mobile-main > .chefops-stock-page,
+  #chefops-mobile-main > .labels-page,
+  #chefops-mobile-main > .urgent-page,
+  #chefops-mobile-main > .training-page {
+    max-width: 720px !important;
+  }
+
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > .flex.gap-2.overflow-auto {
+    display: flex;
+    width: 100%;
+  }
+
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > select,
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > input[type='date'],
+  .chefops-stock-page > input[type='date'],
+  .chefops-stock-page > section.rounded-2xl,
+  .chefops-stock-page > div.rounded-xl.border.border-border.bg-card {
+    display: block;
+    width: 100%;
+  }
+
+  .labels-page .chefops-labels-toolbar,
+  .urgent-page .chefops-issues-toolbar,
+  .training-page .chefops-training-toolbar {
+    top: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #chefops-mobile-main > .mx-auto.max-w-lg.space-y-4.p-4.pb-24:not(.chefops-page) > section > button,
+  .labels-page > .space-y-2 > div.rounded-lg.border,
+  .training-page > .space-y-3 > button {
+    transition: none;
+  }
+}
