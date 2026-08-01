@@ -2,10 +2,11 @@ import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Download, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
 import { opsClient } from '@/api/opsClient'
 
-const CURRENT_RELEASE = '4.5.3'
+const CURRENT_RELEASE = '4.5.13'
 const DEFAULT_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk'
 const DEFAULT_RELEASE_API = 'https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest'
-const CHECK_MS = 10 * 60_000
+const CHECK_MS = 60_000
+const AUTO_OPEN_COOLDOWN_MS = 60_000
 
 function nativeAndroid() {
   const capacitor = window.Capacitor
@@ -46,7 +47,7 @@ async function installedVersion() {
 }
 
 async function remoteReleaseManifest() {
-  const response = await fetch(`${opsClient.apiBaseUrl}/app-release.json`, {
+  const response = await fetch(`${opsClient.apiBaseUrl}/app-release.json?_=${Date.now()}`, {
     cache: 'no-store',
     credentials: 'omit',
   })
@@ -67,6 +68,7 @@ async function verifiedRelease(manifest, targetVersion) {
     if (!title.includes(targetVersion)) return null
     const asset = (release.assets || []).find((item) => item.name === 'stupiaks-ops-task-sop-alarm.apk')
       || (release.assets || []).find((item) => String(item.name || '').endsWith('.apk'))
+    if (!asset?.browser_download_url && !manifest.apk_url) return null
     return {
       url: asset?.browser_download_url || manifest.apk_url || DEFAULT_APK_URL,
       title: release.name || `Stupiak's Ops ${targetVersion}`,
@@ -77,6 +79,7 @@ async function verifiedRelease(manifest, targetVersion) {
 }
 
 async function openApkDownload(url) {
+  if (!url) return
   const plugin = window.Capacitor?.Plugins?.AppUpdate
   if (plugin?.openDownload) {
     await plugin.openDownload({ url })
@@ -91,6 +94,15 @@ async function openApkDownload(url) {
   anchor.remove()
 }
 
+function autoOpenRequiredApk(update) {
+  if (!update?.releaseReady || !update.apkUrl) return
+  const key = `chefops.apk-update.last-opened.${update.targetVersion}`
+  const lastOpened = Number(localStorage.getItem(key) || 0)
+  if (Date.now() - lastOpened < AUTO_OPEN_COOLDOWN_MS) return
+  localStorage.setItem(key, String(Date.now()))
+  openApkDownload(update.apkUrl).catch(() => undefined)
+}
+
 export default function AppUpdateBanner() {
   const android = nativeAndroid()
   const [registration, setRegistration] = useState(null)
@@ -101,22 +113,53 @@ export default function AppUpdateBanner() {
 
   useEffect(() => {
     if (android || !('serviceWorker' in navigator)) return undefined
-    let active = true
+    let cancelled = false
+    let reloading = false
+
+    const activateWaitingWorker = (current) => {
+      if (!current?.waiting || cancelled) return
+      setRegistration(current)
+      current.waiting.postMessage({ type: 'SKIP_WAITING' })
+    }
+
     const inspect = async () => {
       const current = await navigator.serviceWorker.getRegistration()
-      if (!current || !active) return
-      if (current.waiting) setRegistration(current)
-      const onUpdate = () => {
+      if (!current || cancelled) return
+      activateWaitingWorker(current)
+      current.addEventListener('updatefound', () => {
         const worker = current.installing
         if (!worker) return
         worker.addEventListener('statechange', () => {
-          if (worker.state === 'installed' && navigator.serviceWorker.controller) setRegistration(current)
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) activateWaitingWorker(current)
         })
-      }
-      current.addEventListener('updatefound', onUpdate)
+      }, { once: true })
+      current.update().catch(() => undefined)
     }
+
+    const onControllerChange = () => {
+      if (reloading) return
+      reloading = true
+      localStorage.setItem('chefops.pending-shell-version', CURRENT_RELEASE)
+      window.location.reload()
+    }
+    const onActive = () => {
+      if (document.visibilityState === 'visible') inspect()
+    }
+
+    navigator.serviceWorker.addEventListener('controllerchange', onControllerChange)
+    window.addEventListener('focus', onActive)
+    window.addEventListener('online', inspect)
+    document.addEventListener('visibilitychange', onActive)
     inspect()
-    return () => { active = false }
+    const timer = window.setInterval(inspect, CHECK_MS)
+    return () => {
+      cancelled = true
+      navigator.serviceWorker.removeEventListener('controllerchange', onControllerChange)
+      window.removeEventListener('focus', onActive)
+      window.removeEventListener('online', inspect)
+      document.removeEventListener('visibilitychange', onActive)
+      window.clearInterval(timer)
+    }
   }, [android])
 
   useEffect(() => {
@@ -147,25 +190,19 @@ export default function AppUpdateBanner() {
 
         const release = await verifiedRelease(manifest, targetVersion)
         if (cancelled) return
-        if (!release) {
-          setStatusText(`版本 ${targetVersion} 正在完成签名发布，完成后会自动再次检查。`)
-          return
-        }
         const update = {
           installedVersion: installed,
           targetVersion,
-          apkUrl: release.url,
-          releaseTitle: release.title,
+          apkUrl: release?.url || '',
+          releaseTitle: release?.title || `Stupiak's Ops ${targetVersion}`,
           releaseNotes: manifest.release_notes || 'This version is required to continue using OPS.',
+          releaseReady: Boolean(release?.url),
         }
         setApkUpdate(update)
-        setStatusText('')
-
-        const sessionKey = `chefops.apk-update.opened.${targetVersion}`
-        if (sessionStorage.getItem(sessionKey) !== '1') {
-          sessionStorage.setItem(sessionKey, '1')
-          openApkDownload(update.apkUrl).catch(() => undefined)
-        }
+        setStatusText(update.releaseReady
+          ? ''
+          : `版本 ${targetVersion} 正在完成签名发布。旧版已锁定，系统会每分钟自动重试。`)
+        autoOpenRequiredApk(update)
       } catch (error) {
         if (userRequested) setStatusText(error.message || '无法检查更新，请确认网络连接。')
       } finally {
@@ -178,11 +215,13 @@ export default function AppUpdateBanner() {
       if (document.visibilityState === 'visible') check()
     }
     check()
+    window.addEventListener('focus', onVisible)
     window.addEventListener('online', check)
     document.addEventListener('visibilitychange', onVisible)
     const timer = window.setInterval(check, CHECK_MS)
     return () => {
       cancelled = true
+      window.removeEventListener('focus', onVisible)
       window.removeEventListener('online', check)
       document.removeEventListener('visibilitychange', onVisible)
       window.clearInterval(timer)
@@ -196,7 +235,7 @@ export default function AppUpdateBanner() {
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-red-700"><ShieldAlert className="h-7 w-7" /></span>
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-red-600">Mandatory Android update</p>
           <h1 className="mt-2 text-2xl font-bold">必须更新 OPS 才能继续</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">系统检测到新的 APK。旧版本会停在这里，安装新版并重新打开 OPS 后才会解除。</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">系统会自动打开固定 APK 下载。Android 仍会显示系统安装确认；覆盖安装后重新打开 OPS 即可。</p>
           <div className="mt-5 grid grid-cols-2 gap-2">
             <VersionStat label="Installed" value={apkUpdate.installedVersion} />
             <VersionStat label="Required" value={apkUpdate.targetVersion} />
@@ -206,13 +245,14 @@ export default function AppUpdateBanner() {
             <p className="mt-1 text-xs leading-5 text-muted-foreground">{apkUpdate.releaseNotes}</p>
           </div>
           {statusText ? <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">{statusText}</p> : null}
-          <button type="button" className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-bold text-white" onClick={() => openApkDownload(apkUpdate.apkUrl)}>
-            <Download className="mr-2 h-5 w-5" />下载并安装新版 APK
+          <button type="button" className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled={!apkUpdate.releaseReady} onClick={() => openApkDownload(apkUpdate.apkUrl)}>
+            {apkUpdate.releaseReady ? <Download className="mr-2 h-5 w-5" /> : <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
+            {apkUpdate.releaseReady ? '打开下载并覆盖安装' : '正在等待签名 APK'}
           </button>
           <button type="button" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border px-4 text-sm font-semibold" disabled={checking} onClick={() => window.location.reload()}>
-            {checking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}安装完成后重新打开 / 检查
+            {checking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}安装完成后重新检查
           </button>
-          <p className="mt-3 text-center text-[11px] leading-5 text-muted-foreground">Android 下载后会显示安装确认。直接覆盖旧版本即可，不需要先删除 App。</p>
+          <p className="mt-3 text-center text-[11px] leading-5 text-muted-foreground">旧版会保持锁定，不能略过。无需管理层另外提醒员工下载。</p>
         </section>
       </div>
     )
@@ -224,10 +264,12 @@ export default function AppUpdateBanner() {
 
   if (!registration) return null
   return (
-    <div className="fixed inset-x-3 top-16 z-[90] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-amber-300 bg-amber-50 p-3 shadow-xl">
-      <RefreshCw className="h-4 w-4 text-amber-700" />
-      <div className="min-w-0 flex-1"><p className="text-sm font-semibold text-amber-900">New app version ready</p><p className="text-xs text-amber-800/75">Reload once to use the latest screens and cached data.</p></div>
-      <button type="button" className="rounded-xl bg-amber-900 px-3 py-2 text-xs font-semibold text-white" onClick={() => { registration.waiting?.postMessage({ type: 'SKIP_WAITING' }); window.location.reload() }}>Update</button>
+    <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/80 p-4">
+      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <RefreshCw className="h-8 w-8 animate-spin text-amber-700" />
+        <h2 className="mt-4 text-xl font-bold">正在强制更新 OPS</h2>
+        <p className="mt-2 text-sm leading-6 text-slate-600">网站／PWA 已发现新版本，完成安装后会自动重新载入。</p>
+      </div>
     </div>
   )
 }
