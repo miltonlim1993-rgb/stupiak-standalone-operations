@@ -3,7 +3,6 @@ import { getLabelCatalog } from './labels.js'
 import { ensureMediaRules } from './media-rules.js'
 
 const PACK_SCHEMA_VERSION = 2
-const PACK_MAX_AGE_MS = 2 * 60 * 1000
 const DEFAULT_PAYMENT_METHODS = [
   { id: 'payment-cash', code: 'cash', name: 'Cash', icon: 'banknote', color: 'emerald', category: 'cash', display_order: 10, active: true, requires_reference: false },
   { id: 'payment-duitnow', code: 'duitnow', name: 'DuitNow', icon: 'qr-code', color: 'violet', category: 'cashless', display_order: 20, active: true, requires_reference: false },
@@ -24,6 +23,7 @@ export const POSITION_MASTER_SEEDS = [
   { id: 'position-sd', code: 'SD', name: 'Special Duty', short_name: 'Special Duty', icon: 'sparkles', pattern: 'diagonal', color: '#4F46E5', display_order: 60, active: true, notes: '' },
   { id: 'position-p', code: 'P', name: 'Packaging', short_name: 'Packaging', icon: 'package-check', pattern: 'boxes', color: '#0F766E', display_order: 70, active: true, notes: '' },
 ]
+
 const MEMORY = new Map()
 const BUILD_INFLIGHT = new Map()
 
@@ -241,15 +241,6 @@ export async function markAppPackDirty(env, outletId = '', { modules = [] } = {}
   queueRebuild(env, outletId)
 }
 
-async function isDirty(env, outletId, manifest) {
-  const raw = await storeGet(env, keyFor('dirty', outletId))
-  if (!raw) return false
-  try {
-    const dirty = JSON.parse(raw)
-    return Boolean(dirty.dirty_at && (!manifest?.generated_at || dirty.dirty_at > manifest.generated_at))
-  } catch { return false }
-}
-
 export async function getPublishedAppPack(env, outletId = '') {
   const target = outletKey(outletId)
   const manifestRaw = await storeGet(env, keyFor('manifest', target))
@@ -262,11 +253,14 @@ export async function getOrBuildAppPack(env, outletId = '', { force = false, sha
   const manifestRaw = await storeGet(env, keyFor('manifest', target))
   let manifest = null
   try { manifest = manifestRaw ? JSON.parse(manifestRaw) : null } catch {}
-  const stale = !manifest || Date.now() - Date.parse(manifest.generated_at || 0) > PACK_MAX_AGE_MS
-  const dirty = manifest ? await isDirty(env, target, manifest) : true
-  if (!force && manifest && !stale && !dirty) return manifest
 
-  const inflightKey = `${target}:${force ? 'force' : 'normal'}`
+  // Client manifest checks must never fan out into Google Sheets. They only
+  // receive the last package that was fully built and atomically published to
+  // Cloudflare. Sheet-backed publishing happens through the scheduled job,
+  // the dirty-record background queue, or an explicit manager rebuild POST.
+  if (!force) return manifest
+
+  const inflightKey = `${target}:force`
   if (BUILD_INFLIGHT.has(inflightKey)) return BUILD_INFLIGHT.get(inflightKey)
   const promise = (async () => {
     const modules = await buildModules(env, target, shared)
