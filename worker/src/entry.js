@@ -19,7 +19,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-d1-foundation-v1'
+const WORKER_REVISION = 'task-stock-submit-lock-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
