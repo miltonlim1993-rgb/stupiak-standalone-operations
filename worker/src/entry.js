@@ -3,7 +3,8 @@ import { loginWithGoogle, sessionCookie } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { ensureEntitySheet } from './sheets.js'
 import { markAppPackDirty } from './app-pack.js'
-import { handleRealtimeApi, OutletRealtimeHub, publishMutationEvent } from './realtime.js'
+import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
+import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 
 const WORKER_REVISION = 'outlet-realtime-hub-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
