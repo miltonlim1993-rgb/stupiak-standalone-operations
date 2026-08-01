@@ -1,0 +1,54 @@
+name: Deploy data pack refresh hotfix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/deploy-data-pack-refresh-hotfix.yml
+
+permissions:
+  contents: write
+
+env:
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
+  CLOUDFLARE_MEDIA_BUCKET_NAME: ${{ secrets.CLOUDFLARE_MEDIA_BUCKET_NAME }}
+
+jobs:
+  deploy-and-record:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Validate refresh hotfix
+        run: |
+          grep -q "Every client manifest check is stale-aware" worker/src/index.js
+          grep -q "const PACK_MAX_AGE_MS = 2 \* 60 \* 1000" worker/src/app-pack.js
+          node --check worker/src/index.js
+          node --check worker/src/app-pack.js
+      - name: Deploy Worker to production
+        run: npm run cf:deploy
+      - name: Record successful production deployment
+        run: |
+          mkdir -p .deployments
+          cat > .deployments/data-pack-refresh-hotfix.txt <<EOF
+          production_deployed=true
+          source_commit=${GITHUB_SHA}
+          deployed_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          policy=stale-aware-manifest
+          pack_max_age_ms=120000
+          EOF
+          git config user.name "stupiaks-ops-release"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/deploy-data-pack-refresh-hotfix.yml
+          git add .deployments/data-pack-refresh-hotfix.txt
+          git commit -m "Record production data pack refresh deployment"
+          git push origin HEAD:main
