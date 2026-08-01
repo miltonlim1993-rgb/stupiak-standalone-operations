@@ -12,7 +12,7 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = 'mobile-readable-sop-v19'
+const SHELL_VERSION = 'closed-loop-v23'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -109,8 +109,6 @@ applyTheme()
 configureNativeSystemBars()
 
 if (isNativeAndroid()) {
-  // APK assets are bundled locally. Keeping a service worker on https://localhost
-  // can serve an older shell after an in-place APK update, so native builds purge it.
   purgeNativeServiceWorkers()
 }
 
@@ -120,17 +118,25 @@ if (window.location.hash === '#/cash' || window.location.hash.startsWith('#/cash
 }
 
 if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) {
+  let shellReloading = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    // Never reload an installed PWA while a checklist, stock count or form is in progress.
-    // The active page keeps working and the new shell is used on the next normal launch.
+    if (shellReloading) return
+    shellReloading = true
     localStorage.setItem('chefops.pending-shell-version', SHELL_VERSION)
-    window.dispatchEvent(new CustomEvent('chefops:shell-update-ready', {
-      detail: { version: SHELL_VERSION, deferred: true },
-    }))
+    window.location.reload()
   })
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js', { updateViaCache: 'none' }).then((registration) => {
+    navigator.serviceWorker.register('/sw-v23.js', { updateViaCache: 'none' }).then((registration) => {
+      if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' })
+      registration.addEventListener('updatefound', () => {
+        const worker = registration.installing
+        worker?.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            registration.waiting?.postMessage({ type: 'SKIP_WAITING' })
+          }
+        })
+      })
       registration.update().catch(() => undefined)
       registerBackgroundAlertChecks(registration)
     }).catch((error) => console.warn('Service worker registration failed', error))

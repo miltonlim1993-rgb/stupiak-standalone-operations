@@ -10,20 +10,82 @@ function findPhotoGroup(config, id) {
   return (config.photo_groups || []).find((group) => String(group.id || '') === id)
 }
 
-export function applyOpeningChecklistFeedback(template, config) {
-  const templateId = String(template?.id || '')
-  const checklistKey = String(config?.checklist_key || '')
-  if (templateId !== 'tmpl-rr-opening-checklist-v3' && checklistKey !== 'opening') return config
+function normalized(value = '') {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ')
+}
 
-  const next = cloneConfig(config)
-  next.version = Math.max(3, Number(next.version || 1))
-  next.schedule = {
-    ...(next.schedule || {}),
-    due_time: '13:00',
-    due_day_offset: 0,
-    lock_time: '13:15',
-    lock_day_offset: 0,
+function hourFromTime(value = '') {
+  const match = String(value || '').match(/^(\d{1,2}):\d{2}$/)
+  return match ? Number(match[1]) : Number.NaN
+}
+
+function operationalShift(template = {}, config = {}) {
+  const schedule = config.schedule || {}
+  const explicit = normalized([
+    schedule.shift_id,
+    schedule.shift_name,
+    config.shift_id,
+    config.period,
+    template.period,
+  ].filter(Boolean).join(' '))
+  if (/night|closing|evening/.test(explicit)) return 'NIGHT'
+  if (/morning|opening|day/.test(explicit)) return 'MORNING'
+
+  const source = normalized([
+    template.name,
+    template.title,
+    template.description,
+    template.station,
+    config.checklist_key,
+    config.title,
+    config.title_cn,
+    config.title_en,
+  ].filter(Boolean).join(' '))
+  if (/night|closing|close down|end of day/.test(source)) return 'NIGHT'
+
+  const openHour = hourFromTime(schedule.open_time)
+  if (Number.isFinite(openHour) && openHour >= 18) return 'NIGHT'
+  return 'MORNING'
+}
+
+function normalizeShiftSchedule(template, config) {
+  const shift = operationalShift(template, config)
+  const night = shift === 'NIGHT'
+  const schedule = {
+    ...(config.schedule || {}),
+    shift_id: shift,
+    shift_name: night ? 'Night Shift / 晚班' : 'Morning Shift / 早班',
+    open_time: night ? '21:00' : '10:00',
+    open_day_offset: 0,
+    due_time: night ? '00:00' : '17:30',
+    due_day_offset: night ? 1 : 0,
+    lock_time: night ? '00:00' : '17:30',
+    lock_day_offset: night ? 1 : 0,
   }
+
+  config.timezone = 'Asia/Kuching'
+  config.version = Math.max(4, Number(config.version || 1))
+  config.schedule = schedule
+
+  // Existing generated rows are reconciled by operational bootstrap on refresh.
+  template.period = shift
+  template.due_time = schedule.due_time
+  template.version = Math.max(4, Number(template.version || 1))
+  return config
+}
+
+export function applyOpeningChecklistFeedback(template, config) {
+  const next = normalizeShiftSchedule(template, cloneConfig(config))
+  const templateId = String(template?.id || '')
+  const checklistKey = String(next?.checklist_key || '')
+  const isOpening = templateId === 'tmpl-rr-opening-checklist-v3' || checklistKey === 'opening'
+  if (!isOpening) return next
 
   const drinks = findSection(next, 'drinks')
   if (drinks) {

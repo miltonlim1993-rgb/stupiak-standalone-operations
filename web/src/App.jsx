@@ -8,6 +8,7 @@ import ScrollToTop from '@/components/ScrollToTop'
 import MobileNavigation from '@/components/MobileNavigation'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
+import AppUpdateBanner from '@/components/AppUpdateBanner'
 import RosterTaskAssignmentManager from '@/components/RosterTaskAssignmentManager'
 import RosterGatedTaskAlarmManager from '@/components/RosterGatedTaskAlarmManager'
 import TaskBadgeManager from '@/components/TaskBadgeManager'
@@ -86,6 +87,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
+      <AppUpdateBanner global />
       <RosterTaskAssignmentManager />
       <QueryClientProvider client={queryClientInstance}>
         <Router>

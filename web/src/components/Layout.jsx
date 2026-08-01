@@ -8,7 +8,6 @@ import { useAuth } from '@/lib/AuthContext'
 import { ROLE_LABELS } from '@/lib/ops-helpers'
 import AppFoundation from '@/components/AppFoundation'
 import NotificationBell from '@/components/NotificationBell'
-import AppUpdateBanner from '@/components/AppUpdateBanner'
 import DataPackGate from '@/components/DataPackGate'
 
 const primaryNav = [
@@ -117,7 +116,6 @@ export default function Layout() {
   return (
     <div id="chefops-mobile-app" className={`chefops-app h-[100dvh] min-h-[100dvh] overflow-hidden bg-muted/40 ${rootClass}`}>
       <AppFoundation />
-      <AppUpdateBanner />
       <div id="chefops-mobile-shell" className="chefops-shell mx-auto flex h-full min-h-0 w-full overflow-hidden bg-background shadow-[0_0_40px_rgba(0,0,0,0.08)]">
         <aside className="chefops-sidebar hidden border-r border-border bg-background p-4">
           <div className="chefops-sidebar-brand flex items-center gap-3 px-2 py-2">
