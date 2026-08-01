@@ -15,6 +15,20 @@
       "id": "f62696e1a2f14b8a9e0b84a540c7e997"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OUTLET_REALTIME",
+        "class_name": "OutletRealtimeHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "realtime-v1",
+      "new_sqlite_classes": ["OutletRealtimeHub"]
+    }
+  ],
   "observability": {
     "enabled": true
   },
