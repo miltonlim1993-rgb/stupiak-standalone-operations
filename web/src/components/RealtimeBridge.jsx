@@ -1,18 +1,13 @@
 import { useEffect, useMemo, useRef } from 'react'
 import { useAuth } from '@/lib/AuthContext'
 import { parseOutletIds } from '@/lib/outlets'
+import { queryClientInstance } from '@/lib/query-client'
 import { realtimeClientId, startRealtimeConnections } from '@/lib/realtime-client'
-
-function isEditing() {
-  const element = document.activeElement
-  if (!element) return false
-  const tag = String(element.tagName || '').toLowerCase()
-  return tag === 'input' || tag === 'textarea' || tag === 'select' || element.isContentEditable
-}
 
 export default function RealtimeBridge() {
   const { user, isAuthenticated } = useAuth()
-  const reloadTimer = useRef(null)
+  const refreshTimer = useRef(null)
+  const pendingEntities = useRef(new Set())
   const role = String(user?.role || '').toLowerCase()
   const outletIds = useMemo(() => {
     if (!isAuthenticated || !user) return []
@@ -43,21 +38,26 @@ export default function RealtimeBridge() {
         const accepted = window.dispatchEvent(domEvent)
         if (!accepted || domEvent.defaultPrevented) return
 
-        // Until every legacy page has its own granular state reducer, reload
-        // the current route so the second device immediately sees the saved
-        // result. Do not interrupt someone who is actively typing.
-        if (document.visibilityState !== 'visible' || window.location.pathname === '/login') return
-        if (isEditing()) {
-          window.dispatchEvent(new CustomEvent('chefops:realtime-pending', { detail: event }))
-          return
-        }
-        window.clearTimeout(reloadTimer.current)
-        reloadTimer.current = window.setTimeout(() => window.location.reload(), 350)
+        if (event.entity) pendingEntities.current.add(String(event.entity))
+        window.clearTimeout(refreshTimer.current)
+        refreshTimer.current = window.setTimeout(async () => {
+          const entities = [...pendingEntities.current]
+          pendingEntities.current.clear()
+          await queryClientInstance.invalidateQueries({ refetchType: 'active' })
+          window.dispatchEvent(new CustomEvent('chefops:realtime-applied', {
+            detail: {
+              entities,
+              outlet_id: event.outlet_id || '',
+              occurred_at: event.occurred_at || new Date().toISOString(),
+            },
+          }))
+        }, 120)
       },
     })
 
     return () => {
-      window.clearTimeout(reloadTimer.current)
+      window.clearTimeout(refreshTimer.current)
+      pendingEntities.current.clear()
       stop()
     }
   }, [isAuthenticated, outletIds])
