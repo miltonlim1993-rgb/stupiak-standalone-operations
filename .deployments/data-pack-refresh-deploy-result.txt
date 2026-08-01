@@ -1,0 +1,109 @@
+production_deployed=false
+source_commit=e892acc891f304569dbc5ce274ec447845c448df
+install_status=0
+deploy_status=1
+recorded_at=2026-08-01T08:06:04Z
+--- install tail ---
+npm warn deprecated inflight@1.0.6: This module is not supported, and leaks memory. Do not use it. Check out lru-cache if you want a good and tested way to coalesce async requests by a key value, which is much more comprehensive and powerful.
+npm warn deprecated rimraf@2.7.1: Rimraf versions prior to v4 are no longer supported
+npm warn deprecated lodash.isequal@4.5.0: This package is deprecated. Use require('node:util').isDeepStrictEqual instead.
+npm warn deprecated glob@7.2.3: Old versions of glob are not supported, and contain widely publicized security vulnerabilities, which have been fixed in the current version. Please update. Support for old versions may be purchased (at exorbitant rates) by contacting i@izs.me
+npm warn deprecated fstream@1.0.12: This package is no longer supported.
+npm warn deprecated uuid@8.3.2: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+npm warn deprecated recharts@2.15.4: 1.x and 2.x branches are no longer active. Bump to Recharts v3 to receive latest features and bugfixes. See https://github.com/recharts/recharts/wiki/3.0-migration-guide
+
+added 557 packages, and audited 560 packages in 13s
+
+150 packages are looking for funding
+  run `npm fund` for details
+
+8 vulnerabilities (4 moderate, 4 high)
+
+To address issues that do not require attention, run:
+  npm audit fix
+
+To address all issues (including breaking changes), run:
+  npm audit fix --force
+
+Run `npm audit` for details.
+--- deploy tail ---
+[2mdist/[22m[2massets/[22m[36mfile-text-D754pvpw.js             [39m[1m[2m  0.51 kB[22m[1m[22m[2m │ gzip:   0.32 kB[22m
+[2mdist/[22m[2massets/[22m[36mPositionBadge-DjqeX_DC.js         [39m[1m[2m  0.51 kB[22m[1m[22m[2m │ gzip:   0.33 kB[22m
+[2mdist/[22m[2massets/[22m[36minput-CPdwpLQ_.js                 [39m[1m[2m  0.56 kB[22m[1m[22m[2m │ gzip:   0.36 kB[22m
+[2mdist/[22m[2massets/[22m[36mpackage-minus-LF52IzeT.js         [39m[1m[2m  0.59 kB[22m[1m[22m[2m │ gzip:   0.39 kB[22m
+[2mdist/[22m[2massets/[22m[36mpackage-check-DJEEUQfg.js         [39m[1m[2m  0.60 kB[22m[1m[22m[2m │ gzip:   0.40 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-FKPT_G3A.js                 [39m[1m[2m  0.60 kB[22m[1m[22m[2m │ gzip:   0.44 kB[22m
+[2mdist/[22m[2massets/[22m[36mlabel-DBX1qzJH.js                 [39m[1m[2m  0.65 kB[22m[1m[22m[2m │ gzip:   0.44 kB[22m
+[2mdist/[22m[2massets/[22m[36mcalendar-days-D8kJUIVa.js         [39m[1m[2m  0.67 kB[22m[1m[22m[2m │ gzip:   0.37 kB[22m
+[2mdist/[22m[2massets/[22m[36msparkles-CNslRLvG.js              [39m[1m[2m  0.68 kB[22m[1m[22m[2m │ gzip:   0.41 kB[22m
+[2mdist/[22m[2massets/[22m[36mPageNotFound-DNBKs-8I.js          [39m[1m[2m  0.72 kB[22m[1m[22m[2m │ gzip:   0.41 kB[22m
+[2mdist/[22m[2massets/[22m[36msliders-horizontal-UmoaGl79.js    [39m[1m[2m  0.76 kB[22m[1m[22m[2m │ gzip:   0.37 kB[22m
+[2mdist/[22m[2massets/[22m[36mAuthLayout-Bl0orhlv.js            [39m[1m[2m  0.82 kB[22m[1m[22m[2m │ gzip:   0.44 kB[22m
+[2mdist/[22m[2massets/[22m[36mstore-BFgkjRhw.js                 [39m[1m[2m  0.82 kB[22m[1m[22m[2m │ gzip:   0.41 kB[22m
+[2mdist/[22m[2massets/[22m[36mboxes-DYO1Xbo_.js                 [39m[1m[2m  1.02 kB[22m[1m[22m[2m │ gzip:   0.51 kB[22m
+[2mdist/[22m[2massets/[22m[36mAppDrawer-BedZElkL.js             [39m[1m[2m  1.83 kB[22m[1m[22m[2m │ gzip:   0.84 kB[22m
+[2mdist/[22m[2massets/[22m[36mProfileSetup-D9rW53ZP.js          [39m[1m[2m  1.84 kB[22m[1m[22m[2m │ gzip:   1.03 kB[22m
+[2mdist/[22m[2massets/[22m[36mPageNotifications-DaBVhWRP.js     [39m[1m[2m  2.21 kB[22m[1m[22m[2m │ gzip:   0.97 kB[22m
+[2mdist/[22m[2massets/[22m[36mNotifications-DSJ-rJiZ.js         [39m[1m[2m  2.28 kB[22m[1m[22m[2m │ gzip:   1.05 kB[22m
+[2mdist/[22m[2massets/[22m[36mMobileSheet-Dj1EIJ9p.js           [39m[1m[2m  2.34 kB[22m[1m[22m[2m │ gzip:   1.06 kB[22m
+[2mdist/[22m[2massets/[22m[36mperformance-qlUiqqLW.js           [39m[1m[2m  3.22 kB[22m[1m[22m[2m │ gzip:   1.27 kB[22m
+[2mdist/[22m[2massets/[22m[36mLogin-CQyHoUb-.js                 [39m[1m[2m  3.78 kB[22m[1m[22m[2m │ gzip:   1.88 kB[22m
+[2mdist/[22m[2massets/[22m[36mMore-CwK6hM_w.js                  [39m[1m[2m  4.12 kB[22m[1m[22m[2m │ gzip:   1.82 kB[22m
+[2mdist/[22m[2massets/[22m[36mMediaLightbox-BTllyxqH.js         [39m[1m[2m  4.26 kB[22m[1m[22m[2m │ gzip:   1.76 kB[22m
+[2mdist/[22m[2massets/[22m[36mDataPackage-Do6LrCkt.js           [39m[1m[2m  5.69 kB[22m[1m[22m[2m │ gzip:   2.11 kB[22m
+[2mdist/[22m[2massets/[22m[36mSettings-XaMfdoHi.js              [39m[1m[2m  8.12 kB[22m[1m[22m[2m │ gzip:   2.89 kB[22m
+[2mdist/[22m[2massets/[22m[36mInstallApp-C8ZduAq7.js            [39m[1m[2m 10.61 kB[22m[1m[22m[2m │ gzip:   3.70 kB[22m
+[2mdist/[22m[2massets/[22m[36mStockCount-BEcCgyKi.js            [39m[1m[2m 15.78 kB[22m[1m[22m[2m │ gzip:   5.36 kB[22m
+[2mdist/[22m[2massets/[22m[36mOpsControl-C116ob6k.js            [39m[1m[2m 17.21 kB[22m[1m[22m[2m │ gzip:   5.31 kB[22m
+[2mdist/[22m[2massets/[22m[36mLabelPrinterSettings-CX9_khgU.js  [39m[1m[2m 18.30 kB[22m[1m[22m[2m │ gzip:   5.74 kB[22m
+[2mdist/[22m[2massets/[22m[36mAttendance-CT8VqcWe.js            [39m[1m[2m 20.06 kB[22m[1m[22m[2m │ gzip:   7.39 kB[22m
+[2mdist/[22m[2massets/[22m[36mInventory-C2xLvNv3.js             [39m[1m[2m 20.41 kB[22m[1m[22m[2m │ gzip:   6.21 kB[22m
+[2mdist/[22m[2massets/[22m[36mOperationalTasksV2-CE0Dmamz.js    [39m[1m[2m 20.46 kB[22m[1m[22m[2m │ gzip:   7.60 kB[22m
+[2mdist/[22m[2massets/[22m[36mCloseUp-BbEwsUrT.js               [39m[1m[2m 20.85 kB[22m[1m[22m[2m │ gzip:   6.57 kB[22m
+[2mdist/[22m[2massets/[22m[36mGuidedSopGuideBook-Dz1jbGyl.js    [39m[1m[2m 21.77 kB[22m[1m[22m[2m │ gzip:   7.08 kB[22m
+[2mdist/[22m[2massets/[22m[36mReceipts-CMwZYKrL.js              [39m[1m[2m 22.03 kB[22m[1m[22m[2m │ gzip:   8.14 kB[22m
+[2mdist/[22m[2massets/[22m[36mUrgentIssues-U4uCwp1Y.js          [39m[1m[2m 24.99 kB[22m[1m[22m[2m │ gzip:   8.14 kB[22m
+[2mdist/[22m[2massets/[22m[36mTraining-CIx5mJVk.js              [39m[1m[2m 30.68 kB[22m[1m[22m[2m │ gzip:   8.69 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-DCAVmNFl.js                 [39m[1m[2m 35.66 kB[22m[1m[22m[2m │ gzip:  12.16 kB[22m
+[2mdist/[22m[2massets/[22m[36mFoodLabels-CepQ9Dqp.js            [39m[1m[2m 50.82 kB[22m[1m[22m[2m │ gzip:  14.69 kB[22m
+[2mdist/[22m[2massets/[22m[36mindex-CwNW5OLD.js                 [39m[1m[2m375.09 kB[22m[1m[22m[2m │ gzip: 118.61 kB[22m
+[2mdist/[22m[2massets/[22m[36mDashboard-BYp87dMX.js             [39m[1m[2m397.27 kB[22m[1m[22m[2m │ gzip: 110.47 kB[22m
+[2mdist/[22m[2massets/[22m[36mReports-N-2bev9Z.js               [39m[1m[33m979.33 kB[39m[22m[2m │ gzip: 283.00 kB[22m
+[33m
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.[39m
+[32m✓ built in 11.31s[39m
+
+> chefops-worker@1.0.0 check
+> wrangler deploy --dry-run
+
+
+ ⛅️ wrangler 4.113.0
+────────────────────
+✨ Read 83 files from the assets directory /home/runner/work/stupiak-standalone-operations/stupiak-standalone-operations/web/dist
+Total Upload: 351.18 KiB / gzip: 74.39 KiB
+Your Worker has access to the following bindings:
+Binding            Resource      
+env.ASSETS         Assets        
+
+--dry-run: exiting now.
+
+Cloudflare collects anonymous telemetry about your usage of Wrangler. Learn more at https://github.com/cloudflare/workers-sdk/tree/main/packages/wrangler/telemetry.md
+
+> chefops-standalone@4.5.1 cf:render
+> node scripts/render-wrangler-production.mjs
+
+Generated /home/runner/work/stupiak-standalone-operations/stupiak-standalone-operations/worker/wrangler.production.jsonc without R2 binding
+
+ ⛅️ wrangler 4.113.0 (update available 4.118.0)
+───────────────────────────────────────────────
+
+[31m✘ [41;31m[[41;97mERROR[41;31m][0m [1mIn a non-interactive environment, it's necessary to set a CLOUDFLARE_API_TOKEN environment variable for wrangler to work. Please go to https://developers.cloudflare.com/fundamentals/api/get-started/create-token/ for instructions on how to create an api token, and assign its value to CLOUDFLARE_API_TOKEN.[0m
+
+  
+  To continue without logging in, rerun this command with `--temporary`. Wrangler will use a temporary account and print a claim URL.
+
+
+🪵  Logs were written to "/home/runner/.config/.wrangler/logs/wrangler-2026-08-01_08-06-04_471.log"
