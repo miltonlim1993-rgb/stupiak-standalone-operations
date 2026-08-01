@@ -1,5 +1,21 @@
 let accessTokenCache = null
 
+const RETRYABLE_METHODS = new Set(['GET', 'HEAD', 'PUT'])
+const RETRYABLE_STATUSES = new Set([429, 500, 502, 503, 504])
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function retryDelayMs(response, attempt) {
+  const retryAfter = Number(response.headers.get('Retry-After') || 0)
+  if (Number.isFinite(retryAfter) && retryAfter > 0) {
+    return Math.min(retryAfter * 1000, 5000)
+  }
+  const schedule = [500, 1200, 2500, 5000]
+  return schedule[Math.min(attempt, schedule.length - 1)]
+}
+
 export async function getGoogleAccessToken(env) {
   const now = Date.now()
   if (accessTokenCache && accessTokenCache.expiresAt > now + 60_000) {
@@ -34,27 +50,36 @@ export async function getGoogleAccessToken(env) {
 }
 
 export async function googleFetch(env, url, options = {}) {
-  const token = await getGoogleAccessToken(env)
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Authorization: `Bearer ${token}`,
-      ...(options.headers || {}),
-    },
-  })
-  if (!response.ok) {
-    const text = await response.text()
-    const error = new Error(`Google API ${response.status}: ${text.slice(0, 800)}`)
-    if (response.status === 429) {
-      error.status = 503
-      error.code = 'sheets_rate_limited'
-      error.publicMessage = 'Google Sheets is temporarily busy. Cached data remains available; retry in about one minute.'
-      error.retryAfter = Number(response.headers.get('Retry-After') || 60)
-    } else {
-      error.status = 502
-      error.code = 'google_api_error'
-    }
-    throw error
+  const method = String(options.method || 'GET').toUpperCase()
+  const maxRetries = RETRYABLE_METHODS.has(method) ? 4 : 0
+  let response = null
+
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    const token = await getGoogleAccessToken(env)
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        ...(options.headers || {}),
+      },
+    })
+
+    if (response.ok) return response
+
+    if (!RETRYABLE_STATUSES.has(response.status) || attempt >= maxRetries) break
+    await sleep(retryDelayMs(response, attempt))
   }
-  return response
+
+  const text = await response.text()
+  const error = new Error(`Google API ${response.status}: ${text.slice(0, 800)}`)
+  if (response.status === 429) {
+    error.status = 503
+    error.code = 'sheets_rate_limited'
+    error.publicMessage = 'Google Sheets is temporarily busy. Cached data remains available; retry shortly.'
+    error.retryAfter = Number(response.headers.get('Retry-After') || 15)
+  } else {
+    error.status = 502
+    error.code = 'google_api_error'
+  }
+  throw error
 }
