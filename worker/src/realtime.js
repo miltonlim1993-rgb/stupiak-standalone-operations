@@ -1,4 +1,4 @@
-import { getCurrentUser, sessionPayload } from './auth.js'
+import { getCurrentUser } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { assignedOutletIds, assertOutletAccess } from './permissions.js'
 
@@ -127,6 +127,7 @@ export async function publishMutationEvent(request, env, pathname, response) {
     path: pathname,
     method: request.method,
     occurred_at: now(),
+    origin_client_id: String(request.headers.get('X-ChefOps-Client-Id') || ''),
     actor: user ? {
       id: user.id || '',
       email: user.email || '',
