@@ -1,4 +1,4 @@
-// Production release trigger: Android 4.5.4 Data Package restoration
+// Production release trigger: Android 4.5.11 automatic Task package refresh
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, CheckCircle2, DatabaseZap, Download, Loader2, PackageCheck, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
@@ -58,7 +58,9 @@ export default function DataPackage() {
     if (!outletId || busy || !navigator.onLine) return
     setBusy(true)
     try {
-      await syncAppPack({ outletId, force: false })
+      // Force the Worker to rebuild from the current Google Sheets rather than
+      // accepting a still-valid server package generated before the latest edit.
+      await syncAppPack({ outletId, force: true })
     } catch {
       // The permanent status panel below displays the exact package error.
     } finally {
@@ -83,7 +85,7 @@ export default function DataPackage() {
         </div>
         <Button size="sm" variant="outline" className="shrink-0 rounded-xl" onClick={updatePackage} disabled={busy || !navigator.onLine}>
           {busy ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-          Check update
+          Check live Sheet
         </Button>
       </div>
 
@@ -97,7 +99,7 @@ export default function DataPackage() {
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               {blocking
                 ? 'OPS will keep this page visible until the required modules finish downloading, verification succeeds and obsolete hashes are removed.'
-                : 'The active package remains on this device. Only an older module hash is removed after a complete replacement has been verified.'}
+                : 'OPS now checks for newer Sheet-backed Task packages automatically. Only an older module hash is removed after a complete replacement has been verified.'}
             </p>
           </div>
         </div>
@@ -126,7 +128,7 @@ export default function DataPackage() {
         {status.error ? <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{status.error}</p> : null}
         <Button className="mt-4 h-12 w-full rounded-xl" onClick={updatePackage} disabled={busy || !navigator.onLine}>
           {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Download className="mr-2 h-5 w-5" />}
-          {busy ? stateLabel(status.state) : status.state === 'error' ? 'Retry required package update' : 'Check and download latest package'}
+          {busy ? stateLabel(status.state) : status.state === 'error' ? 'Retry required package update' : 'Rebuild and download latest package'}
         </Button>
       </section>
     </div>
