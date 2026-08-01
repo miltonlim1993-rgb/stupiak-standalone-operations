@@ -1,0 +1,63 @@
+name: Prepare canonical OPS config for Cloudflare Workers Builds
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/prepare-cloudflare-workers-builds.yml
+
+permissions:
+  contents: write
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
+      CLOUDFLARE_MEDIA_BUCKET_NAME: ${{ secrets.CLOUDFLARE_MEDIA_BUCKET_NAME }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate committed root Wrangler config
+        shell: bash
+        run: |
+          if [[ -z "$CLOUDFLARE_APP_DATA_PACKS_ID" ]]; then
+            echo "CLOUDFLARE_APP_DATA_PACKS_ID is unavailable"
+            exit 1
+          fi
+          node <<'NODE'
+          const fs = require('fs')
+          const template = JSON.parse(
+            fs.readFileSync('worker/wrangler.production.example.jsonc', 'utf8')
+              .replaceAll('__APP_DATA_PACKS_ID__', process.env.CLOUDFLARE_APP_DATA_PACKS_ID)
+              .replaceAll('__MEDIA_BUCKET_NAME__', process.env.CLOUDFLARE_MEDIA_BUCKET_NAME || 'stupiaks-ops-media')
+          )
+          template.main = 'worker/src/entry.js'
+          template.assets.directory = 'web/dist'
+          if (!process.env.CLOUDFLARE_MEDIA_BUCKET_NAME) delete template.r2_buckets
+          fs.writeFileSync('wrangler.jsonc', JSON.stringify(template, null, 2) + '\n')
+          NODE
+
+      - name: Add Workers Builds deployment command
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
+          pkg.scripts = pkg.scripts || {}
+          pkg.scripts['deploy:workers-builds'] = 'npm run build && npx wrangler deploy --config wrangler.jsonc'
+          fs.writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n')
+          NODE
+
+      - name: Remove temporary workflows and commit
+        shell: bash
+        run: |
+          git config user.name "stupiaks-ops-release"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/workflows/prepare-cloudflare-workers-builds.yml
+          git rm -f .github/workflows/find-existing-cloudflare-credential-names.yml || true
+          git add wrangler.jsonc package.json
+          git commit -m "Restore Cloudflare Workers Builds deployment for canonical OPS"
+          git push origin HEAD:main
