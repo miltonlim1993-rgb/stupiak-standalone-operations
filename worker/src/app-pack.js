@@ -208,12 +208,24 @@ async function persistPack(env, outletId, modules) {
   return manifest
 }
 
+async function buildAndPublishAppPack(env, outletId, shared = null) {
+  const target = outletKey(outletId)
+  const inflightKey = `${target}:publish`
+  if (BUILD_INFLIGHT.has(inflightKey)) return BUILD_INFLIGHT.get(inflightKey)
+  const promise = (async () => {
+    const modules = await buildModules(env, target, shared)
+    return persistPack(env, target, modules)
+  })()
+  BUILD_INFLIGHT.set(inflightKey, promise)
+  try { return await promise } finally { BUILD_INFLIGHT.delete(inflightKey) }
+}
+
 async function rebuildTargets(env, targets) {
   const shared = await sharedData(env)
   const results = []
   for (const target of targets) {
     try {
-      results.push(await getOrBuildAppPack(env, target, { force: true, shared }))
+      results.push(await buildAndPublishAppPack(env, target, shared))
     } catch (error) {
       console.error('App pack rebuild failed', target, error)
     }
@@ -248,26 +260,11 @@ export async function getPublishedAppPack(env, outletId = '') {
   try { return JSON.parse(manifestRaw) } catch { return null }
 }
 
-export async function getOrBuildAppPack(env, outletId = '', { force = false, shared = null } = {}) {
-  const target = outletKey(outletId)
-  const manifestRaw = await storeGet(env, keyFor('manifest', target))
-  let manifest = null
-  try { manifest = manifestRaw ? JSON.parse(manifestRaw) : null } catch {}
-
-  // Client manifest checks must never fan out into Google Sheets. They only
-  // receive the last package that was fully built and atomically published to
-  // Cloudflare. Sheet-backed publishing happens through the scheduled job,
-  // the dirty-record background queue, or an explicit manager rebuild POST.
-  if (!force) return manifest
-
-  const inflightKey = `${target}:force`
-  if (BUILD_INFLIGHT.has(inflightKey)) return BUILD_INFLIGHT.get(inflightKey)
-  const promise = (async () => {
-    const modules = await buildModules(env, target, shared)
-    return persistPack(env, target, modules)
-  })()
-  BUILD_INFLIGHT.set(inflightKey, promise)
-  try { return await promise } finally { BUILD_INFLIGHT.delete(inflightKey) }
+export async function getOrBuildAppPack(env, outletId = '', _options = {}) {
+  // Backward compatibility: old APK versions still send refresh=1 every few
+  // minutes. Ignore all client force flags and return only the last package
+  // that completed publication to Cloudflare. No client GET can read Sheets.
+  return getPublishedAppPack(env, outletId)
 }
 
 export async function getAppPackModule(env, outletId, name, hash) {
@@ -292,7 +289,7 @@ export async function rebuildAllAppPacks(env) {
   const results = []
   for (const target of targets) {
     try {
-      results.push(await getOrBuildAppPack(env, target, { force: true, shared }))
+      results.push(await buildAndPublishAppPack(env, target, shared))
     } catch (error) {
       console.error('App pack rebuild failed', target, error)
     }
