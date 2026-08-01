@@ -15,6 +15,46 @@
       "id": "__APP_DATA_PACKS_ID__"
     }
   ],
+  "d1_databases": [
+    {
+      "binding": "OPS_DB",
+      "database_name": "stupiaks-ops-realtime",
+      "database_id": "__OPS_DB_ID__",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OUTLET_REALTIME",
+        "class_name": "OutletRealtimeHub"
+      }
+    ]
+  },
+  "exports": {
+    "OutletRealtimeHub": {
+      "type": "durable-object",
+      "storage": "sqlite"
+    }
+  },
+  "queues": {
+    "producers": [
+      {
+        "binding": "SHEET_SYNC_QUEUE",
+        "queue": "__SHEET_SYNC_QUEUE_NAME__"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "__SHEET_SYNC_QUEUE_NAME__",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 10,
+        "retry_delay": 300,
+        "dead_letter_queue": "__SHEET_SYNC_DLQ_NAME__"
+      }
+    ]
+  },
   "r2_buckets": [
     {
       "binding": "MEDIA_BUCKET",
