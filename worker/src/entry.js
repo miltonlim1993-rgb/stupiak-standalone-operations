@@ -5,6 +5,7 @@ import { ensureEntitySheet } from './sheets.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
+import { handleAtomicStockCountBatch } from './realtime-stock-batch.js'
 import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import {
@@ -183,6 +184,9 @@ export default {
           headers: apiCorsHeaders(request, env),
         })
       }
+
+      const atomicStockResponse = await handleAtomicStockCountBatch(request, runEnv, url)
+      if (atomicStockResponse) return withApiHeaders(request, env, atomicStockResponse)
 
       const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(request, runEnv, url)
       if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
