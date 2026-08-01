@@ -1,0 +1,5 @@
+canonical_origin=https://stupiaks-ops.sporkburger19.workers.dev
+production_environment_credentials_available=false
+wrangler_deploy_status=not_run
+stale_aware_verified=false
+checked_at=2026-08-01T08:45:30Z
