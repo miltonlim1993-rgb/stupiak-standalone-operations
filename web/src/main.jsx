@@ -12,7 +12,7 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 
-const SHELL_VERSION = 'closed-loop-v23'
+const SHELL_VERSION = 'exact-on-shift-v24'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -127,7 +127,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) 
   })
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw-v23.js', { updateViaCache: 'none' }).then((registration) => {
+    navigator.serviceWorker.register('/sw-v24.js', { updateViaCache: 'none' }).then((registration) => {
       if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' })
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing
