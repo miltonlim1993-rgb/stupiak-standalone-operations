@@ -6,5 +6,5 @@
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
   "release_notes": "OPS now checks the live Sheet-backed data package automatically on launch, foreground return, network reconnect and at regular intervals. New or changed Tasks rebuild the local roster-assigned snapshot in the background and replace the old Task list without requiring staff to press Refresh.",
-  "release_trigger": "2026-08-01-automatic-task-package-refresh"
+  "release_trigger": "2026-08-01-automatic-task-package-refresh-stable"
 }
