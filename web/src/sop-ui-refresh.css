@@ -1,0 +1,537 @@
+:root {
+  --sop-accent: #f2aa00;
+  --sop-accent-soft: #fff5d9;
+  --sop-ink: #17191d;
+  --sop-muted: #68707d;
+  --sop-line: #e2e5e9;
+  --sop-surface: #ffffff;
+  --sop-canvas: #f5f6f8;
+  --sop-shadow: 0 12px 32px rgba(24, 29, 38, 0.08);
+}
+
+/* SOP & Training library */
+.training-page {
+  max-width: 1280px !important;
+  padding: clamp(16px, 2vw, 28px) !important;
+  padding-bottom: 96px !important;
+}
+
+.training-page > div:first-child {
+  align-items: center !important;
+  padding: 22px 24px;
+  border: 1px solid var(--sop-line);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 100% 0%, rgba(242, 170, 0, 0.16), transparent 34%),
+    var(--sop-surface);
+  box-shadow: var(--sop-shadow);
+}
+
+.training-page > div:first-child h1 {
+  color: var(--sop-ink);
+  font-size: clamp(22px, 2vw, 30px) !important;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.training-page > div:first-child p {
+  max-width: 680px;
+  margin-top: 7px !important;
+  color: var(--sop-muted) !important;
+  font-size: 13px !important;
+  line-height: 1.55;
+}
+
+.training-page > div:first-child button {
+  min-height: 42px;
+  border-color: #d8dce2 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  color: var(--sop-ink) !important;
+  box-shadow: 0 4px 12px rgba(24, 29, 38, 0.06);
+}
+
+.training-page > .grid.grid-cols-3 {
+  gap: 12px !important;
+}
+
+.training-page > .grid.grid-cols-3 > div {
+  position: relative;
+  overflow: hidden;
+  min-height: 112px;
+  padding: 16px !important;
+  border: 1px solid var(--sop-line) !important;
+  border-radius: 18px !important;
+  background: var(--sop-surface) !important;
+  box-shadow: 0 8px 22px rgba(24, 29, 38, 0.055);
+}
+
+.training-page > .grid.grid-cols-3 > div::after {
+  position: absolute;
+  right: -18px;
+  bottom: -26px;
+  width: 78px;
+  height: 78px;
+  border-radius: 999px;
+  background: rgba(242, 170, 0, 0.09);
+  content: '';
+}
+
+.training-page > .grid.grid-cols-3 svg {
+  width: 18px !important;
+  height: 18px !important;
+  margin-bottom: 12px !important;
+  color: #b87d00 !important;
+}
+
+.training-page > .grid.grid-cols-3 p:first-of-type {
+  color: var(--sop-ink);
+  font-size: 24px !important;
+  letter-spacing: -0.035em;
+}
+
+.training-page > .grid.grid-cols-3 p:last-of-type {
+  margin-top: 2px;
+  color: var(--sop-muted) !important;
+  font-size: 11px !important;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.training-page .chefops-training-toolbar {
+  position: sticky;
+  top: 10px;
+  z-index: 30;
+  padding: 10px;
+  border: 1px solid rgba(226, 229, 233, 0.92);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.91);
+  box-shadow: 0 10px 28px rgba(24, 29, 38, 0.08);
+  backdrop-filter: blur(18px);
+}
+
+.training-page .chefops-training-toolbar > div:first-child {
+  padding: 4px !important;
+  border: 1px solid #e6e8ec;
+  border-radius: 14px !important;
+  background: #f0f2f5 !important;
+}
+
+.training-page .chefops-training-toolbar > div:first-child button {
+  min-height: 38px;
+  border-radius: 10px !important;
+  color: #717784;
+  font-size: 12px !important;
+  transition: background-color 160ms ease, color 160ms ease, box-shadow 160ms ease;
+}
+
+.training-page .chefops-training-toolbar > div:first-child button.bg-background {
+  background: #fff !important;
+  color: var(--sop-ink) !important;
+  box-shadow: 0 4px 12px rgba(24, 29, 38, 0.08) !important;
+}
+
+.training-page .chefops-training-toolbar input {
+  height: 44px !important;
+  border-color: #dfe2e7 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  box-shadow: none !important;
+}
+
+.training-page > .space-y-3 {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.training-page > .space-y-3 > * {
+  margin-top: 0 !important;
+}
+
+.training-page > .space-y-3 > button {
+  position: relative;
+  min-height: 146px;
+  padding: 18px !important;
+  border: 1px solid var(--sop-line) !important;
+  border-radius: 20px !important;
+  background: var(--sop-surface) !important;
+  box-shadow: 0 8px 24px rgba(24, 29, 38, 0.055);
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.training-page > .space-y-3 > button:hover {
+  transform: translateY(-2px);
+  border-color: #c9cdd4 !important;
+  box-shadow: 0 14px 30px rgba(24, 29, 38, 0.09);
+}
+
+.training-page > .space-y-3 > button:focus-visible {
+  outline: 3px solid rgba(242, 170, 0, 0.28);
+  outline-offset: 2px;
+}
+
+.training-page > .space-y-3 > button > span:first-child {
+  width: 46px !important;
+  height: 46px !important;
+  border-radius: 14px !important;
+  background: var(--sop-accent-soft) !important;
+  color: #9b6800 !important;
+}
+
+.training-page > .space-y-3 > button > span:first-child svg {
+  color: #9b6800;
+}
+
+.training-page > .space-y-3 > button > span:nth-child(2) > span:first-child {
+  color: #a56d00 !important;
+  font-size: 10px !important;
+  font-weight: 800 !important;
+  letter-spacing: 0.11em !important;
+}
+
+.training-page > .space-y-3 > button > span:nth-child(2) > span:nth-child(2) {
+  margin-top: 5px !important;
+  color: var(--sop-ink);
+  font-size: 15px !important;
+  line-height: 1.45;
+}
+
+.training-page > .space-y-3 > button > span:nth-child(2) > span:last-child {
+  margin-top: 10px !important;
+  color: var(--sop-muted) !important;
+  font-size: 11px !important;
+}
+
+.training-page > .space-y-3 > button > svg:last-child {
+  width: 20px !important;
+  height: 20px !important;
+  color: #aeb3bb !important;
+}
+
+.training-page > .space-y-3 > button > svg.text-emerald-500 {
+  color: #1e9b6c !important;
+}
+
+/* Guided SOP detail */
+html.chefops-guided-sop-active #chefops-mobile-main {
+  background: var(--sop-canvas) !important;
+}
+
+html.chefops-guided-sop-active #chefops-mobile-main > div {
+  background: var(--sop-canvas) !important;
+}
+
+html.chefops-guided-sop-active header {
+  overflow: hidden;
+  border: 1px solid var(--sop-line) !important;
+  border-radius: 20px !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 12px 30px rgba(24, 29, 38, 0.09) !important;
+  backdrop-filter: blur(16px);
+}
+
+html.chefops-guided-sop-active header > div:first-child {
+  display: none !important;
+}
+
+html.chefops-guided-sop-active header a,
+html.chefops-guided-sop-active header button {
+  border: 1px solid #d9dde3 !important;
+  border-radius: 12px !important;
+  background: #fff !important;
+  color: var(--sop-ink) !important;
+  box-shadow: 0 3px 10px rgba(24, 29, 38, 0.05);
+}
+
+html.chefops-guided-sop-active header img {
+  border: 1px solid #e1e4e8 !important;
+  border-radius: 12px !important;
+}
+
+html.chefops-guided-sop-active header h1 {
+  color: var(--sop-ink);
+  letter-spacing: -0.03em;
+}
+
+html.chefops-guided-sop-active header span.rounded-full.bg-black {
+  background: #202226 !important;
+}
+
+html.chefops-guided-sop-active header > div:last-child {
+  border-top: 1px solid #eceef1 !important;
+}
+
+html.chefops-guided-sop-active header > div:last-child > div {
+  height: 6px !important;
+  border: 0 !important;
+  background: #e9ebef !important;
+}
+
+html.chefops-guided-sop-active header > div:last-child > div > div {
+  background: var(--sop-accent) !important;
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] {
+  grid-template-columns: 236px minmax(0, 1fr) !important;
+  gap: 20px !important;
+  max-width: 1260px;
+  margin-right: auto;
+  margin-left: auto;
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] > aside:last-child {
+  display: none !important;
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] > aside:first-child > div {
+  overflow: hidden;
+  border: 1px solid var(--sop-line) !important;
+  border-radius: 18px !important;
+  background: #fff !important;
+  box-shadow: 0 10px 26px rgba(24, 29, 38, 0.07);
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] > aside:first-child > div > div:first-child {
+  border-bottom: 1px solid #eceef1;
+  background: #fff !important;
+  color: var(--sop-ink) !important;
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] > aside:first-child > div > div:first-child b {
+  color: var(--sop-ink) !important;
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] > aside:first-child nav {
+  padding: 10px !important;
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] > aside:first-child nav button {
+  min-height: 54px;
+  border: 1px solid transparent !important;
+  border-radius: 12px !important;
+  background: #f6f7f9 !important;
+  transition: background-color 150ms ease, border-color 150ms ease, transform 150ms ease;
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] > aside:first-child nav button:hover {
+  transform: translateX(2px);
+  background: #f0f2f5 !important;
+}
+
+html.chefops-guided-sop-active div[class*="md:grid-cols-[230px"] > aside:first-child nav button[class*="bg-[#fff0ad]"] {
+  border-color: #f0c458 !important;
+  background: var(--sop-accent-soft) !important;
+}
+
+html.chefops-guided-sop-active main > section {
+  overflow: hidden;
+  border: 1px solid var(--sop-line) !important;
+  border-radius: 20px !important;
+  background: #fff !important;
+  box-shadow: 0 10px 26px rgba(24, 29, 38, 0.065);
+}
+
+html.chefops-guided-sop-active main > section > div:first-child {
+  border-bottom: 0 !important;
+  background: #202226 !important;
+  padding: 18px 20px !important;
+}
+
+html.chefops-guided-sop-active main > section > div:last-child {
+  padding: 18px !important;
+}
+
+html.chefops-guided-sop-active main > section > div:last-child > div {
+  border-width: 1px !important;
+  border-color: #e2e5e9 !important;
+  border-radius: 14px !important;
+}
+
+html.chefops-guided-sop-active main > article {
+  overflow: hidden;
+  border: 1px solid var(--sop-line) !important;
+  border-radius: 20px !important;
+  background: #fff !important;
+  box-shadow: 0 12px 30px rgba(24, 29, 38, 0.075) !important;
+}
+
+html.chefops-guided-sop-active main > article > div:first-child {
+  padding: 20px 22px !important;
+  border-bottom: 1px solid #eceef1;
+  background: var(--sop-accent-soft) !important;
+  color: var(--sop-ink) !important;
+}
+
+html.chefops-guided-sop-active main > article > div:first-child[class*="bg-red-600"] {
+  border-left: 4px solid #d64545;
+  background: #fff1f1 !important;
+  color: #9e2d2d !important;
+}
+
+html.chefops-guided-sop-active main > article > div:first-child[class*="bg-emerald-600"] {
+  border-left: 4px solid #229a70;
+  background: #ecfaf4 !important;
+  color: #176b50 !important;
+}
+
+html.chefops-guided-sop-active main > article > div:first-child > div > span:first-child {
+  width: 44px;
+  min-width: 44px !important;
+  height: 44px !important;
+  border: 0 !important;
+  background: var(--sop-accent) !important;
+  color: #17191d !important;
+}
+
+html.chefops-guided-sop-active main > article > div:first-child[class*="bg-red-600"] > div > span:first-child {
+  background: #d64545 !important;
+  color: #fff !important;
+}
+
+html.chefops-guided-sop-active main > article > div:first-child[class*="bg-emerald-600"] > div > span:first-child {
+  background: #229a70 !important;
+  color: #fff !important;
+}
+
+html.chefops-guided-sop-active main > article > div:first-child h2 {
+  color: inherit;
+  font-size: clamp(20px, 2vw, 26px) !important;
+  line-height: 1.25 !important;
+  letter-spacing: -0.025em;
+}
+
+html.chefops-guided-sop-active main > article > div:last-child {
+  padding: 22px !important;
+}
+
+html.chefops-guided-sop-active main > article section > div:last-child {
+  border-width: 1px !important;
+  border-radius: 14px !important;
+  box-shadow: none !important;
+}
+
+html.chefops-guided-sop-active main > article section > div[class*="border-black/20"] {
+  border-color: #e1e4e8 !important;
+  background: #f7f8fa !important;
+}
+
+html.chefops-guided-sop-active main > article section > div[class*="border-red-300"] {
+  border-color: #f0baba !important;
+  background: #fff5f5 !important;
+}
+
+html.chefops-guided-sop-active main > article section > div[class*="border-emerald-300"] {
+  border-color: #b9e4d3 !important;
+  background: #f2fbf7 !important;
+}
+
+html.chefops-guided-sop-active main > article > button,
+html.chefops-guided-sop-active main > article > div[class*="bg-[#fff9e8]"] {
+  border-color: #ece4cd !important;
+  background: #fbfaf6 !important;
+}
+
+html.chefops-guided-sop-active main > article [class*="border-black"] {
+  border-width: 1px !important;
+  border-color: #dfe2e7 !important;
+}
+
+html.chefops-guided-sop-active main > div:last-child button {
+  min-height: 42px;
+  border-color: #d9dde3 !important;
+  border-radius: 12px !important;
+}
+
+html.chefops-guided-sop-active main > div:last-child button:not([variant="outline"]) {
+  background: var(--sop-accent) !important;
+  color: var(--sop-ink) !important;
+}
+
+html.chefops-guided-sop-active body > div.fixed.inset-x-0.bottom-0 {
+  border-top: 1px solid #dfe2e7 !important;
+  background: rgba(255, 255, 255, 0.96) !important;
+  box-shadow: 0 -12px 30px rgba(24, 29, 38, 0.09);
+  backdrop-filter: blur(16px);
+}
+
+html.chefops-guided-sop-active body > div.fixed.inset-x-0.bottom-0 button {
+  border-width: 1px !important;
+  border-color: #d9dde3 !important;
+  border-radius: 12px !important;
+}
+
+html.chefops-guided-sop-active body > div.fixed.inset-x-0.bottom-0 button[class*="bg-[#f7b500]"] {
+  background: var(--sop-accent) !important;
+  color: var(--sop-ink) !important;
+}
+
+@media (max-width: 767px) {
+  .training-page {
+    padding: 14px !important;
+    padding-bottom: 92px !important;
+  }
+
+  .training-page > div:first-child {
+    padding: 18px;
+    border-radius: 18px;
+  }
+
+  .training-page > div:first-child h1 {
+    font-size: 22px !important;
+  }
+
+  .training-page > .grid.grid-cols-3 {
+    gap: 8px !important;
+  }
+
+  .training-page > .grid.grid-cols-3 > div {
+    min-height: 98px;
+    padding: 12px !important;
+    border-radius: 15px !important;
+  }
+
+  .training-page > .space-y-3 {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .training-page > .space-y-3 > button {
+    min-height: 0;
+    padding: 15px !important;
+    border-radius: 16px !important;
+  }
+
+  html.chefops-guided-sop-active header {
+    border-right: 0 !important;
+    border-left: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  html.chefops-guided-sop-active main > section {
+    margin-right: 12px !important;
+    margin-left: 12px !important;
+    border-radius: 16px !important;
+  }
+
+  html.chefops-guided-sop-active main > article {
+    margin-right: 12px;
+    margin-left: 12px;
+    border-radius: 16px !important;
+  }
+
+  html.chefops-guided-sop-active main > article > div:first-child,
+  html.chefops-guided-sop-active main > article > div:last-child {
+    padding: 16px !important;
+  }
+
+  html.chefops-guided-sop-active main > article > div:first-child h2 {
+    font-size: 20px !important;
+  }
+}
+
+@media (min-width: 1180px) {
+  .training-page > .space-y-3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
