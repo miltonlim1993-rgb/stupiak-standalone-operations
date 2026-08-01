@@ -1,9 +1,27 @@
 import { getPackedEntity, getPackedLabelCatalog } from '@/lib/app-pack'
+import { submitRealtimeMutation } from '@/lib/realtime-mutations'
+
 const configuredApiUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
 const API_BASE_URL = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:8787' : window.location.origin)).replace(/\/$/, '')
 
 const GET_RESPONSE_CACHE = new Map()
 const GET_INFLIGHT = new Map()
+const REALTIME_ENTITIES = new Set([
+  'Task',
+  'TaskPhoto',
+  'UrgentIssue',
+  'StockCount',
+  'CloseUp',
+  'FoodLabel',
+  'LabelPrintLog',
+  'Attendance',
+  'Receipt',
+  'Notification',
+  'TrainingAssignment',
+  'TrainingProgress',
+  'TrainingAcknowledgement',
+  'TrainingAttempt',
+])
 
 function getTtl(path) {
   if (path === '/api/auth/me') return 15_000
@@ -12,6 +30,7 @@ function getTtl(path) {
   if (path.startsWith('/api/app/v4/bootstrap')) return 30_000
   if (path.startsWith('/api/entities/')) return 8_000
   if (path.startsWith('/api/labels/')) return 30_000
+  if (path.startsWith('/api/realtime/')) return 0
   return 5_000
 }
 
@@ -33,11 +52,11 @@ async function request(path, options = {}) {
   const method = options.method || 'GET'
   const isGet = method === 'GET' && options.body === undefined
   const cacheKey = isGet ? path : ''
-  const now = Date.now()
+  const currentTime = Date.now()
 
   if (isGet) {
     const cached = GET_RESPONSE_CACHE.get(cacheKey)
-    if (cached && cached.expiresAt > now) return cached.data
+    if (cached && cached.expiresAt > currentTime) return cached.data
     if (GET_INFLIGHT.has(cacheKey)) return GET_INFLIGHT.get(cacheKey)
   }
 
@@ -61,8 +80,9 @@ async function request(path, options = {}) {
         data?.details,
       )
     }
-    if (isGet) GET_RESPONSE_CACHE.set(cacheKey, { data, expiresAt: Date.now() + getTtl(path) })
-    else clearGetCache()
+    const ttl = getTtl(path)
+    if (isGet && ttl > 0) GET_RESPONSE_CACHE.set(cacheKey, { data, expiresAt: Date.now() + ttl })
+    else if (!isGet) clearGetCache()
     return data
   }
 
@@ -83,38 +103,219 @@ function packOutlet(filter = {}) {
   return String(localStorage.getItem('chefops.data-pack.outlet') || '')
 }
 
+function recordId(row) {
+  return String(row?.id || row?.__realtime?.entity_id || '').trim()
+}
+
+function comparable(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  return String(value)
+}
+
+function orderedComparison(left, right) {
+  const numericLeft = Number(left)
+  const numericRight = Number(right)
+  if (comparable(left) !== '' && comparable(right) !== '' && Number.isFinite(numericLeft) && Number.isFinite(numericRight)) {
+    return numericLeft - numericRight
+  }
+  return comparable(left).localeCompare(comparable(right))
+}
+
+function matchesFilter(row, filter = {}) {
+  return Object.entries(filter || {}).every(([field, expected]) => {
+    if (expected === undefined) return true
+    const actual = row?.[field]
+    if (Array.isArray(expected)) return expected.map(comparable).includes(comparable(actual))
+    if (expected && typeof expected === 'object') {
+      if (Array.isArray(expected.$in) && !expected.$in.map(comparable).includes(comparable(actual))) return false
+      if (Array.isArray(expected.$nin) && expected.$nin.map(comparable).includes(comparable(actual))) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$ne') && comparable(actual) === comparable(expected.$ne)) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$eq') && comparable(actual) !== comparable(expected.$eq)) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$lt') && orderedComparison(actual, expected.$lt) >= 0) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$lte') && orderedComparison(actual, expected.$lte) > 0) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$gt') && orderedComparison(actual, expected.$gt) <= 0) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$gte') && orderedComparison(actual, expected.$gte) < 0) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$contains') && !comparable(actual).toLowerCase().includes(comparable(expected.$contains).toLowerCase())) return false
+      return true
+    }
+    return comparable(actual) === comparable(expected)
+  })
+}
+
+function sortedRows(rows, sort = '') {
+  const fields = String(sort || '').split(',').map((value) => value.trim()).filter(Boolean)
+  if (!fields.length) return rows
+  return [...rows].sort((left, right) => {
+    for (const fieldSpec of fields) {
+      const descending = fieldSpec.startsWith('-')
+      const field = descending ? fieldSpec.slice(1) : fieldSpec
+      const comparison = orderedComparison(left?.[field], right?.[field])
+      if (comparison === 0) continue
+      return descending ? -comparison : comparison
+    }
+    return 0
+  })
+}
+
+async function realtimeRows(entity, outletId, limit = 500) {
+  if (!REALTIME_ENTITIES.has(entity) || !outletId) return []
+  const params = new URLSearchParams({
+    entity,
+    outlet_id: outletId,
+    include_deleted: '1',
+    limit: String(Math.max(1, Math.min(Number(limit) || 500, 500))),
+    _: String(Date.now()),
+  })
+  try {
+    const result = await request(`/api/realtime/records?${params}`)
+    return Array.isArray(result?.records) ? result.records : []
+  } catch (error) {
+    // During phased rollout, an undeployed or temporarily unavailable D1 layer
+    // must not make existing read-only screens unusable.
+    if ([404, 503].includes(Number(error?.status || 0))) return []
+    throw error
+  }
+}
+
+async function mergeRealtimeRows(entity, baseRows, {
+  outletId = '',
+  filter = {},
+  sort = '',
+  limit = 100,
+} = {}) {
+  const base = Array.isArray(baseRows) ? baseRows : []
+  const overlay = await realtimeRows(entity, outletId, Math.max(limit, 500))
+  if (!overlay.length) return base
+
+  const byId = new Map(base.map((row) => [recordId(row), row]).filter(([id]) => id))
+  const unkeyed = base.filter((row) => !recordId(row))
+  for (const row of overlay) {
+    const id = recordId(row)
+    if (!id) continue
+    const deleted = Boolean(row?.deleted_at || row?.__realtime?.deleted_at)
+    if (deleted || !matchesFilter(row, filter)) {
+      byId.delete(id)
+      continue
+    }
+    byId.set(id, {
+      ...(byId.get(id) || {}),
+      ...row,
+      __realtime: row.__realtime,
+    })
+  }
+  return sortedRows([...byId.values(), ...unkeyed], sort).slice(0, Math.max(1, Number(limit) || 100))
+}
+
+async function legacyRecord(entity, id, options = {}) {
+  const params = addYear(new URLSearchParams({
+    filter: JSON.stringify({ id }),
+    limit: '2',
+  }), options)
+  const rows = await request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
+  return Array.isArray(rows) ? rows.find((row) => recordId(row) === String(id)) || rows[0] || null : null
+}
+
+async function realtimeRecord(entity, outletId, id) {
+  const rows = await realtimeRows(entity, outletId, 500)
+  return rows.find((row) => recordId(row) === String(id)) || null
+}
+
 function entityClient(entity) {
+  const legacyCreate = (data, options = {}) => {
+    const params = addYear(new URLSearchParams(), options)
+    const suffix = params.toString() ? `?${params}` : ''
+    return request(`/api/entities/${encodeURIComponent(entity)}${suffix}`, { method: 'POST', body: data })
+  }
+  const legacyUpdate = (id, data, options = {}) => {
+    const params = addYear(new URLSearchParams(), options)
+    const suffix = params.toString() ? `?${params}` : ''
+    return request(`/api/entities/${encodeURIComponent(entity)}/${encodeURIComponent(id)}${suffix}`, { method: 'PATCH', body: data })
+  }
+  const legacyDelete = (id, options = {}) => {
+    const params = addYear(new URLSearchParams(), options)
+    const suffix = params.toString() ? `?${params}` : ''
+    return request(`/api/entities/${encodeURIComponent(entity)}/${encodeURIComponent(id)}${suffix}`, { method: 'DELETE' })
+  }
+
   return {
     async list(sort = '', limit = 100, options = {}) {
-      const packed = await getPackedEntity(entity, { sort, limit, outletId: packOutlet() })
-      if (packed) return packed
+      const outletId = packOutlet()
+      const packed = await getPackedEntity(entity, { sort, limit, outletId })
       const params = addYear(new URLSearchParams({ sort, limit: String(limit) }), options)
-      return request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
+      const base = packed || await request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
+      return mergeRealtimeRows(entity, base, { outletId, sort, limit })
     },
     async filter(filter = {}, sort = '', limit = 100, options = {}) {
-      const packed = await getPackedEntity(entity, { filter, sort, limit, outletId: packOutlet(filter) })
-      if (packed) return packed
+      const outletId = packOutlet(filter)
+      const packed = await getPackedEntity(entity, { filter, sort, limit, outletId })
       const params = addYear(new URLSearchParams({
         filter: JSON.stringify(filter || {}),
         sort,
         limit: String(limit),
       }), options)
-      return request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
+      const base = packed || await request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
+      return mergeRealtimeRows(entity, base, { outletId, filter, sort, limit })
     },
-    create(data, options = {}) {
-      const params = addYear(new URLSearchParams(), options)
-      const suffix = params.toString() ? `?${params}` : ''
-      return request(`/api/entities/${encodeURIComponent(entity)}${suffix}`, { method: 'POST', body: data })
+    async create(data, options = {}) {
+      const outletId = String(data?.outlet_id || packOutlet(data) || '').trim()
+      if (!REALTIME_ENTITIES.has(entity) || !outletId) return legacyCreate(data, options)
+      const id = String(data?.id || crypto.randomUUID())
+      const result = await submitRealtimeMutation({
+        entity,
+        entity_id: id,
+        outlet_id: outletId,
+        operation: 'create',
+        payload: { ...(data || {}), id, outlet_id: outletId },
+      })
+      clearGetCache()
+      return result.record
     },
-    update(id, data, options = {}) {
-      const params = addYear(new URLSearchParams(), options)
-      const suffix = params.toString() ? `?${params}` : ''
-      return request(`/api/entities/${encodeURIComponent(entity)}/${encodeURIComponent(id)}${suffix}`, { method: 'PATCH', body: data })
+    async update(id, data, options = {}) {
+      const outletId = String(data?.outlet_id || packOutlet(data) || '').trim()
+      if (!REALTIME_ENTITIES.has(entity) || !outletId) return legacyUpdate(id, data, options)
+
+      let current = null
+      try { current = await realtimeRecord(entity, outletId, id) } catch {}
+      if (!current) {
+        try { current = await legacyRecord(entity, id, options) } catch {}
+      }
+      const result = await submitRealtimeMutation({
+        entity,
+        entity_id: String(id),
+        outlet_id: outletId,
+        operation: current?.__realtime ? 'update' : 'upsert',
+        expected_version: current?.__realtime?.version,
+        payload: {
+          ...(current || {}),
+          ...(data || {}),
+          id: String(id),
+          outlet_id: outletId,
+          __realtime: undefined,
+        },
+      })
+      clearGetCache()
+      return result.record
     },
-    delete(id, options = {}) {
-      const params = addYear(new URLSearchParams(), options)
-      const suffix = params.toString() ? `?${params}` : ''
-      return request(`/api/entities/${encodeURIComponent(entity)}/${encodeURIComponent(id)}${suffix}`, { method: 'DELETE' })
+    async delete(id, options = {}) {
+      const outletId = String(options?.outlet_id || packOutlet(options) || '').trim()
+      if (!REALTIME_ENTITIES.has(entity) || !outletId) return legacyDelete(id, options)
+
+      let current = null
+      try { current = await realtimeRecord(entity, outletId, id) } catch {}
+      // Existing Sheet-only records remain on the legacy delete path until
+      // they have been seeded into D1 by a create or update mutation.
+      if (!current?.__realtime) return legacyDelete(id, options)
+      const result = await submitRealtimeMutation({
+        entity,
+        entity_id: String(id),
+        outlet_id: outletId,
+        operation: 'delete',
+        expected_version: current.__realtime.version,
+        payload: { ...current, __realtime: undefined },
+      })
+      clearGetCache()
+      return result.record
     },
     updateMany(filter, update, options = {}) {
       const params = addYear(new URLSearchParams(), options)
@@ -161,6 +362,28 @@ export const opsClient = {
     loginWithGoogle: (credential) => request('/api/auth/google', { method: 'POST', body: { credential } }),
     logout: () => request('/api/auth/logout', { method: 'POST' }),
     updateMe: (profile) => request('/api/auth/me', { method: 'PATCH', body: profile }),
+  },
+  realtime: {
+    status() {
+      return request(`/api/realtime/data/status?_=${Date.now()}`)
+    },
+    list({ entity, outletId, since = '', includeDeleted = false, limit = 100 }) {
+      const params = new URLSearchParams({
+        entity,
+        outlet_id: outletId,
+        limit: String(limit),
+        _: String(Date.now()),
+      })
+      if (since) params.set('since', since)
+      if (includeDeleted) params.set('include_deleted', '1')
+      return request(`/api/realtime/records?${params}`)
+    },
+    mutate(payload, options) {
+      return submitRealtimeMutation(payload, options)
+    },
+    retrySheetSync() {
+      return request('/api/realtime/data/sync/retry', { method: 'POST', body: {} })
+    },
   },
   entities: new Proxy({}, {
     get(_target, entity) {

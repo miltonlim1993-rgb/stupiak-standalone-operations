@@ -5,8 +5,20 @@ import { ensureEntitySheet } from './sheets.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
+import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
+import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
+import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
+import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
+import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
+import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
+import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
+import {
+  flushPendingSheetMirrors,
+  handleRealtimeDataApi,
+  processSheetMirrorQueue,
+} from './realtime-store.js'
 
-const WORKER_REVISION = 'outlet-realtime-hub-v1'
+const WORKER_REVISION = 'realtime-d1-foundation-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -82,7 +94,7 @@ function apiCorsHeaders(request, env) {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Client-Id, X-Requested-With',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Client-Id, X-ChefOps-Mutation-Id, X-Requested-With',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
     'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision',
@@ -92,6 +104,7 @@ function apiCorsHeaders(request, env) {
 }
 
 function withApiHeaders(request, env, response) {
+  if (response.status === 101) return response
   const headers = new Headers(response.headers)
   for (const [key, value] of Object.entries(apiCorsHeaders(request, env))) {
     headers.set(key, value)
@@ -176,11 +189,27 @@ export default {
         })
       }
 
+      const atomicStockResponse = await handleJsonAtomicStockCountBatch(request, runEnv, url)
+      if (atomicStockResponse) return withApiHeaders(request, env, atomicStockResponse)
+
+      const closeUpSyncResponse = await handleRealtimeCloseUpSync(request, runEnv, url)
+      if (closeUpSyncResponse) return withApiHeaders(request, env, closeUpSyncResponse)
+
+      const workflowRequest = await withStableWorkflowMutationId(request, url)
+      const completedTaskResponse = await guardCompletedOperationalTask(workflowRequest, runEnv, url)
+      if (completedTaskResponse) return withApiHeaders(request, env, completedTaskResponse)
+
+      const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
+      if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
+
+      const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
+      if (taskPhotoResponse) return withApiHeaders(request, env, taskPhotoResponse)
+
+      const realtimeDataResponse = await handleRealtimeDataApi(request, runEnv, url)
+      if (realtimeDataResponse) return withApiHeaders(request, env, realtimeDataResponse)
+
       const realtimeResponse = await handleRealtimeApi(request, runEnv, url)
-      if (realtimeResponse) {
-        if (realtimeResponse.status === 101) return realtimeResponse
-        return withApiHeaders(request, env, realtimeResponse)
-      }
+      if (realtimeResponse) return withApiHeaders(request, env, realtimeResponse)
 
       const webhookResponse = await handleDataPackDirtyWebhook(request, runEnv, url.pathname)
       if (webhookResponse) return withApiHeaders(request, env, webhookResponse)
@@ -188,7 +217,8 @@ export default {
       const nativeLoginResponse = await handleNativeGoogleLogin(request, runEnv, url.pathname)
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
-      const response = await app.fetch(request, runEnv, ctx)
+      const appResponse = await app.fetch(request, runEnv, ctx)
+      const response = await overlayOperationalBootstrapResponse(url, runEnv, appResponse)
       if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method) && response.status >= 200 && response.status < 300) {
         const broadcastResponse = response.clone()
         ctx.waitUntil(publishMutationEvent(request, runEnv, url.pathname, broadcastResponse).catch((error) => {
@@ -202,9 +232,14 @@ export default {
   },
 
   async scheduled(event, env, ctx) {
-    if (typeof app.scheduled === 'function') {
-      return app.scheduled(event, runtimeEnv(env, ctx), ctx)
-    }
+    const runEnv = runtimeEnv(env, ctx)
+    const jobs = [flushPendingSheetMirrors(runEnv, 50)]
+    if (typeof app.scheduled === 'function') jobs.push(app.scheduled(event, runEnv, ctx))
+    return Promise.all(jobs)
+  },
+
+  async queue(batch, env, ctx) {
+    return processSheetMirrorQueue(batch, runtimeEnv(env, ctx), ctx)
   },
 }
 
