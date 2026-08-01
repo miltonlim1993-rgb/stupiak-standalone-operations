@@ -216,6 +216,13 @@ export async function handleRealtimeTaskPhotoMutation(request, env, url) {
   if (String(body?.entity || '') !== 'TaskPhoto') return null
 
   try {
+    const mutationId = String(body.mutation_id || '').trim()
+    if (mutationId && env.OPS_DB?.prepare) {
+      const replay = await env.OPS_DB.prepare(
+        'SELECT mutation_id FROM ops_mutations WHERE mutation_id = ? LIMIT 1',
+      ).bind(mutationId).first()
+      if (replay) return handleRealtimeDataApi(request, env, url)
+    }
     const validatedRequest = await validatedMutationRequest(request, env, body)
     return handleRealtimeDataApi(validatedRequest, env, url)
   } catch (error) {
