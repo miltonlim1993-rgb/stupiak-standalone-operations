@@ -1,0 +1,119 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
+
+PRODUCTION_ORIGIN="https://stupiaks-ops.sporkburger19.workers.dev"
+HEALTH_URL="$PRODUCTION_ORIGIN/api/health"
+DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
+QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
+DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
+APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
+EXPECTED_REVISION="realtime-d1-foundation-v1"
+
+json_database_id() {
+  local database_name="$1"
+  node -e '
+    const fs = require("node:fs");
+    const name = process.argv[1];
+    const input = fs.readFileSync(0, "utf8").trim();
+    if (!input) process.exit(2);
+    const parsed = JSON.parse(input);
+    const rows = Array.isArray(parsed)
+      ? parsed
+      : (Array.isArray(parsed.result) ? parsed.result
+        : (Array.isArray(parsed.databases) ? parsed.databases : []));
+    const found = rows.find((row) =>
+      String(row.name || row.database_name || "") === name
+    );
+    if (!found) process.exit(3);
+    const id = found.uuid || found.database_id || found.id;
+    if (!id) process.exit(4);
+    process.stdout.write(String(id));
+  ' "$database_name"
+}
+
+ensure_queue() {
+  local queue_name="$1"
+  echo "==> Ensuring Queue: $queue_name"
+  if npx wrangler queues create "$queue_name" >/tmp/chefops-queue-create.log 2>&1; then
+    cat /tmp/chefops-queue-create.log
+    return 0
+  fi
+  if grep -Eqi 'already exists|already been taken|name is already in use' /tmp/chefops-queue-create.log; then
+    echo "Queue already exists: $queue_name"
+    return 0
+  fi
+  cat /tmp/chefops-queue-create.log >&2
+  return 1
+}
+
+echo "==> Canonical OPS production: $PRODUCTION_ORIGIN"
+echo "==> Checking existing local Wrangler authentication"
+npx wrangler whoami
+
+echo "==> Updating main without overwriting local work"
+git fetch origin main
+git pull --ff-only origin main
+
+echo "==> Installing exact dependencies"
+npm ci
+
+echo "==> Resolving D1 database: $DB_NAME"
+databases_json="$(npx wrangler d1 list --json)"
+OPS_DB_ID="$(printf '%s' "$databases_json" | json_database_id "$DB_NAME" || true)"
+if [[ -z "$OPS_DB_ID" ]]; then
+  echo "==> Creating D1 database in APAC: $DB_NAME"
+  npx wrangler d1 create "$DB_NAME" --location apac
+  databases_json="$(npx wrangler d1 list --json)"
+  OPS_DB_ID="$(printf '%s' "$databases_json" | json_database_id "$DB_NAME")"
+fi
+if [[ -z "$OPS_DB_ID" ]]; then
+  echo "Unable to resolve D1 database ID for $DB_NAME" >&2
+  exit 1
+fi
+
+echo "==> D1 database ID resolved: $OPS_DB_ID"
+ensure_queue "$QUEUE_NAME"
+ensure_queue "$DLQ_NAME"
+
+export CLOUDFLARE_APP_DATA_PACKS_ID="$APP_DATA_PACKS_ID"
+export CLOUDFLARE_OPS_DB_ID="$OPS_DB_ID"
+export CLOUDFLARE_SHEET_SYNC_QUEUE_NAME="$QUEUE_NAME"
+export CLOUDFLARE_SHEET_SYNC_DLQ_NAME="$DLQ_NAME"
+
+echo "==> Building web and Worker"
+npm run build
+
+echo "==> Rendering canonical production bindings"
+npm run cf:render
+
+echo "==> Applying D1 migrations"
+npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.production.jsonc
+
+echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
+npx wrangler deploy --config worker/wrangler.production.jsonc
+
+echo "==> Verifying production Worker revision"
+headers=''
+body=''
+for attempt in $(seq 1 30); do
+  headers="$(mktemp)"
+  body="$(curl -fsS --max-time 20 -D "$headers" "$HEALTH_URL" || true)"
+  if grep -Fqi "X-ChefOps-Worker-Revision: $EXPECTED_REVISION" "$headers"; then
+    printf '%s\n' "$body"
+    echo "REALTIME_DEPLOYMENT_VERIFIED=true"
+    echo "D1_MIGRATIONS_APPLIED=true"
+    echo "OUTLET_WEBSOCKET_CONFIGURED=true"
+    echo "SHEET_SYNC_QUEUE_CONFIGURED=true"
+    echo "MULTI_DEVICE_TESTING_READY=true"
+    exit 0
+  fi
+  rm -f "$headers"
+  sleep 5
+done
+
+echo "Deployment command completed, but the realtime revision was not observed in production." >&2
+echo "Last health response: $body" >&2
+exit 1
