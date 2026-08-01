@@ -93,14 +93,22 @@ function windowsForRow(group, row) {
     const start = localDateTime(group.date, segment.start)
     let end = localDateTime(group.date, segment.end)
     if (start && end && end <= start) end = localDateTime(group.date, segment.end, true)
-    if (start && end) windows.push({ startAt: start.getTime(), endAt: end.getTime() })
+    if (start && end) windows.push({
+      outletId: String(group.outletId || ''),
+      startAt: start.getTime(),
+      endAt: end.getTime(),
+    })
   }
 
   if (windows.length) return windows
   const start = clockMoment(group.date, row.clock_in)
   let end = clockMoment(group.date, row.clock_out)
   if (start && end && end <= start) end = new Date(end.getTime() + 86_400_000)
-  if (start && end) windows.push({ startAt: start.getTime(), endAt: end.getTime() })
+  if (start && end) windows.push({
+    outletId: String(group.outletId || ''),
+    startAt: start.getTime(),
+    endAt: end.getTime(),
+  })
   return windows
 }
 
@@ -113,10 +121,12 @@ export function buildScheduledRosterKeys({ rosterGroups = [], user = {} } = {}) 
     const matchedRows = scheduledRows.filter((row) => rosterNameMatchesUser(row.staff_name, user, scheduledNames))
     if (!matchedRows.length || !group.outletId || !group.date) continue
 
+    // Keep the day key for debug visibility and older callers, but alarms are
+    // authorised only by the exact time windows encoded below.
     keys.add(`${group.outletId}|${group.date}`)
     for (const row of matchedRows) {
       for (const window of windowsForRow(group, row)) {
-        keys.add(`${WINDOW_PREFIX}${group.outletId}|${window.startAt}|${window.endAt}`)
+        keys.add(`${WINDOW_PREFIX}${window.outletId}|${window.startAt}|${window.endAt}`)
       }
     }
   }
@@ -144,43 +154,35 @@ export function kuchingDateForTimestamp(value) {
   }).format(new Date(timestamp))
 }
 
-function dailyRosterAllowed(alert, scheduledKeys) {
-  const date = kuchingDateForTimestamp(alert.triggerAt)
-  if (!date) return false
-  const outletId = String(alert.outletId || '').trim()
-  if (outletId) return scheduledKeys.has(`${outletId}|${date}`)
-  for (const key of scheduledKeys) {
-    if (!String(key).startsWith(WINDOW_PREFIX) && String(key).endsWith(`|${date}`)) return true
-  }
-  return false
+function encodedWindows(scheduledKeys = new Set()) {
+  return [...scheduledKeys]
+    .filter((key) => String(key).startsWith(WINDOW_PREFIX))
+    .map((key) => {
+      const [outletId, startAt, endAt] = String(key).slice(WINDOW_PREFIX.length).split('|')
+      return { outletId, startAt: Number(startAt), endAt: Number(endAt) }
+    })
+    .filter((window) => Number.isFinite(window.startAt) && Number.isFinite(window.endAt))
 }
 
-export function alertAllowedByRoster(alert = {}, scheduledKeys = new Set()) {
-  if (!dailyRosterAllowed(alert, scheduledKeys)) return false
-  if (!String(alert.taskId || '').trim()) return true
-
+function alertInsideWindow(alert = {}, windows = []) {
   const triggerAt = Number(alert.triggerAt)
   if (!Number.isFinite(triggerAt)) return false
   const outletId = String(alert.outletId || '').trim()
-  return [...scheduledKeys]
-    .filter((key) => String(key).startsWith(WINDOW_PREFIX))
-    .some((key) => {
-      const [windowOutlet, startAt, endAt] = String(key).slice(WINDOW_PREFIX.length).split('|')
-      return (!outletId || windowOutlet === outletId)
-        && triggerAt >= Number(startAt)
-        && triggerAt <= Number(endAt)
-    })
-}
-
-export function alertAllowedByRosterShift(alert = {}, scheduledKeys = new Set(), scheduledWindows = []) {
-  if (!scheduledWindows?.length) return alertAllowedByRoster(alert, scheduledKeys)
-  if (!dailyRosterAllowed(alert, scheduledKeys)) return false
-  if (!String(alert.taskId || '').trim()) return true
-  const triggerAt = Number(alert.triggerAt)
-  const outletId = String(alert.outletId || '').trim()
-  return scheduledWindows.some((window) => (
+  return (windows || []).some((window) => (
     (!outletId || String(window.outletId || '') === outletId)
       && triggerAt >= Number(window.startAt)
       && triggerAt <= Number(window.endAt)
   ))
+}
+
+export function alertAllowedByRoster(alert = {}, scheduledKeys = new Set()) {
+  // Exact time-window gating applies to Task, SOP and Training alerts. This also
+  // handles a 21:00–00:00 shift correctly because the encoded end is next day.
+  // No parseable roster window means fail closed and install no alarm.
+  return alertInsideWindow(alert, encodedWindows(scheduledKeys))
+}
+
+export function alertAllowedByRosterShift(alert = {}, scheduledKeys = new Set(), scheduledWindows = []) {
+  const windows = scheduledWindows?.length ? scheduledWindows : encodedWindows(scheduledKeys)
+  return alertInsideWindow(alert, windows)
 }
