@@ -35,7 +35,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.11-validation
+      ANDROID_VERSION_NAME: 4.5.12-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -51,7 +51,7 @@ jobs:
       - name: Validate Task, update and package source
         run: |
           grep -q "auto-task-package-v22" web/public/sw.js
-          grep -q '"apk_version": "4.5.11"' web/public/app-release.json
+          grep -q '"apk_version": "4.5.12"' web/public/app-release.json
           grep -q "RosterTaskAssignmentManager" web/src/App.jsx
           grep -q "configureRosterTaskAssignment" web/src/components/RosterTaskAssignmentManager.jsx
           grep -q "TASK_SNAPSHOT_PREFIX" web/src/components/RosterTaskAssignmentManager.jsx
@@ -79,8 +79,8 @@ jobs:
           grep -q "自动同步" web/src/pages/OperationalTasksV2.jsx
           grep -q "applyOpeningChecklistFeedback" worker/src/index.js
           grep -q "op-29-description" worker/src/opening-checklist-feedback.js
-          grep -q "due_time: '12:00'" worker/src/opening-checklist-feedback.js
-          grep -q "lock_time: '12:15'" worker/src/opening-checklist-feedback.js
+          grep -q "due_time: '13:00'" worker/src/opening-checklist-feedback.js
+          grep -q "lock_time: '13:15'" worker/src/opening-checklist-feedback.js
           grep -q "max_photos = 4" worker/src/opening-checklist-feedback.js
           grep -q "max_photos = 3" worker/src/opening-checklist-feedback.js
           grep -q "type === 'TEXT'" web/src/pages/OperationalTasksV2.jsx
@@ -146,7 +146,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.11.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.12.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -228,8 +228,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Automatic Task Package ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. OPS checks the live Sheet-backed data package automatically on launch, foreground return, network reconnect and regular intervals. New or changed Tasks rebuild the local roster-assigned snapshot in the background and replace the old list without staff pressing Refresh. Cashier C/CA and Kitchen P/G/DF assignment, leadership exclusions, authenticated photos, mandatory updates, exact alarms and direct printing remain enabled."
+            --title "Stupiak's Ops Opening Checklist 1 PM ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. The Opening Preparation Checklist remains open until 1:00 PM and locks at 1:15 PM. Automatic Sheet-backed Task package refresh remains enabled, so the revised deadline replaces the previous noon deadline without staff pressing Refresh. Cashier C/CA and Kitchen P/G/DF assignment, leadership exclusions, authenticated photos, exact alarms and direct printing remain enabled."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
