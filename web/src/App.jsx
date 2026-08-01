@@ -1,4 +1,5 @@
 import '@/ops-ui-refresh.css'
+import '@/sop-ui-refresh.css'
 import { lazy, Suspense } from 'react'
 import { Toaster } from '@/components/ui/toaster'
 import { QueryClientProvider } from '@tanstack/react-query'
