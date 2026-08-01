@@ -53,8 +53,15 @@ echo "==> Canonical OPS production: $PRODUCTION_ORIGIN"
 echo "==> Checking existing local Wrangler authentication"
 npx wrangler whoami
 
-echo "==> Updating main without overwriting local work"
+echo "==> Switching to the canonical main branch"
+if ! git diff --quiet || ! git diff --cached --quiet; then
+  echo "Tracked local changes are present. Commit or stash them before production deployment." >&2
+  exit 1
+fi
 git fetch origin main
+if ! git switch main 2>/dev/null; then
+  git checkout main
+fi
 git pull --ff-only origin main
 
 echo "==> Installing exact dependencies"
@@ -102,6 +109,7 @@ for attempt in $(seq 1 30); do
   headers="$(mktemp)"
   body="$(curl -fsS --max-time 20 -D "$headers" "$HEALTH_URL" || true)"
   if grep -Fqi "X-ChefOps-Worker-Revision: $EXPECTED_REVISION" "$headers"; then
+    rm -f "$headers"
     printf '%s\n' "$body"
     echo "REALTIME_DEPLOYMENT_VERIFIED=true"
     echo "D1_MIGRATIONS_APPLIED=true"
