@@ -35,7 +35,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.10-validation
+      ANDROID_VERSION_NAME: 4.5.11-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,11 +50,18 @@ jobs:
         run: npm ci
       - name: Validate Task, update and package source
         run: |
-          grep -q "opening-checklist-feedback-v21" web/public/sw.js
-          grep -q '"apk_version": "4.5.10"' web/public/app-release.json
+          grep -q "auto-task-package-v22" web/public/sw.js
+          grep -q '"apk_version": "4.5.11"' web/public/app-release.json
           grep -q "RosterTaskAssignmentManager" web/src/App.jsx
           grep -q "configureRosterTaskAssignment" web/src/components/RosterTaskAssignmentManager.jsx
-          grep -q "warmRosterTaskAssignmentCache" web/src/components/RosterTaskAssignmentManager.jsx
+          grep -q "TASK_SNAPSHOT_PREFIX" web/src/components/RosterTaskAssignmentManager.jsx
+          grep -q "TASK_REFRESH_INTERVAL_MS" web/src/components/RosterTaskAssignmentManager.jsx
+          grep -q "PACKAGE_FORCE_INTERVAL_MS" web/src/components/RosterTaskAssignmentManager.jsx
+          grep -q "refresh: true" web/src/components/RosterTaskAssignmentManager.jsx
+          grep -q "clearAssignedTaskSnapshots" web/src/components/RosterTaskAssignmentManager.jsx
+          grep -q "AUTO_FORCE_INTERVAL_MS" web/src/components/DataPackGate.jsx
+          grep -q "A usable local package no longer stops update checks" web/src/components/DataPackGate.jsx
+          grep -q "syncAppPack({ outletId, force: true })" web/src/pages/DataPackage.jsx
           grep -q "TASK_STORAGE_PREFIX" web/src/lib/roster-task-assignment.js
           grep -q "cache_mode: 'instant-local'" web/src/lib/roster-task-assignment.js
           grep -q "cache_mode: 'warming'" web/src/lib/roster-task-assignment.js
@@ -139,7 +146,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.10.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.11.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -221,8 +228,8 @@ jobs:
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Instant Assigned Tasks ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. Assigned Tasks no longer block the page while Duty Roster is loading. The app warms and stores the latest assigned Task snapshot locally, displays it immediately, and verifies current roster assignments silently in the background. Cashier C/CA and Kitchen P/G/DF assignment, leadership exclusions, live Task refresh, authenticated APK photo loading, opening-checklist feedback, stock visibility, mandatory updates, exact alarms, and LAN/Bluetooth printing remain enabled."
+            --title "Stupiak's Ops Automatic Task Package ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed Android release ${ANDROID_VERSION_NAME} (versionCode ${ANDROID_VERSION_CODE}) built from commit ${GITHUB_SHA}. OPS checks the live Sheet-backed data package automatically on launch, foreground return, network reconnect and regular intervals. New or changed Tasks rebuild the local roster-assigned snapshot in the background and replace the old list without staff pressing Refresh. Cashier C/CA and Kitchen P/G/DF assignment, leadership exclusions, authenticated photos, mandatory updates, exact alarms and direct printing remain enabled."
       - name: Show stable release URLs
         run: |
           echo "APK: https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_FILE_NAME}"
