@@ -15,6 +15,20 @@
       "id": "__APP_DATA_PACKS_ID__"
     }
   ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OUTLET_REALTIME",
+        "class_name": "OutletRealtimeHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "realtime-v1",
+      "new_sqlite_classes": ["OutletRealtimeHub"]
+    }
+  ],
   "r2_buckets": [
     {
       "binding": "MEDIA_BUCKET",
