@@ -57,8 +57,8 @@ jobs:
           grep -q '"apk_version": "4.5.14"' web/public/app-release.json
           grep -q '"minimum_apk_version": "4.5.14"' web/public/app-release.json
           grep -q "AUTO_OPEN_COOLDOWN_MS" web/src/components/AppUpdateBanner.jsx
-          grep -q "sw-v23.js" web/src/main.jsx
-          grep -q "closed-loop-v23" web/public/sw-v23.js
+          grep -q "sw-v24.js" web/src/main.jsx
+          grep -q "exact-on-shift-v24" web/public/sw-v24.js
           grep -q "open_time: night ? '21:00' : '10:00'" worker/src/opening-checklist-feedback.js
           grep -q "due_time: night ? '00:00' : '17:30'" worker/src/opening-checklist-feedback.js
           grep -q "due_day_offset: night ? 1 : 0" worker/src/opening-checklist-feedback.js
