@@ -3,8 +3,9 @@ import { loginWithGoogle, sessionCookie } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { ensureEntitySheet } from './sheets.js'
 import { markAppPackDirty } from './app-pack.js'
+import { handleRealtimeApi, OutletRealtimeHub, publishMutationEvent } from './realtime.js'
 
-const WORKER_REVISION = 'live-sync-mobile-shell-v3'
+const WORKER_REVISION = 'outlet-realtime-hub-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -174,6 +175,12 @@ export default {
         })
       }
 
+      const realtimeResponse = await handleRealtimeApi(request, runEnv, url)
+      if (realtimeResponse) {
+        if (realtimeResponse.status === 101) return realtimeResponse
+        return withApiHeaders(request, env, realtimeResponse)
+      }
+
       const webhookResponse = await handleDataPackDirtyWebhook(request, runEnv, url.pathname)
       if (webhookResponse) return withApiHeaders(request, env, webhookResponse)
 
@@ -181,6 +188,12 @@ export default {
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
       const response = await app.fetch(request, runEnv, ctx)
+      if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method) && response.status >= 200 && response.status < 300) {
+        const broadcastResponse = response.clone()
+        ctx.waitUntil(publishMutationEvent(request, runEnv, url.pathname, broadcastResponse).catch((error) => {
+          console.error('Realtime mutation broadcast failed', url.pathname, error)
+        }))
+      }
       return withApiHeaders(request, env, response)
     }
 
@@ -193,3 +206,5 @@ export default {
     }
   },
 }
+
+export { OutletRealtimeHub }
