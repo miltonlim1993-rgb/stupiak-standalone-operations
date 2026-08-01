@@ -113,16 +113,31 @@ function comparable(value) {
   return String(value)
 }
 
+function orderedComparison(left, right) {
+  const numericLeft = Number(left)
+  const numericRight = Number(right)
+  if (comparable(left) !== '' && comparable(right) !== '' && Number.isFinite(numericLeft) && Number.isFinite(numericRight)) {
+    return numericLeft - numericRight
+  }
+  return comparable(left).localeCompare(comparable(right))
+}
+
 function matchesFilter(row, filter = {}) {
   return Object.entries(filter || {}).every(([field, expected]) => {
     if (expected === undefined) return true
     const actual = row?.[field]
     if (Array.isArray(expected)) return expected.map(comparable).includes(comparable(actual))
     if (expected && typeof expected === 'object') {
-      if (Array.isArray(expected.$in)) return expected.$in.map(comparable).includes(comparable(actual))
-      if (Object.prototype.hasOwnProperty.call(expected, '$ne')) return comparable(actual) !== comparable(expected.$ne)
-      if (Object.prototype.hasOwnProperty.call(expected, '$eq')) return comparable(actual) === comparable(expected.$eq)
-      return comparable(actual) === comparable(expected)
+      if (Array.isArray(expected.$in) && !expected.$in.map(comparable).includes(comparable(actual))) return false
+      if (Array.isArray(expected.$nin) && expected.$nin.map(comparable).includes(comparable(actual))) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$ne') && comparable(actual) === comparable(expected.$ne)) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$eq') && comparable(actual) !== comparable(expected.$eq)) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$lt') && orderedComparison(actual, expected.$lt) >= 0) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$lte') && orderedComparison(actual, expected.$lte) > 0) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$gt') && orderedComparison(actual, expected.$gt) <= 0) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$gte') && orderedComparison(actual, expected.$gte) < 0) return false
+      if (Object.prototype.hasOwnProperty.call(expected, '$contains') && !comparable(actual).toLowerCase().includes(comparable(expected.$contains).toLowerCase())) return false
+      return true
     }
     return comparable(actual) === comparable(expected)
   })
@@ -135,14 +150,8 @@ function sortedRows(rows, sort = '') {
     for (const fieldSpec of fields) {
       const descending = fieldSpec.startsWith('-')
       const field = descending ? fieldSpec.slice(1) : fieldSpec
-      const a = left?.[field]
-      const b = right?.[field]
-      if (comparable(a) === comparable(b)) continue
-      const numericA = Number(a)
-      const numericB = Number(b)
-      const comparison = Number.isFinite(numericA) && Number.isFinite(numericB)
-        ? numericA - numericB
-        : comparable(a).localeCompare(comparable(b))
+      const comparison = orderedComparison(left?.[field], right?.[field])
+      if (comparison === 0) continue
       return descending ? -comparison : comparison
     }
     return 0
