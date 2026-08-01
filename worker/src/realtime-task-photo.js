@@ -183,8 +183,10 @@ async function validatedMutationRequest(request, env, body) {
   }
 
   const timestamp = new Date().toISOString()
+  const entityId = String(body.entity_id || input.id || crypto.randomUUID())
   const payload = {
     ...input,
+    id: entityId,
     outlet_id: task.outlet_id,
     task_id: task.id,
     template_id: task.template_id,
@@ -203,7 +205,7 @@ async function validatedMutationRequest(request, env, body) {
     body: JSON.stringify({
       ...body,
       outlet_id: task.outlet_id,
-      entity_id: body.entity_id || payload.id || crypto.randomUUID(),
+      entity_id: entityId,
       payload,
     }),
   })
