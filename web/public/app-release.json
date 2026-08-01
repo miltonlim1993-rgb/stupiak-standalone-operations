@@ -1,10 +1,10 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.10",
-  "minimum_apk_version": "4.5.10",
+  "apk_version": "4.5.11",
+  "minimum_apk_version": "4.5.11",
   "force_update": true,
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Task assignment no longer blocks the page while Duty Roster is loading. The app warms and stores the latest assigned Task snapshot locally, displays it immediately, and verifies the current roster silently in the background. Cashier and Kitchen position assignment rules remain unchanged.",
-  "release_trigger": "2026-07-31-instant-roster-task-loading-production"
+  "release_notes": "OPS now checks the live Sheet-backed data package automatically on launch, foreground return, network reconnect and at regular intervals. New or changed Tasks rebuild the local roster-assigned snapshot in the background and replace the old Task list without requiring staff to press Refresh.",
+  "release_trigger": "2026-08-01-automatic-task-package-refresh"
 }

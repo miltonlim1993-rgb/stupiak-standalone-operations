@@ -1,8 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DatabaseZap, Download, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
 import { getAppPackStatus, hasUsableAppPack, syncAppPack } from '@/lib/app-pack'
 import { Button } from '@/components/ui/button'
+
+const AUTO_CHECK_INTERVAL_MS = 60_000
+const AUTO_FORCE_INTERVAL_MS = 5 * 60_000
 
 function bytes(value) {
   const number = Number(value || 0)
@@ -32,21 +35,25 @@ export default function DataPackGate({ children }) {
   const outletId = String(user?.outlet_id || '').trim()
   const [status, setStatus] = useState(() => getAppPackStatus())
   const [downloading, setDownloading] = useState(false)
-  const attemptedOutlet = useRef('')
+  const syncRunning = useRef(false)
+  const lastForceAt = useRef(0)
   const ready = useMemo(() => hasUsableAppPack(outletId), [outletId, status])
 
-  const download = async () => {
-    if (!outletId || downloading) return
-    setDownloading(true)
+  const syncLatest = useCallback(async ({ force = false, showBusy = false } = {}) => {
+    if (!outletId || syncRunning.current || !navigator.onLine) return
+    syncRunning.current = true
+    if (showBusy) setDownloading(true)
     try {
-      await syncAppPack({ outletId, force: false })
+      await syncAppPack({ outletId, force })
+      if (force) lastForceAt.current = Date.now()
       setStatus(getAppPackStatus())
     } catch {
       setStatus(getAppPackStatus())
     } finally {
-      setDownloading(false)
+      syncRunning.current = false
+      if (showBusy) setDownloading(false)
     }
-  }
+  }, [outletId])
 
   useEffect(() => {
     const updateStatus = (event) => setStatus(event.detail || getAppPackStatus())
@@ -62,11 +69,33 @@ export default function DataPackGate({ children }) {
   }, [])
 
   useEffect(() => {
-    if (!outletId || ready || !navigator.onLine || attemptedOutlet.current === outletId) return
-    attemptedOutlet.current = outletId
-    const timer = window.setTimeout(() => download(), 150)
-    return () => window.clearTimeout(timer)
-  }, [outletId, ready])
+    if (!outletId) return undefined
+
+    const check = () => {
+      if (!navigator.onLine) return
+      const force = Date.now() - lastForceAt.current >= AUTO_FORCE_INTERVAL_MS
+      syncLatest({ force })
+    }
+    const onActive = () => {
+      if (document.visibilityState === 'visible') check()
+    }
+
+    // A usable local package no longer stops update checks. The installed package
+    // remains visible while OPS checks, then changed modules are downloaded and
+    // switched atomically without requiring the employee to press Refresh.
+    const initial = window.setTimeout(() => syncLatest({ force: true }), 150)
+    const interval = window.setInterval(check, AUTO_CHECK_INTERVAL_MS)
+    window.addEventListener('focus', onActive)
+    window.addEventListener('online', check)
+    document.addEventListener('visibilitychange', onActive)
+    return () => {
+      window.clearTimeout(initial)
+      window.clearInterval(interval)
+      window.removeEventListener('focus', onActive)
+      window.removeEventListener('online', check)
+      document.removeEventListener('visibilitychange', onActive)
+    }
+  }, [outletId, syncLatest])
 
   if (ready) return children
 
@@ -96,9 +125,9 @@ export default function DataPackGate({ children }) {
         ) : null}
         {status.state === 'cleaning' ? <div className="mt-4 flex items-center gap-2 rounded-xl bg-slate-100 px-3 py-2 text-sm text-slate-700"><Trash2 className="h-4 w-4" />Deleting obsolete package hashes from this device.</div> : null}
         {status.error ? <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{status.error}</p> : null}
-        <Button className="mt-5 h-12 w-full rounded-xl" onClick={download} disabled={busy || !navigator.onLine}>
+        <Button className="mt-5 h-12 w-full rounded-xl" onClick={() => syncLatest({ force: true, showBusy: true })} disabled={busy || !navigator.onLine}>
           {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Download className="mr-2 h-5 w-5" />}
-          {busy ? statusLabel(status) : status.state === 'error' ? 'Retry required update' : 'Download now'}
+          {busy ? statusLabel(status) : status.state === 'error' ? 'Retry required update' : 'Download latest package'}
         </Button>
         <div className="mt-4 flex items-start gap-2 text-xs leading-5 text-muted-foreground"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /><span>The currently active package stays intact until every required new module is downloaded and verified. OPS then switches versions and removes obsolete module data.</span></div>
       </section>
