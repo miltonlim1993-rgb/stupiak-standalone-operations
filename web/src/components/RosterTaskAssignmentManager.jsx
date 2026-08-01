@@ -8,6 +8,8 @@ import { configureRosterTaskAssignment } from '@/lib/roster-task-assignment'
 const TASK_SNAPSHOT_PREFIX = 'chefops.roster-task-assignment.tasks.v2.'
 const TASK_REFRESH_INTERVAL_MS = 60_000
 const PACKAGE_FORCE_INTERVAL_MS = 5 * 60_000
+const AUTO_REFRESH_MARKER_KEY = 'chefops.automatic-task-refresh.version'
+const AUTO_REFRESH_VERSION = '4.5.11'
 
 function kuchingDate() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -27,6 +29,13 @@ function clearAssignedTaskSnapshots() {
     removed.push(key)
   }
   return removed.length
+}
+
+function firstLaunchNeedsSnapshotReset() {
+  const previous = localStorage.getItem(AUTO_REFRESH_MARKER_KEY)
+  if (previous === AUTO_REFRESH_VERSION) return false
+  localStorage.setItem(AUTO_REFRESH_MARKER_KEY, AUTO_REFRESH_VERSION)
+  return true
 }
 
 export default function RosterTaskAssignmentManager() {
@@ -86,9 +95,13 @@ export default function RosterTaskAssignmentManager() {
   useEffect(() => {
     if (!isAuthenticated || !user) return undefined
 
+    // The first 4.5.11 launch removes snapshots created by older APKs. This covers
+    // devices that had already downloaded the package but still retained old Tasks.
+    const resetOldSnapshots = firstLaunchNeedsSnapshotReset()
+
     // Do not start the old refresh=false warm-up first. A refresh=false build could
     // win the in-flight cache race and put the previous Task package back on screen.
-    refreshLatestTasks({ forcePackage: true })
+    refreshLatestTasks({ forcePackage: true, invalidateSnapshots: resetOldSnapshots })
 
     const onActive = () => {
       if (document.visibilityState === 'visible') refreshLatestTasks()
