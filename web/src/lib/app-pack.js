@@ -6,7 +6,6 @@ const DB_VERSION = 1
 const MANIFEST_STORE = 'manifests'
 const MODULE_STORE = 'modules'
 const STATUS_KEY = 'chefops.data-pack.status'
-const BLOCKING_STATES = new Set(['update_required', 'downloading', 'saving', 'cleaning', 'error'])
 
 let dbPromise = null
 let activeSync = null
@@ -115,7 +114,7 @@ export function hasUsableAppPack(outletId = '') {
   const status = getAppPackStatus()
   const expected = outletKey(outletId)
   const actual = outletKey(status.outlet_id || '')
-  return Boolean(status.version) && expected === actual && !BLOCKING_STATES.has(String(status.state || ''))
+  return Boolean(status.installed_version) && expected === actual
 }
 
 async function hydrate(outletId) {
@@ -184,18 +183,20 @@ async function ensureManifestModules(outletId, manifest) {
   }
 }
 
-export async function syncAppPack({ outletId = '', force = false } = {}) {
+export async function syncAppPack({ outletId = '' } = {}) {
   if (activeSync) return activeSync
   const run = (async () => {
     const localManifest = await hydrate(outletId)
-    let updateDetected = false
+    const installedVersion = localManifest?.version || ''
     if (!localManifest) {
-      setStatus({ state: 'checking', outlet_id: outletId || '', error: '', warning: '' })
+      setStatus({ state: 'checking', outlet_id: outletId || '', installed_version: '', error: '', warning: '' })
     } else {
       setStatus({
         state: 'checking',
         outlet_id: outletId || '',
-        version: localManifest.version,
+        installed_version: installedVersion,
+        version: installedVersion,
+        current_version: installedVersion,
         data_version: localManifest.data_version,
         error: '',
         warning: '',
@@ -205,7 +206,6 @@ export async function syncAppPack({ outletId = '', force = false } = {}) {
     try {
       const params = new URLSearchParams()
       if (outletId) params.set('outlet_id', outletId)
-      if (force) params.set('refresh', '1')
       params.set('_', String(Date.now()))
       const manifest = await fetchJson(`/api/app/v4/pack/manifest?${params}`)
       const changed = []
@@ -218,6 +218,8 @@ export async function syncAppPack({ outletId = '', force = false } = {}) {
         setStatus({
           state: 'ready',
           outlet_id: outletId || '',
+          installed_version: manifest.version,
+          current_version: manifest.version,
           version: manifest.version,
           data_version: manifest.data_version,
           total_bytes: manifest.total_bytes,
@@ -228,17 +230,18 @@ export async function syncAppPack({ outletId = '', force = false } = {}) {
           completed_modules: 0,
           total_modules: 0,
           error: '',
-          warning: '',
+          warning: manifest.publish_warning || '',
         })
         return manifest
       }
 
-      updateDetected = true
       setStatus({
         state: 'update_required',
         outlet_id: outletId || '',
-        current_version: localManifest?.version || '',
-        version: manifest.version,
+        installed_version: installedVersion,
+        current_version: installedVersion,
+        available_version: manifest.version,
+        version: installedVersion || manifest.version,
         data_version: manifest.data_version,
         total_bytes: manifest.total_bytes,
         changed_modules: changed,
@@ -277,6 +280,9 @@ export async function syncAppPack({ outletId = '', force = false } = {}) {
       setStatus({
         state: 'ready',
         outlet_id: outletId || '',
+        installed_version: manifest.version,
+        current_version: manifest.version,
+        available_version: manifest.version,
         version: manifest.version,
         data_version: manifest.data_version,
         total_bytes: manifest.total_bytes,
@@ -289,20 +295,31 @@ export async function syncAppPack({ outletId = '', force = false } = {}) {
         completed_modules: completed,
         total_modules: changed.length,
         error: '',
-        warning: '',
+        warning: manifest.publish_warning || '',
       })
       navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
       window.dispatchEvent(new CustomEvent('chefops:data-pack-updated', { detail: window.__chefopsDataPack }))
       return manifest
     } catch (error) {
-      if (localManifest && !updateDetected) {
+      if (localManifest) {
+        // Download failures never deactivate or replace the installed package.
+        // Partially downloaded modules remain unreferenced until a complete
+        // manifest has been verified and committed atomically.
+        window.__chefopsDataPack = { outlet_id: outletId || '', manifest: localManifest, modules: moduleSnapshot(outletId, localManifest) }
         setStatus({
           state: 'ready',
           outlet_id: outletId || '',
+          installed_version: localManifest.version,
+          current_version: localManifest.version,
           version: localManifest.version,
           data_version: localManifest.data_version,
-          warning: error.message || 'Unable to check for a new data pack',
+          generated_at: localManifest.generated_at,
+          warning: `Latest published package could not be installed. The current package remains active. ${error.message || ''}`.trim(),
           last_checked_at: new Date().toISOString(),
+          changed_modules: [],
+          removed_modules: [],
+          completed_modules: 0,
+          total_modules: 0,
           error: '',
         })
         return localManifest
@@ -310,7 +327,8 @@ export async function syncAppPack({ outletId = '', force = false } = {}) {
       setStatus({
         state: 'error',
         outlet_id: outletId || '',
-        error: error.message || 'Unable to download required data patch',
+        installed_version: '',
+        error: error.message || 'Unable to download the published Cloudflare package',
         last_checked_at: new Date().toISOString(),
       })
       throw error
