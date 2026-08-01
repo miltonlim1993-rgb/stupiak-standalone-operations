@@ -12,8 +12,9 @@ import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 import { installRealtimeClientHeader } from '@/lib/client-id'
+import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
 
-const SHELL_VERSION = 'outlet-realtime-v25'
+const SHELL_VERSION = 'realtime-d1-foundation-v1'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -106,6 +107,7 @@ function publishShellHealth() {
 markRuntime()
 installNativeSessionFetch()
 installRealtimeClientHeader()
+installRealtimeMutationQueue()
 installNativeLabelPrintBridge()
 applyTheme()
 configureNativeSystemBars()
