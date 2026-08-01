@@ -5,6 +5,7 @@ import { ensureEntitySheet } from './sheets.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
+import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import {
   flushPendingSheetMirrors,
@@ -198,7 +199,8 @@ export default {
       const nativeLoginResponse = await handleNativeGoogleLogin(request, runEnv, url.pathname)
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
-      const response = await app.fetch(request, runEnv, ctx)
+      const appResponse = await app.fetch(request, runEnv, ctx)
+      const response = await overlayOperationalBootstrapResponse(url, runEnv, appResponse)
       if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method) && response.status >= 200 && response.status < 300) {
         const broadcastResponse = response.clone()
         ctx.waitUntil(publishMutationEvent(request, runEnv, url.pathname, broadcastResponse).catch((error) => {
