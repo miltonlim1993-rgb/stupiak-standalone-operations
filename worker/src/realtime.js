@@ -19,10 +19,14 @@ function ticketKey(value) {
   return `realtime:ticket:${String(value || '').trim()}`
 }
 
+function isPrivileged(user) {
+  return ['owner', 'manager'].includes(String(user?.role || '').toLowerCase())
+}
+
 function allowedOutlets(user) {
   const values = new Set(assignedOutletIds(user).map(String).filter(Boolean))
   if (user?.outlet_id) values.add(String(user.outlet_id))
-  if (['owner', 'manager'].includes(String(user?.role || '').toLowerCase())) values.add('global')
+  if (isPrivileged(user)) values.add('global')
   return [...values]
 }
 
@@ -149,14 +153,31 @@ async function issueTicket(request, env) {
     ? body.outlet_ids.map(String).filter(Boolean)
     : [String(body.outlet_id || user.outlet_id || '').trim()].filter(Boolean)
   const permitted = allowedOutlets(user)
+  const privileged = isPrivileged(user)
   const outlets = requested.length
-    ? requested.filter((outletId) => outletId === 'global' || permitted.includes(outletId))
+    ? requested.filter((outletId) => permitted.includes(outletId) || (privileged && outletId === 'global'))
     : permitted
-  if (!outlets.length) outlets.push('global')
+
+  if (requested.length && !outlets.length) {
+    const error = new Error('Realtime outlet access denied')
+    error.status = 403
+    error.code = 'realtime_outlet_forbidden'
+    throw error
+  }
+  if (!outlets.length) {
+    const fallback = String(user.outlet_id || '').trim()
+    if (fallback) outlets.push(fallback)
+    else if (privileged) outlets.push('global')
+  }
+  if (!outlets.length) {
+    const error = new Error('No outlet is assigned to this account')
+    error.status = 403
+    error.code = 'realtime_outlet_unassigned'
+    throw error
+  }
+
   for (const outletId of outlets) {
-    if (outletId !== 'global' && !['owner', 'manager'].includes(String(user.role || '').toLowerCase())) {
-      assertOutletAccess(user, outletId)
-    }
+    if (outletId !== 'global' && !privileged) assertOutletAccess(user, outletId)
   }
 
   const ticket = crypto.randomUUID()
@@ -197,7 +218,7 @@ async function connect(request, env, url) {
   }
   const ticket = await readTicket(env, url.searchParams.get('ticket'))
   const outletId = outletKey(url.searchParams.get('outlet_id'))
-  if (!ticket || (!ticket.outlets.includes(outletId) && !ticket.outlets.includes('global'))) {
+  if (!ticket || !ticket.outlets.includes(outletId)) {
     const error = new Error('Realtime ticket is invalid or expired')
     error.status = 401
     error.code = 'realtime_ticket_invalid'
@@ -289,9 +310,7 @@ export class OutletRealtimeHub {
   async webSocketMessage(socket, message) {
     let input = null
     try { input = JSON.parse(typeof message === 'string' ? message : new TextDecoder().decode(message)) } catch {}
-    if (input?.type === 'ping') {
-      socket.send(JSON.stringify({ type: 'pong', occurred_at: now() }))
-    }
+    if (input?.type === 'ping') socket.send(JSON.stringify({ type: 'pong', occurred_at: now() }))
   }
 
   async webSocketClose(socket, code, reason) {
