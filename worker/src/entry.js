@@ -8,6 +8,7 @@ import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleAtomicStockCountBatch } from './realtime-stock-batch.js'
 import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
+import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import {
   flushPendingSheetMirrors,
@@ -194,6 +195,9 @@ export default {
 
       const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(request, runEnv, url)
       if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
+
+      const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
+      if (taskPhotoResponse) return withApiHeaders(request, env, taskPhotoResponse)
 
       const realtimeDataResponse = await handleRealtimeDataApi(request, runEnv, url)
       if (realtimeDataResponse) return withApiHeaders(request, env, realtimeDataResponse)
