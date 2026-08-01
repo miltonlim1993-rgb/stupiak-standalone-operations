@@ -1,0 +1,52 @@
+name: Recheck Cloudflare deployment credential now
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/recheck-cloudflare-auth-now.yml
+
+permissions:
+  contents: write
+
+jobs:
+  recheck:
+    runs-on: ubuntu-latest
+    env:
+      S_CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      S_CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      S_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+      S_CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+      V_CLOUDFLARE_API_TOKEN: ${{ vars.CLOUDFLARE_API_TOKEN }}
+      V_CF_API_TOKEN: ${{ vars.CF_API_TOKEN }}
+      S_CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      S_CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record availability without exposing values
+        shell: bash
+        run: |
+          present() { if [[ -n "$1" ]]; then echo present; else echo missing; fi; }
+          mkdir -p .deployments
+          {
+            echo "secret.CLOUDFLARE_API_TOKEN=$(present "$S_CLOUDFLARE_API_TOKEN")"
+            echo "secret.CF_API_TOKEN=$(present "$S_CF_API_TOKEN")"
+            echo "secret.CLOUDFLARE_TOKEN=$(present "$S_CLOUDFLARE_TOKEN")"
+            echo "secret.CLOUDFLARE_API_KEY=$(present "$S_CLOUDFLARE_API_KEY")"
+            echo "variable.CLOUDFLARE_API_TOKEN=$(present "$V_CLOUDFLARE_API_TOKEN")"
+            echo "variable.CF_API_TOKEN=$(present "$V_CF_API_TOKEN")"
+            echo "secret.CLOUDFLARE_ACCOUNT_ID=$(present "$S_CLOUDFLARE_ACCOUNT_ID")"
+            echo "secret.CLOUDFLARE_APP_DATA_PACKS_ID=$(present "$S_CLOUDFLARE_APP_DATA_PACKS_ID")"
+            echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          } > .deployments/cloudflare-auth-recheck-now.txt
+      - name: Commit result and remove one-time workflow
+        shell: bash
+        run: |
+          git config user.name "stupiaks-ops-release"
+          git config user.email "actions@users.noreply.github.com"
+          git rm -f .github/workflows/recheck-cloudflare-auth-now.yml
+          git add .deployments/cloudflare-auth-recheck-now.txt
+          git commit -m "Record current Cloudflare deployment credential availability"
+          git push origin HEAD:main
