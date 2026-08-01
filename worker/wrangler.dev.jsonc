@@ -1,12 +1,32 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "chefops-api-local",
-  "main": "src/index.js",
-  "compatibility_date": "2026-07-01",
+  "main": "src/entry.js",
+  "compatibility_date": "2026-07-25",
   "dev": {
     "port": 8787,
     "local_protocol": "http"
   },
+  "kv_namespaces": [
+    {
+      "binding": "APP_DATA_PACKS",
+      "id": "f62696e1a2f14b8a9e0b84a540c7e997"
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "OUTLET_REALTIME",
+        "class_name": "OutletRealtimeHub"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "realtime-v1",
+      "new_sqlite_classes": ["OutletRealtimeHub"]
+    }
+  ],
   "observability": {
     "enabled": false
   }
