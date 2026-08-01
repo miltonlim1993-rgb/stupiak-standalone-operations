@@ -11,10 +11,11 @@ export default function RealtimeBridge() {
   const role = String(user?.role || '').toLowerCase()
   const outletIds = useMemo(() => {
     if (!isAuthenticated || !user) return []
-    if (role === 'owner' || role === 'manager') return ['global']
     const values = parseOutletIds(user)
     if (user.outlet_id) values.unshift(String(user.outlet_id))
-    return [...new Set(values.map(String).filter(Boolean))].slice(0, 4)
+    const assigned = [...new Set(values.map(String).filter(Boolean))]
+    if (role === 'owner' || role === 'manager') return ['global', ...assigned].slice(0, 5)
+    return assigned.slice(0, 4)
   }, [isAuthenticated, role, user])
 
   useEffect(() => {

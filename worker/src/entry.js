@@ -12,13 +12,14 @@ import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.j
 import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
 import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
+import { withSubmissionLock } from './submission-locks.js'
 import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-d1-foundation-v1'
+const WORKER_REVISION = 'task-stock-submit-lock-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -189,7 +190,14 @@ export default {
         })
       }
 
-      const atomicStockResponse = await handleJsonAtomicStockCountBatch(request, runEnv, url)
+      const atomicStockResponse = url.pathname === '/api/stock-counts/batch'
+        ? await withSubmissionLock(
+            request,
+            runEnv,
+            url,
+            () => handleJsonAtomicStockCountBatch(request, runEnv, url),
+          )
+        : await handleJsonAtomicStockCountBatch(request, runEnv, url)
       if (atomicStockResponse) return withApiHeaders(request, env, atomicStockResponse)
 
       const closeUpSyncResponse = await handleRealtimeCloseUpSync(request, runEnv, url)
@@ -199,7 +207,14 @@ export default {
       const completedTaskResponse = await guardCompletedOperationalTask(workflowRequest, runEnv, url)
       if (completedTaskResponse) return withApiHeaders(request, env, completedTaskResponse)
 
-      const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
+      const realtimeWorkflowResponse = url.pathname === '/api/tasks/operational/action'
+        ? await withSubmissionLock(
+            workflowRequest,
+            runEnv,
+            url,
+            () => handleRealtimeWorkflowApi(workflowRequest, runEnv, url),
+          )
+        : await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
       if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
 
       const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
