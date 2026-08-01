@@ -1,5 +1,5 @@
-// Production release refresh: 4.5.7 / PWA v21
-const VERSION = 'chefops-v4-5-7-opening-checklist-feedback-v21'
+// Production release refresh: 4.5.11 / PWA v22
+const VERSION = 'chefops-v4-5-11-auto-task-package-v22'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
