@@ -1,10 +1,10 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.13",
-  "minimum_apk_version": "4.5.13",
+  "apk_version": "4.5.14",
+  "minimum_apk_version": "4.5.14",
   "force_update": true,
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "All morning operational Tasks run from 10:00 AM to 5:30 PM. Night Tasks run from 9:00 PM to midnight. Task alarms require the signed-in employee to be inside the matching Duty Roster time window. Android, website and installed PWA clients now enforce the latest shell, data package and mandatory APK release automatically.",
-  "release_trigger": "2026-08-01-closed-loop-shifts-packages-and-updates-stable"
+  "release_notes": "Morning Tasks remain 10:00 AM–5:30 PM and Night Tasks remain 9:00 PM–midnight. Every Task, SOP and Training alarm now requires its trigger time to fall inside the signed-in employee's exact Duty Roster window, including overnight shifts. Package, website, PWA and mandatory APK update enforcement remain enabled.",
+  "release_trigger": "2026-08-01-exact-on-shift-alerts-all-kinds"
 }
