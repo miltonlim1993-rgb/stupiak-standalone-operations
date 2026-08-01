@@ -16,12 +16,12 @@ export function applyOpeningChecklistFeedback(template, config) {
   if (templateId !== 'tmpl-rr-opening-checklist-v3' && checklistKey !== 'opening') return config
 
   const next = cloneConfig(config)
-  next.version = Math.max(2, Number(next.version || 1))
+  next.version = Math.max(3, Number(next.version || 1))
   next.schedule = {
     ...(next.schedule || {}),
-    due_time: '12:00',
+    due_time: '13:00',
     due_day_offset: 0,
-    lock_time: '12:15',
+    lock_time: '13:15',
     lock_day_offset: 0,
   }
 
