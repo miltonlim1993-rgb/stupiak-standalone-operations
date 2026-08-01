@@ -9,6 +9,7 @@ import MobileNavigation from '@/components/MobileNavigation'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import AppUpdateBanner from '@/components/AppUpdateBanner'
+import RealtimeBridge from '@/components/RealtimeBridge'
 import RosterTaskAssignmentManager from '@/components/RosterTaskAssignmentManager'
 import RosterGatedTaskAlarmManager from '@/components/RosterGatedTaskAlarmManager'
 import TaskBadgeManager from '@/components/TaskBadgeManager'
@@ -93,6 +94,7 @@ export default function App() {
         <Router>
           <MobileNavigation />
           <ScrollToTop />
+          <RealtimeBridge />
           <AppRoutes />
           <RosterGatedTaskAlarmManager />
           <TaskBadgeManager />
