@@ -31,11 +31,30 @@ function isNativeAndroid() {
   return Boolean(capacitor?.isNativePlatform?.() && capacitor?.getPlatform?.() === 'android')
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 function loginErrorMessage(error) {
   if (error?.code === 'sheets_rate_limited') {
-    return 'The operations sheet is temporarily busy. Please wait about one minute, then try again.'
+    return 'The operations sheet is still busy after automatic retries. Please try again shortly.'
   }
   return error?.message || 'Google sign-in failed'
+}
+
+async function loginWithAutomaticRetry(loginWithGoogle, credential) {
+  let lastError = null
+  const delays = [0, 1200, 2500]
+  for (let attempt = 0; attempt < delays.length; attempt += 1) {
+    if (delays[attempt]) await sleep(delays[attempt])
+    try {
+      return await loginWithGoogle(credential)
+    } catch (error) {
+      lastError = error
+      if (error?.code !== 'sheets_rate_limited') throw error
+    }
+  }
+  throw lastError
 }
 
 export default function Login() {
@@ -65,7 +84,7 @@ export default function Login() {
             setLoading(true)
             setError('')
             try {
-              await loginWithGoogle(credential)
+              await loginWithAutomaticRetry(loginWithGoogle, credential)
               navigate(location.state?.from || '/', { replace: true })
             } catch (err) {
               setError(loginErrorMessage(err))
@@ -99,7 +118,7 @@ export default function Login() {
       if (!plugin?.signIn) throw new Error('Native Google Sign-In is unavailable. Install the latest Android release.')
       const result = await plugin.signIn({ serverClientId: clientId })
       if (!result?.idToken) throw new Error('Google did not return an ID token')
-      await loginWithGoogle(result.idToken)
+      await loginWithAutomaticRetry(loginWithGoogle, result.idToken)
       navigate(location.state?.from || '/', { replace: true })
     } catch (err) {
       setError(loginErrorMessage(err))
