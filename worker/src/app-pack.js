@@ -3,7 +3,7 @@ import { getLabelCatalog } from './labels.js'
 import { ensureMediaRules } from './media-rules.js'
 
 const PACK_SCHEMA_VERSION = 2
-const PACK_MAX_AGE_MS = 15 * 60 * 1000
+const PACK_MAX_AGE_MS = 2 * 60 * 1000
 const DEFAULT_PAYMENT_METHODS = [
   { id: 'payment-cash', code: 'cash', name: 'Cash', icon: 'banknote', color: 'emerald', category: 'cash', display_order: 10, active: true, requires_reference: false },
   { id: 'payment-duitnow', code: 'duitnow', name: 'DuitNow', icon: 'qr-code', color: 'violet', category: 'cashless', display_order: 20, active: true, requires_reference: false },

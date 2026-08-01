@@ -2070,10 +2070,12 @@ async function handleV4App(request, env, url) {
   const requestedOutlet = String(url.searchParams.get('outlet_id') || user.outlet_id || assignedOutletIds(user)[0] || '').trim()
 
   if (url.pathname === '/api/app/v4/pack/manifest' && request.method === 'GET') {
-    const force = url.searchParams.get('refresh') === '1' && ['manager', 'owner'].includes(user.role)
-    const manifest = force
-      ? await getOrBuildAppPack(env, requestedOutlet, { force: true })
-      : await getPublishedAppPack(env, requestedOutlet)
+    const refreshRequested = url.searchParams.get('refresh') === '1'
+    const privilegedForce = refreshRequested && ['manager', 'owner'].includes(user.role)
+    // Every client manifest check is stale-aware. Staff never force an
+    // unconditional rebuild, but they can no longer be trapped on an old
+    // published package after a direct Master Sheet update.
+    const manifest = await getOrBuildAppPack(env, requestedOutlet, { force: privilegedForce })
     if (!manifest) {
       const error = new Error('The operational data patch has not been published for this outlet yet. Ask a manager to publish it first.')
       error.status = 503
