@@ -2,6 +2,14 @@
 
 Standalone operations application for Stupiak's Pork Burger.
 
+## Canonical production
+
+- Production application and API origin: `https://stupiaks-ops.sporkburger19.workers.dev`
+- Production health endpoint: `https://stupiaks-ops.sporkburger19.workers.dev/api/health`
+- Cloudflare Worker name: `stupiaks-ops`
+
+This Worker serves both the React application and `/api/*`. A Cloudflare Pages project or its Variables and secrets screen must not be treated as the canonical OPS production deployment.
+
 ## Architecture
 
 - `web/` — React + Vite application for desktop, tablet, mobile PWA, and the Android shell.
@@ -32,6 +40,8 @@ npm run build
 ## Cloudflare production
 
 Read [`deploy/cloudflare/README.md`](deploy/cloudflare/README.md).
+
+Repository operating facts and deployment guardrails are recorded in [`AGENTS.md`](AGENTS.md).
 
 ## Android APK
 
