@@ -2297,6 +2297,10 @@ export default {
       if (url.pathname === '/api/health') return json(request, env, {
         ok: true,
         service: 'chefops-api',
+        deployment: {
+          data_pack_refresh_policy: 'stale-aware-v1',
+          pack_max_age_ms: 120000,
+        },
         storage: {
           layout: env.GOOGLE_MASTER_SPREADSHEET_ID ? 'master-plus-yearly-operations' : 'legacy-combined',
           masterConfigured: Boolean(env.GOOGLE_MASTER_SPREADSHEET_ID || env.GOOGLE_SPREADSHEET_ID),
