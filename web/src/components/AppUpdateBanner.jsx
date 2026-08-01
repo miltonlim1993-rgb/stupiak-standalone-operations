@@ -103,7 +103,12 @@ function autoOpenRequiredApk(update) {
   openApkDownload(update.apkUrl).catch(() => undefined)
 }
 
-export default function AppUpdateBanner() {
+export default function AppUpdateBanner({ global = false } = {}) {
+  if (typeof window !== 'undefined') {
+    if (global) window.__chefopsGlobalAppUpdateGate = true
+    else if (window.__chefopsGlobalAppUpdateGate) return null
+  }
+
   const android = nativeAndroid()
   const [registration, setRegistration] = useState(null)
   const [apkUpdate, setApkUpdate] = useState(null)
