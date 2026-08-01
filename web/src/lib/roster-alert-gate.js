@@ -6,6 +6,7 @@ const BLOCKED_ROSTER_STATUSES = [
 ]
 
 const LEADERSHIP_ROSTER_ROLES = new Set(['leader', 'supervisor', 'manager', 'owner'])
+const WINDOW_PREFIX = '@window|'
 
 function normalized(value = '') {
   return String(value || '')
@@ -69,18 +70,6 @@ export function rosterNameMatchesUser(staffName, user = {}, scheduledNames = [])
   return matchingRows.length === 1 && matchingRows[0] === rosterName
 }
 
-export function buildScheduledRosterKeys({ rosterGroups = [], user = {} } = {}) {
-  const keys = new Set()
-  if (LEADERSHIP_ROSTER_ROLES.has(normalized(user.role))) return keys
-  for (const group of rosterGroups || []) {
-    const scheduledRows = (group.rows || []).filter(isScheduledRosterRow)
-    const scheduledNames = scheduledRows.map((row) => row.staff_name)
-    const matched = scheduledRows.some((row) => rosterNameMatchesUser(row.staff_name, user, scheduledNames))
-    if (matched && group.outletId && group.date) keys.add(`${group.outletId}|${group.date}`)
-  }
-  return keys
-}
-
 function localDateTime(dateText, timeText, rollover = false) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(dateText || ''))) return null
   const match = String(timeText || '').match(/^(\d{1,2}):(\d{2})$/)
@@ -104,39 +93,44 @@ function windowsForRow(group, row) {
     const start = localDateTime(group.date, segment.start)
     let end = localDateTime(group.date, segment.end)
     if (start && end && end <= start) end = localDateTime(group.date, segment.end, true)
-    if (start && end) windows.push({
-      outletId: String(group.outletId || ''),
-      date: String(group.date || ''),
-      startAt: start.getTime(),
-      endAt: end.getTime(),
-      positionCode: segment.code || '',
-    })
+    if (start && end) windows.push({ startAt: start.getTime(), endAt: end.getTime() })
   }
 
   if (windows.length) return windows
   const start = clockMoment(group.date, row.clock_in)
   let end = clockMoment(group.date, row.clock_out)
   if (start && end && end <= start) end = new Date(end.getTime() + 86_400_000)
-  if (start && end) windows.push({
-    outletId: String(group.outletId || ''),
-    date: String(group.date || ''),
-    startAt: start.getTime(),
-    endAt: end.getTime(),
-    positionCode: '',
-  })
+  if (start && end) windows.push({ startAt: start.getTime(), endAt: end.getTime() })
   return windows
 }
 
-export function buildScheduledRosterWindows({ rosterGroups = [], user = {} } = {}) {
-  const windows = []
-  if (LEADERSHIP_ROSTER_ROLES.has(normalized(user.role))) return windows
+export function buildScheduledRosterKeys({ rosterGroups = [], user = {} } = {}) {
+  const keys = new Set()
+  if (LEADERSHIP_ROSTER_ROLES.has(normalized(user.role))) return keys
   for (const group of rosterGroups || []) {
     const scheduledRows = (group.rows || []).filter(isScheduledRosterRow)
     const scheduledNames = scheduledRows.map((row) => row.staff_name)
     const matchedRows = scheduledRows.filter((row) => rosterNameMatchesUser(row.staff_name, user, scheduledNames))
-    for (const row of matchedRows) windows.push(...windowsForRow(group, row))
+    if (!matchedRows.length || !group.outletId || !group.date) continue
+
+    keys.add(`${group.outletId}|${group.date}`)
+    for (const row of matchedRows) {
+      for (const window of windowsForRow(group, row)) {
+        keys.add(`${WINDOW_PREFIX}${group.outletId}|${window.startAt}|${window.endAt}`)
+      }
+    }
   }
-  return windows
+  return keys
+}
+
+export function buildScheduledRosterWindows({ rosterGroups = [], user = {} } = {}) {
+  const encoded = buildScheduledRosterKeys({ rosterGroups, user })
+  return [...encoded]
+    .filter((key) => String(key).startsWith(WINDOW_PREFIX))
+    .map((key) => {
+      const [outletId, startAt, endAt] = String(key).slice(WINDOW_PREFIX.length).split('|')
+      return { outletId, startAt: Number(startAt), endAt: Number(endAt) }
+    })
 }
 
 export function kuchingDateForTimestamp(value) {
@@ -150,25 +144,41 @@ export function kuchingDateForTimestamp(value) {
   }).format(new Date(timestamp))
 }
 
-export function alertAllowedByRoster(alert = {}, scheduledKeys = new Set()) {
+function dailyRosterAllowed(alert, scheduledKeys) {
   const date = kuchingDateForTimestamp(alert.triggerAt)
   if (!date) return false
   const outletId = String(alert.outletId || '').trim()
   if (outletId) return scheduledKeys.has(`${outletId}|${date}`)
   for (const key of scheduledKeys) {
-    if (String(key).endsWith(`|${date}`)) return true
+    if (!String(key).startsWith(WINDOW_PREFIX) && String(key).endsWith(`|${date}`)) return true
   }
   return false
 }
 
-export function alertAllowedByRosterShift(alert = {}, scheduledKeys = new Set(), scheduledWindows = []) {
-  if (!alertAllowedByRoster(alert, scheduledKeys)) return false
+export function alertAllowedByRoster(alert = {}, scheduledKeys = new Set()) {
+  if (!dailyRosterAllowed(alert, scheduledKeys)) return false
   if (!String(alert.taskId || '').trim()) return true
 
   const triggerAt = Number(alert.triggerAt)
   if (!Number.isFinite(triggerAt)) return false
   const outletId = String(alert.outletId || '').trim()
-  return (scheduledWindows || []).some((window) => (
+  return [...scheduledKeys]
+    .filter((key) => String(key).startsWith(WINDOW_PREFIX))
+    .some((key) => {
+      const [windowOutlet, startAt, endAt] = String(key).slice(WINDOW_PREFIX.length).split('|')
+      return (!outletId || windowOutlet === outletId)
+        && triggerAt >= Number(startAt)
+        && triggerAt <= Number(endAt)
+    })
+}
+
+export function alertAllowedByRosterShift(alert = {}, scheduledKeys = new Set(), scheduledWindows = []) {
+  if (!scheduledWindows?.length) return alertAllowedByRoster(alert, scheduledKeys)
+  if (!dailyRosterAllowed(alert, scheduledKeys)) return false
+  if (!String(alert.taskId || '').trim()) return true
+  const triggerAt = Number(alert.triggerAt)
+  const outletId = String(alert.outletId || '').trim()
+  return scheduledWindows.some((window) => (
     (!outletId || String(window.outletId || '') === outletId)
       && triggerAt >= Number(window.startAt)
       && triggerAt <= Number(window.endAt)
