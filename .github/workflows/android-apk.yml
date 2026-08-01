@@ -67,7 +67,7 @@ jobs:
           grep -q "Exact time-window gating applies to Task, SOP and Training alerts" web/src/lib/roster-alert-gate.js
           grep -q "return alertInsideWindow(alert, encodedWindows(scheduledKeys))" web/src/lib/roster-alert-gate.js
           grep -q "RosterGatedTaskAlarmManager" web/src/App.jsx
-          grep -q "syncAppPack({ outletId, force: true })" web/src/pages/DataPackage.jsx
+          grep -q "syncAppPack({ outletId })" web/src/pages/DataPackage.jsx
           grep -q "A usable local package no longer stops update checks" web/src/components/DataPackGate.jsx
           grep -q "purgeNativeServiceWorkers" web/src/main.jsx
           grep -q "TaskAlarmPlugin.class" scripts/configure-android-task-alarms.mjs
