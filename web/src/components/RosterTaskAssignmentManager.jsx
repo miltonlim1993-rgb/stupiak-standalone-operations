@@ -7,9 +7,9 @@ import { configureRosterTaskAssignment } from '@/lib/roster-task-assignment'
 
 const TASK_SNAPSHOT_PREFIX = 'chefops.roster-task-assignment.tasks.v2.'
 const TASK_REFRESH_INTERVAL_MS = 60_000
-const PACKAGE_FORCE_INTERVAL_MS = 5 * 60_000
+const PACKAGE_FORCE_INTERVAL_MS = 2 * 60_000
 const AUTO_REFRESH_MARKER_KEY = 'chefops.automatic-task-refresh.version'
-const AUTO_REFRESH_VERSION = '4.5.11'
+const AUTO_REFRESH_VERSION = '4.5.13'
 
 function kuchingDate() {
   return new Intl.DateTimeFormat('en-CA', {
@@ -74,8 +74,6 @@ export default function RosterTaskAssignmentManager() {
 
       const date = kuchingDate()
       await Promise.all(outletIds.map((outletId) => (
-        // A forced bootstrap is deliberately used here. It refreshes the Sheet-backed
-        // task record and rebuilds the instant roster-assigned snapshot in background.
         opsClient.tasks.operationalBootstrap({ outletId, date, refresh: true })
           .catch(() => undefined)
       )))
@@ -86,6 +84,7 @@ export default function RosterTaskAssignmentManager() {
         outletIds,
         packageChanged,
         snapshotsInvalidated: Boolean(invalidateSnapshots || packageChanged),
+        packageForceIntervalMs: PACKAGE_FORCE_INTERVAL_MS,
       }
     } finally {
       refreshRunning.current = false
@@ -95,20 +94,15 @@ export default function RosterTaskAssignmentManager() {
   useEffect(() => {
     if (!isAuthenticated || !user) return undefined
 
-    // The first 4.5.11 launch removes snapshots created by older APKs. This covers
-    // devices that had already downloaded the package but still retained old Tasks.
+    // Every 4.5.13 client starts from a fresh assigned-Task snapshot, then verifies
+    // the live package before rebuilding today's roster-scoped Tasks.
     const resetOldSnapshots = firstLaunchNeedsSnapshotReset()
-
-    // Do not start the old refresh=false warm-up first. A refresh=false build could
-    // win the in-flight cache race and put the previous Task package back on screen.
     refreshLatestTasks({ forcePackage: true, invalidateSnapshots: resetOldSnapshots })
 
     const onActive = () => {
-      if (document.visibilityState === 'visible') refreshLatestTasks()
+      if (document.visibilityState === 'visible') refreshLatestTasks({ forcePackage: true })
     }
     const onPackageUpdated = () => {
-      // Template/config-only changes may not alter the task row timestamp. Remove the
-      // old instant snapshot so the newly downloaded package becomes visible at once.
       refreshLatestTasks({ invalidateSnapshots: true })
     }
     const interval = window.setInterval(() => refreshLatestTasks(), TASK_REFRESH_INTERVAL_MS)
