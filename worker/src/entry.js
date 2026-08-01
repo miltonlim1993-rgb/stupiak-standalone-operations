@@ -9,6 +9,7 @@ import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
 import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
 import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
+import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import {
   flushPendingSheetMirrors,
@@ -193,7 +194,8 @@ export default {
       const closeUpSyncResponse = await handleRealtimeCloseUpSync(request, runEnv, url)
       if (closeUpSyncResponse) return withApiHeaders(request, env, closeUpSyncResponse)
 
-      const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(request, runEnv, url)
+      const workflowRequest = await withStableWorkflowMutationId(request, url)
+      const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
       if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
 
       const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
