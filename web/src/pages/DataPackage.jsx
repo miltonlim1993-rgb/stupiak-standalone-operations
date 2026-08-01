@@ -22,12 +22,12 @@ function dateTime(value) {
 function stateLabel(value, hasInstalledPackage) {
   const state = String(value || '')
   if (state === 'ready') return 'Ready'
-  if (state === 'checking') return 'Checking Cloudflare package'
+  if (state === 'checking') return hasInstalledPackage ? 'Installed package active' : 'Checking Cloudflare package'
   if (state === 'update_required') return 'Published update available'
-  if (state === 'downloading') return 'Downloading modules'
-  if (state === 'saving') return 'Verifying package'
+  if (state === 'downloading') return hasInstalledPackage ? 'Updating in background' : 'Downloading modules'
+  if (state === 'saving') return hasInstalledPackage ? 'Verifying update' : 'Verifying package'
   if (state === 'cleaning') return 'Removing obsolete data'
-  if (state === 'error' && hasInstalledPackage) return 'Using installed package'
+  if (state === 'error' && hasInstalledPackage) return 'Installed package active'
   if (state === 'error') return 'Download failed'
   return 'Not downloaded'
 }
@@ -61,19 +61,21 @@ export default function DataPackage() {
     try {
       // Employee devices only read the last package that was fully published
       // to Cloudflare. They never trigger a Google Sheets rebuild.
-      await syncAppPack({ outletId, force: false })
+      await syncAppPack({ outletId })
     } catch {
-      // The status panel keeps the installed last-known-good package available.
+      // Without a first package there is nothing local to use. Once a package
+      // exists, syncAppPack keeps it active and reports only a warning.
     } finally {
       setStatus(getAppPackStatus())
       setBusy(false)
     }
   }
 
-  const hasInstalledPackage = Boolean(status.version || status.current_version)
+  const hasInstalledPackage = Boolean(status.installed_version || status.current_version || (status.last_downloaded_at && status.version))
   const transitionState = ['update_required', 'downloading', 'saving', 'cleaning'].includes(String(status.state || ''))
-  const blocking = !hasInstalledPackage || transitionState
-  const degraded = status.state === 'error' && hasInstalledPackage
+  const blocking = !hasInstalledPackage
+  const updating = transitionState && hasInstalledPackage
+  const degraded = Boolean(status.warning) && hasInstalledPackage
   const progress = useMemo(() => {
     const completed = Number(status.completed_modules || 0)
     const total = Number(status.total_modules || 0)
@@ -99,11 +101,13 @@ export default function DataPackage() {
             {blocking ? <AlertTriangle className="h-6 w-6" /> : <PackageCheck className="h-6 w-6" />}
           </span>
           <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold">{blocking ? 'Package download in progress' : 'Last published package is available'}</p>
+            <p className="text-sm font-semibold">
+              {blocking ? 'No package has been installed yet' : updating ? 'Installed package remains active while updating' : 'Last published package is active'}
+            </p>
             <p className="mt-1 text-xs leading-5 text-muted-foreground">
               {blocking
-                ? 'OPS is downloading and verifying Cloudflare modules. Google Sheets is not contacted by this device.'
-                : 'This device uses the last package that completed publication to Cloudflare. A failed background Sheet refresh cannot remove or block this package.'}
+                ? 'OPS needs one successful download from Cloudflare. This device does not rebuild Google Sheets.'
+                : 'This device uses the last package that completed publication to Cloudflare. A failed background Sheet refresh or interrupted download cannot remove or block it.'}
             </p>
           </div>
         </div>
@@ -112,8 +116,8 @@ export default function DataPackage() {
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="Outlet" value={outletId || 'Global'} />
         <Stat label="Status" value={stateLabel(status.state, hasInstalledPackage)} />
-        <Stat label="Active package" value={status.version || status.current_version || '—'} />
-        <Stat label="Data version" value={status.data_version || '—'} />
+        <Stat label="Installed package" value={status.installed_version || status.current_version || status.version || '—'} />
+        <Stat label="Available package" value={status.available_version || status.installed_version || status.version || '—'} />
         <Stat label="Package size" value={bytes(status.total_bytes)} />
         <Stat label="Module progress" value={progress} />
         <Stat label="Old modules removed" value={String(Number(status.deleted_modules || 0))} />
@@ -128,8 +132,7 @@ export default function DataPackage() {
           <Info icon={CheckCircle2} label="Published" value={dateTime(status.generated_at)} />
           <Info icon={ShieldCheck} label="Last installed" value={dateTime(status.last_downloaded_at)} />
         </div>
-        {status.warning ? <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">{status.warning}</p> : null}
-        {degraded ? <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">The latest check could not finish. The installed last-known-good package remains active.</p> : null}
+        {degraded ? <p className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-sm text-amber-800">{status.warning}</p> : null}
         {!hasInstalledPackage && status.error ? <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{status.error}</p> : null}
         <Button className="mt-4 h-12 w-full rounded-xl" onClick={updatePackage} disabled={busy || !navigator.onLine}>
           {busy ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <CloudDownload className="mr-2 h-5 w-5" />}
