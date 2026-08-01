@@ -1,0 +1,41 @@
+name: Probe production Worker once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/probe-production-health-once.yml
+
+permissions:
+  contents: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Probe and record
+        shell: bash
+        run: |
+          set +e
+          response=$(curl -fsS --max-time 20 'https://stupiaks-ops.sporkburger19.workers.dev/api/health' 2>/tmp/curl-error.log)
+          status=$?
+          set -e
+          marker=false
+          if echo "$response" | grep -q 'stale-aware-v1'; then marker=true; fi
+          mkdir -p .deployments
+          {
+            echo "curl_status=${status}"
+            echo "marker_present=${marker}"
+            echo "checked_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "health_response=${response}"
+            if [[ -s /tmp/curl-error.log ]]; then echo "curl_error=$(tr '\n' ' ' < /tmp/curl-error.log)"; fi
+          } > .deployments/production-health-probe-once.txt
+          git config user.name "stupiaks-ops-release"
+          git config user.email "actions@users.noreply.github.com"
+          git rm .github/workflows/probe-production-health-once.yml
+          git add .deployments/production-health-probe-once.txt
+          git commit -m "Record current production Worker health probe"
+          git push origin HEAD:main
