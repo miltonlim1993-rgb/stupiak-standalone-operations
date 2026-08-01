@@ -8,9 +8,53 @@ const COOKIE_NAME = 'chefops_session'
 const USER_CACHE = new Map()
 const USER_INFLIGHT = new Map()
 const USER_CACHE_TTL_MS = 60_000
+const USER_KV_TTL_SECONDS = 15 * 60
+const LAST_LOGIN_WRITE_INTERVAL_MS = 6 * 60 * 60_000
 
 function booleanValue(value) {
   return value === true || String(value || '').toLowerCase() === 'true'
+}
+
+function isTemporarySheetsError(error) {
+  return error?.code === 'sheets_rate_limited' || error?.code === 'google_api_error'
+}
+
+function userKvKeyBySub(googleSub) {
+  return `auth:user:sub:${String(googleSub || '').trim()}`
+}
+
+function userKvKeyByEmail(email) {
+  return `auth:user:email:${String(email || '').trim().toLowerCase()}`
+}
+
+async function cacheUserInKv(env, user) {
+  if (!user?.google_sub || !env.APP_DATA_PACKS?.put) return user
+  const payload = JSON.stringify({ user, cachedAt: Date.now() })
+  const writes = [
+    env.APP_DATA_PACKS.put(userKvKeyBySub(user.google_sub), payload, { expirationTtl: USER_KV_TTL_SECONDS }),
+  ]
+  if (user.email) {
+    writes.push(env.APP_DATA_PACKS.put(userKvKeyByEmail(user.email), payload, { expirationTtl: USER_KV_TTL_SECONDS }))
+  }
+  await Promise.all(writes).catch((error) => console.error('Unable to cache auth user', error))
+  return user
+}
+
+async function cachedUserFromKv(env, { googleSub = '', email = '' } = {}) {
+  if (!env.APP_DATA_PACKS?.get) return null
+  const keys = []
+  if (googleSub) keys.push(userKvKeyBySub(googleSub))
+  if (email) keys.push(userKvKeyByEmail(email))
+  for (const key of keys) {
+    try {
+      const stored = await env.APP_DATA_PACKS.get(key, 'json')
+      if (!stored?.user || Date.now() - Number(stored.cachedAt || 0) > USER_KV_TTL_SECONDS * 1000) continue
+      return stored.user
+    } catch (error) {
+      console.error('Unable to read cached auth user', error)
+    }
+  }
+  return null
 }
 
 export function validateActualName(value, email = '') {
@@ -50,15 +94,31 @@ export function rememberUser(user) {
   return user
 }
 
+async function rememberUserEverywhere(env, user) {
+  rememberUser(user)
+  await cacheUserInKv(env, user)
+  return user
+}
+
 async function activeUserBySub(env, googleSub) {
   const key = String(googleSub || '')
   const cached = USER_CACHE.get(key)
   if (cached && Date.now() - cached.cachedAt < USER_CACHE_TTL_MS) return cached.user
   if (USER_INFLIGHT.has(key)) return USER_INFLIGHT.get(key)
+
   const pending = (async () => {
-    const users = await listRecords(env, 'User', { filter: { google_sub: key }, limit: 1 })
-    return rememberUser(users[0] || null)
+    try {
+      const users = await listRecords(env, 'User', { filter: { google_sub: key }, limit: 1 })
+      const user = users[0] || null
+      if (user) await rememberUserEverywhere(env, user)
+      return user
+    } catch (error) {
+      if (!isTemporarySheetsError(error)) throw error
+      const fallback = await cachedUserFromKv(env, { googleSub: key })
+      return fallback ? rememberUser(fallback) : null
+    }
   })()
+
   USER_INFLIGHT.set(key, pending)
   try { return await pending } finally { if (USER_INFLIGHT.get(key) === pending) USER_INFLIGHT.delete(key) }
 }
@@ -155,6 +215,29 @@ export async function getCurrentUser(request, env, { optional = false } = {}) {
   return user
 }
 
+async function findLoginUser(env, { googleSub, email }) {
+  try {
+    let user = (await listRecords(env, 'User', { filter: { google_sub: googleSub }, limit: 1 }))[0]
+    if (!user) user = (await listRecords(env, 'User', { filter: { email }, limit: 1 }))[0]
+    return user || null
+  } catch (error) {
+    if (!isTemporarySheetsError(error)) throw error
+    const fallback = await cachedUserFromKv(env, { googleSub, email })
+    if (fallback) return fallback
+    throw error
+  }
+}
+
+function shouldWriteLoginUpdate(user, { googleSub, email, fullName, avatarUrl, nowMs }) {
+  const lastLoginMs = Date.parse(user.last_login_at || '')
+  const staleLastLogin = !Number.isFinite(lastLoginMs) || nowMs - lastLoginMs >= LAST_LOGIN_WRITE_INTERVAL_MS
+  return staleLastLogin
+    || String(user.google_sub || '') !== googleSub
+    || String(user.email || '').toLowerCase() !== email
+    || (!validateActualName(user.full_name, email) && Boolean(fullName))
+    || String(user.avatar_url || '') !== avatarUrl
+}
+
 export async function loginWithGoogle(credential, env) {
   const payload = await verifyGoogleCredential(credential, env)
   const googleSub = String(payload.sub)
@@ -168,23 +251,38 @@ export async function loginWithGoogle(credential, env) {
     throw error
   }
 
-  let user = (await listRecords(env, 'User', { filter: { google_sub: googleSub }, limit: 1 }))[0]
-  if (!user) {
-    user = (await listRecords(env, 'User', { filter: { email }, limit: 1 }))[0]
-  }
+  let user = await findLoginUser(env, { googleSub, email })
+  const nowDate = new Date()
+  const now = nowDate.toISOString()
 
-  const now = new Date().toISOString()
   if (user) {
-    user = await updateRecord(env, 'User', user.id, {
+    const nextUser = {
+      ...user,
       google_sub: googleSub,
       email,
       full_name: validateActualName(user.full_name, email) || fullName,
       avatar_url: avatarUrl,
-      last_login_at: now,
-      updated_date: now,
-      updated_by: email,
-      version: Number(user.version || 0) + 1,
-    })
+    }
+
+    if (shouldWriteLoginUpdate(user, { googleSub, email, fullName, avatarUrl, nowMs: nowDate.getTime() })) {
+      try {
+        user = await updateRecord(env, 'User', user.id, {
+          google_sub: googleSub,
+          email,
+          full_name: nextUser.full_name,
+          avatar_url: avatarUrl,
+          last_login_at: now,
+          updated_date: now,
+          updated_by: email,
+          version: Number(user.version || 0) + 1,
+        })
+      } catch (error) {
+        if (!isTemporarySheetsError(error)) throw error
+        user = nextUser
+      }
+    } else {
+      user = nextUser
+    }
   } else {
     const isBootstrapOwner = email === String(env.BOOTSTRAP_OWNER_EMAIL || '').toLowerCase()
     user = {
@@ -212,7 +310,7 @@ export async function loginWithGoogle(credential, env) {
     await appendRecord(env, 'User', user)
   }
 
-  rememberUser(user)
+  await rememberUserEverywhere(env, user)
 
   if (user.status !== 'active') {
     const error = new Error('Registration received. A manager must approve your account before you can enter ChefOps.')
