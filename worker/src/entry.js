@@ -7,6 +7,7 @@ import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
+import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
 import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
 import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
 import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
@@ -195,6 +196,9 @@ export default {
       if (closeUpSyncResponse) return withApiHeaders(request, env, closeUpSyncResponse)
 
       const workflowRequest = await withStableWorkflowMutationId(request, url)
+      const completedTaskResponse = await guardCompletedOperationalTask(workflowRequest, runEnv, url)
+      if (completedTaskResponse) return withApiHeaders(request, env, completedTaskResponse)
+
       const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
       if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
 
