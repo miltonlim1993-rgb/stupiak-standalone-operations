@@ -5,6 +5,7 @@ import { ensureEntitySheet } from './sheets.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
+import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
@@ -181,6 +182,9 @@ export default {
           headers: apiCorsHeaders(request, env),
         })
       }
+
+      const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(request, runEnv, url)
+      if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
 
       const realtimeDataResponse = await handleRealtimeDataApi(request, runEnv, url)
       if (realtimeDataResponse) return withApiHeaders(request, env, realtimeDataResponse)
