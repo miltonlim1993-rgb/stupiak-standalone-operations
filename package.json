@@ -25,6 +25,7 @@
     "cf:render": "node scripts/render-wrangler-production.mjs",
     "cf:deploy": "npm run build && npm run cf:render && npx wrangler deploy --config worker/wrangler.production.jsonc",
     "mobile:open": "cd web && npx cap open android",
-    "mobile:apk:debug": "npm run mobile:sync && cd web/android && ./gradlew assembleDebug"
+    "mobile:apk:debug": "npm run mobile:sync && cd web/android && ./gradlew assembleDebug",
+    "deploy:workers-builds": "npm run build && npx wrangler deploy --config wrangler.jsonc"
   }
 }
