@@ -1,8 +1,17 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { opsClient } from '@/api/opsClient'
 import { clearNativeSessionToken, saveNativeSessionToken } from '@/lib/native-session'
+import { parseOutletIds } from '@/lib/outlets'
 
 const AuthContext = createContext(null)
+
+function primaryOutlet(user) {
+  return String(user?.outlet_id || parseOutletIds(user)[0] || '').trim()
+}
+
+function rememberOutlet(user) {
+  localStorage.setItem('chefops.data-pack.outlet', primaryOutlet(user))
+}
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
@@ -16,7 +25,7 @@ export function AuthProvider({ children }) {
     try {
       const currentUser = await opsClient.auth.me()
       setUser(currentUser)
-      localStorage.setItem('chefops.data-pack.outlet', String(currentUser?.outlet_id || ''))
+      rememberOutlet(currentUser)
       return currentUser
     } catch (error) {
       setUser(null)
@@ -40,7 +49,7 @@ export function AuthProvider({ children }) {
     const result = await opsClient.auth.loginWithGoogle(credential)
     if (result?.session_token) saveNativeSessionToken(result.session_token)
     setUser(result.user)
-    localStorage.setItem('chefops.data-pack.outlet', String(result.user?.outlet_id || ''))
+    rememberOutlet(result.user)
     setAuthChecked(true)
     return result.user
   }, [])
@@ -48,7 +57,7 @@ export function AuthProvider({ children }) {
   const updateProfile = useCallback(async (profile) => {
     const updated = await opsClient.auth.updateMe(profile)
     setUser(updated)
-    localStorage.setItem('chefops.data-pack.outlet', String(updated?.outlet_id || ''))
+    rememberOutlet(updated)
     return updated
   }, [])
 
