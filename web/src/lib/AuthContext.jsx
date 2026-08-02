@@ -4,6 +4,8 @@ import { clearNativeSessionToken, saveNativeSessionToken } from '@/lib/native-se
 import { parseOutletIds } from '@/lib/outlets'
 
 const AuthContext = createContext(null)
+const CACHED_USER_KEY = 'chefops.auth.cached-user'
+const AUTH_CHECK_TIMEOUT_MS = 12_000
 
 function primaryOutlet(user) {
   return String(user?.outlet_id || parseOutletIds(user)[0] || '').trim()
@@ -13,32 +15,84 @@ function rememberOutlet(user) {
   localStorage.setItem('chefops.data-pack.outlet', primaryOutlet(user))
 }
 
+function readCachedUser() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CACHED_USER_KEY) || 'null')
+    return parsed && parsed.status === 'active' && parsed.google_sub ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function persistUser(user) {
+  try {
+    if (user) localStorage.setItem(CACHED_USER_KEY, JSON.stringify(user))
+    else localStorage.removeItem(CACHED_USER_KEY)
+  } catch {}
+}
+
+function withTimeout(promise, timeoutMs, message) {
+  let timer
+  const timeout = new Promise((_, reject) => {
+    timer = window.setTimeout(() => {
+      const error = new Error(message)
+      error.code = 'auth_check_timeout'
+      error.status = 503
+      reject(error)
+    }, timeoutMs)
+  })
+  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer))
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)
-  const [isLoadingAuth, setIsLoadingAuth] = useState(true)
+  const initialUser = useMemo(() => readCachedUser(), [])
+  const [user, setUser] = useState(initialUser)
+  const [isLoadingAuth, setIsLoadingAuth] = useState(!initialUser)
   const [authError, setAuthError] = useState(null)
-  const [authChecked, setAuthChecked] = useState(false)
+  const [authChecked, setAuthChecked] = useState(Boolean(initialUser))
+
+  const applyUser = useCallback((nextUser) => {
+    setUser(nextUser)
+    persistUser(nextUser)
+    if (nextUser) rememberOutlet(nextUser)
+  }, [])
 
   const checkUserAuth = useCallback(async () => {
-    setIsLoadingAuth(true)
+    const fallbackUser = readCachedUser()
+    if (!fallbackUser) setIsLoadingAuth(true)
     setAuthError(null)
     try {
-      const currentUser = await opsClient.auth.me()
-      setUser(currentUser)
-      rememberOutlet(currentUser)
+      const currentUser = await withTimeout(
+        opsClient.auth.me(),
+        AUTH_CHECK_TIMEOUT_MS,
+        'Session verification timed out',
+      )
+      applyUser(currentUser)
       return currentUser
     } catch (error) {
-      setUser(null)
-      if (error.status === 401) clearNativeSessionToken()
-      if (error.status !== 401) {
-        setAuthError({ type: error.code || 'auth_error', message: error.message })
+      const status = Number(error?.status || 0)
+      if (status === 401 || status === 403) {
+        applyUser(null)
+        if (status === 401) clearNativeSessionToken()
+        return null
       }
+
+      if (fallbackUser) {
+        applyUser(fallbackUser)
+        setAuthError({
+          type: error.code || 'auth_temporarily_unavailable',
+          message: error.message || 'Session verification is temporarily unavailable',
+        })
+        return fallbackUser
+      }
+
+      setAuthError({ type: error.code || 'auth_error', message: error.message })
       return null
     } finally {
       setIsLoadingAuth(false)
       setAuthChecked(true)
     }
-  }, [])
+  }, [applyUser])
 
   useEffect(() => {
     checkUserAuth()
@@ -48,24 +102,24 @@ export function AuthProvider({ children }) {
     setAuthError(null)
     const result = await opsClient.auth.loginWithGoogle(credential)
     if (result?.session_token) saveNativeSessionToken(result.session_token)
-    setUser(result.user)
-    rememberOutlet(result.user)
+    applyUser(result.user)
     setAuthChecked(true)
+    setIsLoadingAuth(false)
     return result.user
-  }, [])
+  }, [applyUser])
 
   const updateProfile = useCallback(async (profile) => {
     const updated = await opsClient.auth.updateMe(profile)
-    setUser(updated)
-    rememberOutlet(updated)
+    applyUser(updated)
     return updated
-  }, [])
+  }, [applyUser])
 
   const logout = useCallback(async () => {
     try {
       await opsClient.auth.logout()
     } finally {
       clearNativeSessionToken()
+      persistUser(null)
       try {
         navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
         if ('caches' in window) {
@@ -76,6 +130,7 @@ export function AuthProvider({ children }) {
       } catch {}
       setUser(null)
       setAuthChecked(true)
+      setIsLoadingAuth(false)
       window.location.assign('/login')
     }
   }, [])
@@ -86,7 +141,7 @@ export function AuthProvider({ children }) {
 
   const value = useMemo(() => ({
     user,
-    setUser,
+    setUser: applyUser,
     isAuthenticated: Boolean(user),
     isLoadingAuth,
     isLoadingPublicSettings: false,
@@ -98,7 +153,7 @@ export function AuthProvider({ children }) {
     checkUserAuth,
     checkAppState: checkUserAuth,
     updateProfile,
-  }), [user, isLoadingAuth, authError, authChecked, loginWithGoogle, logout, navigateToLogin, checkUserAuth, updateProfile])
+  }), [user, applyUser, isLoadingAuth, authError, authChecked, loginWithGoogle, logout, navigateToLogin, checkUserAuth, updateProfile])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
