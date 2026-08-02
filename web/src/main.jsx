@@ -13,8 +13,9 @@ import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 import { installRealtimeClientHeader } from '@/lib/client-id'
 import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
+import { installMediaUiRepair } from '@/lib/media-ui'
 
-const SHELL_VERSION = 'auth-session-stability-pwa-v28'
+const SHELL_VERSION = 'stock-history-media-ui-pwa-v29'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -109,6 +110,7 @@ installNativeSessionFetch()
 installRealtimeClientHeader()
 installRealtimeMutationQueue()
 installNativeLabelPrintBridge()
+installMediaUiRepair()
 applyTheme()
 configureNativeSystemBars()
 
