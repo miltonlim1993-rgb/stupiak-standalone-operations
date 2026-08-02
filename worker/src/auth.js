@@ -1,6 +1,10 @@
 import { createRemoteJWKSet, jwtVerify, SignJWT } from 'jose'
-import { appendRecord, listRecords, updateRecord } from './sheets.js'
 import { parseCookies } from './http.js'
+import {
+  cacheDirectoryUser,
+  findDirectoryUser,
+  saveDirectoryRecord,
+} from './d1-directory-store.js'
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'))
 const COOKIE_NAME = 'chefops_session'
@@ -8,18 +12,11 @@ const COOKIE_NAME = 'chefops_session'
 const USER_CACHE = new Map()
 const USER_INFLIGHT = new Map()
 const USER_CACHE_TTL_MS = 60_000
-// Match the seven-day signed session. Once an approved user has logged in,
-// transient Google Sheets quota or availability problems must not lock that
-// user out of the realtime Cloudflare workspace.
 const USER_KV_TTL_SECONDS = 7 * 24 * 60 * 60
 const LAST_LOGIN_WRITE_INTERVAL_MS = 6 * 60 * 60_000
 
 function booleanValue(value) {
   return value === true || String(value || '').toLowerCase() === 'true'
-}
-
-function isTemporarySheetsError(error) {
-  return error?.code === 'sheets_rate_limited' || error?.code === 'google_api_error'
 }
 
 function userKvKeyBySub(googleSub) {
@@ -28,19 +25,6 @@ function userKvKeyBySub(googleSub) {
 
 function userKvKeyByEmail(email) {
   return `auth:user:email:${String(email || '').trim().toLowerCase()}`
-}
-
-async function cacheUserInKv(env, user) {
-  if (!user?.google_sub || !env.APP_DATA_PACKS?.put) return user
-  const payload = JSON.stringify({ user, cachedAt: Date.now() })
-  const writes = [
-    env.APP_DATA_PACKS.put(userKvKeyBySub(user.google_sub), payload, { expirationTtl: USER_KV_TTL_SECONDS }),
-  ]
-  if (user.email) {
-    writes.push(env.APP_DATA_PACKS.put(userKvKeyByEmail(user.email), payload, { expirationTtl: USER_KV_TTL_SECONDS }))
-  }
-  await Promise.all(writes).catch((error) => console.error('Unable to cache auth user', error))
-  return user
 }
 
 async function cachedUserFromKv(env, { googleSub = '', email = '' } = {}) {
@@ -54,7 +38,7 @@ async function cachedUserFromKv(env, { googleSub = '', email = '' } = {}) {
       if (!stored?.user || Date.now() - Number(stored.cachedAt || 0) > USER_KV_TTL_SECONDS * 1000) continue
       return stored.user
     } catch (error) {
-      console.error('Unable to read cached auth user', error)
+      console.error('Unable to read cached D1 auth user', error)
     }
   }
   return null
@@ -99,24 +83,8 @@ export function rememberUser(user) {
 
 async function rememberUserEverywhere(env, user) {
   rememberUser(user)
-  await cacheUserInKv(env, user)
+  await cacheDirectoryUser(env, user)
   return user
-}
-
-function refreshUserDirectoryInBackground(env, googleSub) {
-  const refresh = (async () => {
-    try {
-      const users = await listRecords(env, 'User', { filter: { google_sub: googleSub }, limit: 1 })
-      const user = users[0] || null
-      if (user) await rememberUserEverywhere(env, user)
-      return user
-    } catch (error) {
-      if (!isTemporarySheetsError(error)) console.error('Unable to refresh cached auth directory', error)
-      return null
-    }
-  })()
-  if (env.__CHEFOPS_CTX?.waitUntil) env.__CHEFOPS_CTX.waitUntil(refresh)
-  else refresh.catch(() => undefined)
 }
 
 async function activeUserBySub(env, googleSub) {
@@ -126,22 +94,16 @@ async function activeUserBySub(env, googleSub) {
   if (USER_INFLIGHT.has(key)) return USER_INFLIGHT.get(key)
 
   const pending = (async () => {
-    const cloudflareUser = await cachedUserFromKv(env, { googleSub: key })
-    if (cloudflareUser) {
-      rememberUser(cloudflareUser)
-      refreshUserDirectoryInBackground(env, key)
-      return cloudflareUser
+    try {
+      const user = await findDirectoryUser(env, { googleSub: key })
+      if (user) return rememberUserEverywhere(env, user)
+    } catch (error) {
+      console.error('D1 user lookup failed; checking last-known-good auth cache', error)
     }
 
-    try {
-      const users = await listRecords(env, 'User', { filter: { google_sub: key }, limit: 1 })
-      const user = users[0] || null
-      if (user) await rememberUserEverywhere(env, user)
-      return user
-    } catch (error) {
-      if (!isTemporarySheetsError(error)) throw error
-      return null
-    }
+    const fallback = await cachedUserFromKv(env, { googleSub: key })
+    if (fallback) rememberUser(fallback)
+    return fallback
   })()
 
   USER_INFLIGHT.set(key, pending)
@@ -231,7 +193,7 @@ export async function getCurrentUser(request, env, { optional = false } = {}) {
     throw error
   }
   const user = await activeUserBySub(env, payload.sub)
-  if (!user || user.status !== 'active') {
+  if (!user || String(user.status || '').toLowerCase() !== 'active') {
     const error = new Error(user?.status === 'pending' ? 'Your account is waiting for approval' : 'User account is inactive')
     error.status = 403
     error.code = user?.status === 'pending' ? 'user_pending' : 'user_inactive'
@@ -242,15 +204,14 @@ export async function getCurrentUser(request, env, { optional = false } = {}) {
 
 async function findLoginUser(env, { googleSub, email }) {
   try {
-    let user = (await listRecords(env, 'User', { filter: { google_sub: googleSub }, limit: 1 }))[0]
-    if (!user) user = (await listRecords(env, 'User', { filter: { email }, limit: 1 }))[0]
-    return user || null
+    const d1User = await findDirectoryUser(env, { googleSub, email })
+    if (d1User) return d1User
   } catch (error) {
-    if (!isTemporarySheetsError(error)) throw error
     const fallback = await cachedUserFromKv(env, { googleSub, email })
     if (fallback) return fallback
     throw error
   }
+  return cachedUserFromKv(env, { googleSub, email })
 }
 
 function shouldWriteLoginUpdate(user, { googleSub, email, fullName, avatarUrl, nowMs }) {
@@ -278,7 +239,7 @@ export async function loginWithGoogle(credential, env) {
 
   let user = await findLoginUser(env, { googleSub, email })
   const nowDate = new Date()
-  const now = nowDate.toISOString()
+  const timestamp = nowDate.toISOString()
 
   if (user) {
     const nextUser = {
@@ -287,35 +248,28 @@ export async function loginWithGoogle(credential, env) {
       email,
       full_name: validateActualName(user.full_name, email) || fullName,
       avatar_url: avatarUrl,
+      last_login_at: timestamp,
+      __realtime: undefined,
     }
 
     if (shouldWriteLoginUpdate(user, { googleSub, email, fullName, avatarUrl, nowMs: nowDate.getTime() })) {
-      try {
-        user = await updateRecord(env, 'User', user.id, {
-          google_sub: googleSub,
-          email,
-          full_name: nextUser.full_name,
-          avatar_url: avatarUrl,
-          last_login_at: now,
-          updated_date: now,
-          updated_by: email,
-          version: Number(user.version || 0) + 1,
-        })
-      } catch (error) {
-        if (!isTemporarySheetsError(error)) throw error
-        user = nextUser
-      }
+      user = await saveDirectoryRecord(env, 'User', user.id, nextUser, {
+        actorEmail: email,
+        operation: 'update',
+      })
     } else {
       user = nextUser
     }
   } else {
     const isBootstrapOwner = email === String(env.BOOTSTRAP_OWNER_EMAIL || '').toLowerCase()
+    const fallbackOutlet = isBootstrapOwner ? String(env.BOOTSTRAP_OWNER_OUTLET_ID || 'RR-KCH') : ''
     user = {
       id: crypto.randomUUID(),
-      outlet_id: '',
-      created_date: now,
+      outlet_id: fallbackOutlet,
+      outlet_ids: fallbackOutlet ? JSON.stringify([fallbackOutlet]) : '[]',
+      created_date: timestamp,
       created_by: email,
-      updated_date: now,
+      updated_date: timestamp,
       updated_by: email,
       deleted_at: '',
       version: 1,
@@ -327,17 +281,20 @@ export async function loginWithGoogle(credential, env) {
       phone: '',
       department: '',
       status: isBootstrapOwner ? 'active' : 'pending',
-      last_login_at: now,
-      name_confirmed: false,
-      name_confirmed_at: '',
-      name_updated_at: '',
+      last_login_at: timestamp,
+      name_confirmed: isBootstrapOwner,
+      name_confirmed_at: isBootstrapOwner ? timestamp : '',
+      name_updated_at: isBootstrapOwner ? timestamp : '',
     }
-    await appendRecord(env, 'User', user)
+    user = await saveDirectoryRecord(env, 'User', user.id, user, {
+      actorEmail: email,
+      operation: 'create',
+    })
   }
 
   await rememberUserEverywhere(env, user)
 
-  if (user.status !== 'active') {
+  if (String(user.status || '').toLowerCase() !== 'active') {
     const error = new Error('Registration received. A manager must approve your account before you can enter ChefOps.')
     error.status = 403
     error.code = 'user_pending'
