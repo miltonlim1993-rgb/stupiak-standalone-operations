@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { DatabaseZap, Download, Loader2, ShieldCheck, Trash2 } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
 import { getAppPackStatus, syncAppPack } from '@/lib/app-pack'
+import { parseOutletIds } from '@/lib/outlets'
 import { Button } from '@/components/ui/button'
 
 const AUTO_CHECK_INTERVAL_MS = 5 * 60_000
@@ -40,7 +41,7 @@ function localPackageAvailable(status, outletId) {
 
 export default function DataPackGate({ children }) {
   const { user } = useAuth()
-  const outletId = String(user?.outlet_id || '').trim()
+  const outletId = String(user?.outlet_id || parseOutletIds(user)[0] || '').trim()
   const [status, setStatus] = useState(() => getAppPackStatus())
   const [downloading, setDownloading] = useState(false)
   const syncRunning = useRef(false)
@@ -51,8 +52,6 @@ export default function DataPackGate({ children }) {
     syncRunning.current = true
     if (showBusy) setDownloading(true)
     try {
-      // Devices only ask Cloudflare for the latest fully published manifest.
-      // They never trigger a Google Sheets rebuild.
       await syncAppPack({ outletId, force: false })
       setStatus(getAppPackStatus())
     } catch {
@@ -100,8 +99,6 @@ export default function DataPackGate({ children }) {
     }
   }, [outletId, syncLatest])
 
-  // Never interrupt work when a verified local package already exists. A newer
-  // package downloads and switches atomically in the background.
   if (ready) return children
 
   const busy = downloading || ['checking', 'update_required', 'downloading', 'saving', 'cleaning'].includes(status.state)
