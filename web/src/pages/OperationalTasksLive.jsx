@@ -3,7 +3,7 @@ import OperationalTasksV2 from '@/pages/OperationalTasksV2'
 
 const TASK_ENTITIES = new Set(['Task', 'TaskPhoto'])
 const AUTOSAVE_DELAY_MS = 900
-const SAVE_SETTLE_MS = 1800
+const SAVE_TIMEOUT_MS = 20_000
 
 function eventTouchesTasks(detail = {}) {
   const entities = Array.isArray(detail.entities)
@@ -40,6 +40,12 @@ function isTaskDraftInteraction(target) {
     '查看标准做法',
     '删除',
   ].some((action) => label.includes(action))
+}
+
+function visibleTaskError() {
+  return [...document.querySelectorAll('.text-destructive')]
+    .map((node) => String(node.textContent || '').trim())
+    .find(Boolean) || ''
 }
 
 export default function OperationalTasksLive() {
@@ -87,18 +93,37 @@ export default function OperationalTasksLive() {
         if (saveInFlight.current || changeRevision.current <= savedRevision.current) return
 
         const savingRevision = changeRevision.current
+        const startedAt = Date.now()
+        let sawBusy = false
         saveInFlight.current = true
         setAutosaveState('saving')
         saveButton.click()
 
-        window.clearTimeout(autosaveSettleTimer.current)
-        autosaveSettleTimer.current = window.setTimeout(() => {
+        const inspect = () => {
+          const currentButton = buttonWithText(activeTaskDrawer(), '保存进度')
+          if (currentButton?.disabled) sawBusy = true
+          const timedOut = Date.now() - startedAt >= SAVE_TIMEOUT_MS
+          const completed = sawBusy && currentButton && !currentButton.disabled
+
+          if (!completed && !timedOut) {
+            autosaveSettleTimer.current = window.setTimeout(inspect, 150)
+            return
+          }
+
           saveInFlight.current = false
-          savedRevision.current = Math.max(savedRevision.current, savingRevision)
-          setAutosaveState('saved')
-          window.setTimeout(() => setAutosaveState(''), 1600)
-          if (changeRevision.current > savedRevision.current) saveDraft()
-        }, SAVE_SETTLE_MS)
+          const error = visibleTaskError()
+          if (completed && !error) {
+            savedRevision.current = Math.max(savedRevision.current, savingRevision)
+            setAutosaveState('saved')
+            window.setTimeout(() => setAutosaveState(''), 1600)
+          } else {
+            setAutosaveState('error')
+          }
+          if (changeRevision.current > savedRevision.current && !error) saveDraft()
+        }
+
+        window.clearTimeout(autosaveSettleTimer.current)
+        autosaveSettleTimer.current = window.setTimeout(inspect, 80)
       }
 
       if (immediate) run()
@@ -197,12 +222,14 @@ export default function OperationalTasksLive() {
     <>
       <OperationalTasksV2 key={revision} />
       {autosaveState ? (
-        <div className="pointer-events-none fixed bottom-[82px] left-1/2 z-[360] -translate-x-1/2 rounded-full bg-black/85 px-3 py-1.5 text-[11px] font-bold text-white shadow-lg">
+        <div className={`pointer-events-none fixed bottom-[82px] left-1/2 z-[360] -translate-x-1/2 rounded-full px-3 py-1.5 text-[11px] font-bold text-white shadow-lg ${autosaveState === 'error' ? 'bg-rose-700' : 'bg-black/85'}`}>
           {autosaveState === 'pending'
             ? '草稿等待自动保存'
             : autosaveState === 'saving'
               ? '正在自动保存草稿…'
-              : '草稿已自动保存'}
+              : autosaveState === 'saved'
+                ? '草稿已自动保存'
+                : '草稿自动保存失败，将在下次修改时重试'}
         </div>
       ) : null}
     </>
