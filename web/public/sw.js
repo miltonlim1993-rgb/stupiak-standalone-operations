@@ -1,5 +1,5 @@
-// Production release refresh: shared task claim + autosave / PWA v27
-const VERSION = 'chefops-shared-task-claim-autosave-pwa-v27'
+// Production release refresh: stable Cloudflare sessions / PWA v28
+const VERSION = 'chefops-auth-session-stability-pwa-v28'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -40,6 +40,12 @@ function isPackManifest(url) {
   return url.pathname === '/api/app/v4/pack/manifest'
 }
 
+function isAuthApi(url) {
+  return url.pathname === '/api/auth/google'
+    || url.pathname === '/api/auth/logout'
+    || url.pathname === '/api/auth/me'
+}
+
 async function staleWhileRevalidate(request, cacheName) {
   const cache = await caches.open(cacheName)
   const cached = await cache.match(request)
@@ -61,11 +67,36 @@ async function networkFirst(request, cacheName) {
   }
 }
 
+async function networkOnly(request, timeoutMs = 12_000) {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
+  try {
+    return await fetch(request, { signal: controller.signal, cache: 'no-store' })
+  } catch {
+    return new Response(JSON.stringify({
+      error: 'Session verification is temporarily unavailable. Your local session was kept.',
+      code: 'auth_check_timeout',
+    }), {
+      status: 503,
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'Cache-Control': 'no-store',
+      },
+    })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const request = event.request
-  if (request.method !== 'GET') return
   const url = new URL(request.url)
 
+  if (isAuthApi(url)) {
+    event.respondWith(networkOnly(request))
+    return
+  }
+  if (request.method !== 'GET') return
   if (request.mode === 'navigate') {
     event.respondWith(networkFirst(request, SHELL_CACHE))
     return
