@@ -1,4 +1,4 @@
 // Compatibility updater for existing v24 PWA installations.
-// Keeping this file updated lets already-installed iPhone and desktop PWAs
-// discover the realtime task shell before the new app registers sw-v25.js.
-importScripts('/sw.js?realtime-resilience-v2-pwa-v25')
+// Keeping this URL changing lets older iPhone home-screen apps discover the
+// live Task shell before the new app registers sw-v26.js.
+importScripts('/sw.js?realtime-resilience-v3-ios-live-task-v26')
