@@ -28,11 +28,12 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v8-d1-primary'",
+  "const WORKER_REVISION = 'realtime-resilience-v9-media-roster-recovery'",
   'handleCloudflareAuth',
   'handleD1OperationalTaskAction',
   'handleD1CloseUpUpsert',
   'handleJsonAtomicStockCountBatch',
+  'handleRealtimeAttendanceRead',
   'handleRealtimeCloseUpSync',
   'handleRealtimeDataApi',
   'processSheetMirrorQueue',
@@ -92,6 +93,23 @@ if (d1StockBatch.includes("from './sheets.js'") || d1StockBatch.includes('listRe
   failures.push('worker/src/realtime-stock-batch-json.js must not read Google Sheets')
 }
 
+requireText('worker/src/realtime-attendance-read.js', [
+  'handleRealtimeAttendanceRead',
+  "'Attendance'!A:Q",
+  "WHERE entity = 'Attendance'",
+  'persistAttendance',
+  "source = visible.length ? 'd1' : 'd1-empty'",
+  "'attendance-sheet-seeded-d1'",
+])
+
+requireText('worker/src/drive.js', [
+  "const MEDIA_CACHE_PREFIX = 'media:file:'",
+  'cacheMedia',
+  'cachedMedia',
+  "storage: 'cloudflare-kv'",
+  "X-ChefOps-Media-Source",
+])
+
 requireText('worker/src/realtime-task-bootstrap.js', [
   'CLOUDFLARE_PACKAGE_D1_FALLBACK',
   'createGeneratedTask',
@@ -131,6 +149,12 @@ requireText('web/src/api/opsClient.js', [
   'if (REALTIME_ENTITIES.has(entity) && outletId)',
   'return visibleRealtimeRows(rows, { filter, sort, limit })',
   "if (path === '/api/auth/me') return 0",
+])
+requireText('web/src/components/MediaLightbox.jsx', [
+  'googleDriveFileId',
+  'displayMediaUrl',
+  '/api/files/',
+  'const mediaSrc = useMemo',
 ])
 requireText('web/src/lib/realtime-mutations.js', [
   'savePending',
@@ -211,4 +235,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('D1-primary live reads, package plus D1 stock submissions, D1-only Close Up submissions, isolated legacy hydration, stable sessions, draft autosave, WebSocket broadcast and Queue mirroring are wired.')
+console.log('D1-primary live reads, direct duty roster hydration, Cloudflare media cache, authenticated Drive proxy, stable sessions, draft autosave, WebSocket broadcast and Queue mirroring are wired.')
