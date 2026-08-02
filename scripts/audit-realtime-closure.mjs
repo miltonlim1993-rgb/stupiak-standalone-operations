@@ -25,7 +25,7 @@ requireText('worker/migrations/0001_realtime_core.sql', [
   'last_attempt_at TEXT NOT NULL',
 ])
 requireText('worker/migrations/0002_submission_locks.sql', [
-  'CREATE TABLE IF NOT EXISTS submission_locks',
+  'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
   "const WORKER_REVISION = 'realtime-resilience-v2'",
@@ -35,6 +35,12 @@ requireText('worker/src/entry.js', [
   'handleRealtimeDataApi',
   'processSheetMirrorQueue',
   'augmentHealthResponse',
+])
+requireText('worker/src/realtime-health.js', [
+  "'ops_records'",
+  "'ops_mutations'",
+  "'sheet_sync_outbox'",
+  "'ops_submission_locks'",
 ])
 requireText('worker/src/realtime-store.js', [
   'INSERT INTO ops_records',
