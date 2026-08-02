@@ -5,6 +5,7 @@ import { opsClient } from '@/api/opsClient'
 import { useAuth } from '@/lib/AuthContext'
 import { parseOutletIds } from '@/lib/outlets'
 import {
+  cancelTaskAlertsForTask,
   collectTaskAlerts,
   collectTrainingAlerts,
   enableTaskAlerts,
@@ -15,6 +16,7 @@ import {
   showWebTaskNotification,
   stopNativeTaskAlarm,
   syncTaskAlertSchedule,
+  taskWorkHasStarted,
 } from '@/lib/task-alerts'
 import { alertAllowedByRoster, buildScheduledRosterKeys } from '@/lib/roster-alert-gate'
 
@@ -57,6 +59,27 @@ function uniqueAlerts(alerts) {
   return [...map.values()].sort((a, b) => Number(a.triggerAt) - Number(b.triggerAt))
 }
 
+function eventTouchesTask(detail = {}) {
+  if (String(detail.entity || '') === 'Task') return true
+  return Array.isArray(detail.entities) && detail.entities.map(String).includes('Task')
+}
+
+function taskFromEvent(detail = {}) {
+  const payload = detail?.payload || {}
+  const candidates = [
+    payload.task,
+    payload.record,
+    payload.summary?.task,
+    payload.summary?.record,
+  ]
+  return candidates.find((value) => value && typeof value === 'object') || null
+}
+
+function taskFinished(task) {
+  return String(task?.status || '').toLowerCase() === 'done'
+    || String(task?.access_state || '').toUpperCase() === 'DONE'
+}
+
 export default function RosterGatedTaskAlarmManager() {
   const { user, isAuthenticated } = useAuth()
   const navigate = useNavigate()
@@ -68,6 +91,7 @@ export default function RosterGatedTaskAlarmManager() {
   const audioRef = useRef({ context: null, interval: null })
   const activeAlertRef = useRef(null)
   const syncRunningRef = useRef(false)
+  const realtimeSyncTimerRef = useRef(null)
 
   const refreshPermission = useCallback(async () => {
     const state = await getTaskAlertPermissionState()
@@ -177,9 +201,16 @@ export default function RosterGatedTaskAlarmManager() {
         opsClient.entities.TrainingProgress.list('updated_at', 3000).catch(() => []),
       ])
 
+      const allTasks = taskGroups.flat()
+      const claimedTaskIds = new Set(allTasks
+        .filter((task) => taskWorkHasStarted(task) || taskFinished(task))
+        .map((task) => String(task?.id || '').trim())
+        .filter(Boolean))
+      await Promise.all([...claimedTaskIds].map((taskId) => cancelTaskAlertsForTask(taskId)))
+
       const scheduledKeys = buildScheduledRosterKeys({ rosterGroups, user })
       const allAlerts = uniqueAlerts([
-        ...collectTaskAlerts(taskGroups.flat()),
+        ...collectTaskAlerts(allTasks),
         ...collectTrainingAlerts({ assignments, courses, progress, userEmail: user.email }),
       ])
       const eligibleAlerts = allAlerts.filter((alert) => alertAllowedByRoster(alert, scheduledKeys))
@@ -187,7 +218,8 @@ export default function RosterGatedTaskAlarmManager() {
       installWebTimers(scheduled)
 
       const current = activeAlertRef.current
-      if (current && !scheduled.some((alert) => alert.id === current.id)) await clearActiveAlert()
+      if (current?.taskId && claimedTaskIds.has(String(current.taskId))) await clearActiveAlert()
+      else if (current && !scheduled.some((alert) => alert.id === current.id)) await clearActiveAlert()
       cleanupFiredAlerts()
 
       const allRosterReadsFailed = rosterGroups.length > 0 && rosterGroups.every((group) => group.failed)
@@ -197,6 +229,7 @@ export default function RosterGatedTaskAlarmManager() {
         scheduledKeys: [...scheduledKeys],
         candidateAlerts: allAlerts.length,
         eligibleAlerts: scheduled.length,
+        claimedTaskIds: [...claimedTaskIds],
         strict: true,
       }
     } catch (error) {
@@ -233,6 +266,33 @@ export default function RosterGatedTaskAlarmManager() {
       stopTone()
     }
   }, [isAuthenticated, refreshPermission, stopTone, syncAlerts])
+
+  useEffect(() => {
+    if (!isAuthenticated) return undefined
+
+    const onTaskMutation = (event) => {
+      const detail = event?.detail || {}
+      if (!eventTouchesTask(detail)) return
+      const task = taskFromEvent(detail)
+      const taskId = String(task?.id || task?.__realtime?.entity_id || '').trim()
+      if (taskId && (taskWorkHasStarted(task) || taskFinished(task))) {
+        cancelTaskAlertsForTask(taskId).catch(() => undefined)
+        if (String(activeAlertRef.current?.taskId || '') === taskId) clearActiveAlert()
+      }
+      window.clearTimeout(realtimeSyncTimerRef.current)
+      realtimeSyncTimerRef.current = window.setTimeout(() => syncAlerts(), 120)
+    }
+
+    window.addEventListener('chefops:realtime', onTaskMutation)
+    window.addEventListener('chefops:realtime-applied', onTaskMutation)
+    window.addEventListener('chefops:task-state-changed', onTaskMutation)
+    return () => {
+      window.clearTimeout(realtimeSyncTimerRef.current)
+      window.removeEventListener('chefops:realtime', onTaskMutation)
+      window.removeEventListener('chefops:realtime-applied', onTaskMutation)
+      window.removeEventListener('chefops:task-state-changed', onTaskMutation)
+    }
+  }, [clearActiveAlert, isAuthenticated, syncAlerts])
 
   useEffect(() => {
     const openTarget = (event) => {
@@ -284,7 +344,7 @@ export default function RosterGatedTaskAlarmManager() {
             </div>
             <div className="space-y-5 p-6">
               <div><h2 className="text-2xl font-black leading-tight text-black">{activeAlert.title}</h2><p className="mt-3 text-sm font-medium leading-6 text-slate-600">{activeAlert.message}</p></div>
-              <div className="flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />只有当天 Duty Roster 有排班的员工会收到此响铃。</div>
+              <div className="flex items-start gap-2 rounded-2xl bg-amber-50 p-3 text-xs font-semibold leading-5 text-amber-900"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />只有当天 Duty Roster 有排班的员工会收到此响铃。有人开始任务后，同一任务的其余提醒会自动取消。</div>
               <div className="grid gap-3">
                 <button type="button" onClick={() => acknowledge(true)} className="rounded-2xl bg-black px-4 py-3 text-sm font-black text-white">打开任务 / SOP</button>
                 <button type="button" onClick={() => acknowledge(false)} className="rounded-2xl border-2 border-black px-4 py-3 text-sm font-black text-black">已处理，停止声音</button>
