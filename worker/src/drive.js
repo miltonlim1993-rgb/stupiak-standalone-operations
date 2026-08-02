@@ -2,6 +2,13 @@ import { googleFetch } from './google.js'
 import { allowedMediaKinds, getMediaRule, mediaKind } from './media-rules.js'
 import { assertOutletAccess } from './permissions.js'
 
+const MEDIA_CACHE_PREFIX = 'media:file:'
+const MAX_CACHE_BYTES = 20 * 1024 * 1024
+
+function mediaCacheKey(fileId) {
+  return `${MEDIA_CACHE_PREFIX}${String(fileId || '').trim()}`
+}
+
 function escapeDriveQuery(value) {
   return String(value).replaceAll('\\', '\\\\').replaceAll("'", "\\'")
 }
@@ -37,6 +44,83 @@ async function createFolder(env, parentId, name) {
 
 async function ensureFolder(env, parentId, name) {
   return (await findFolder(env, parentId, name)) || createFolder(env, parentId, name)
+}
+
+async function cacheMedia(env, fileId, bytes, { mimeType = 'application/octet-stream', fileName = '' } = {}) {
+  if (!fileId || !env.APP_DATA_PACKS?.put || !bytes || bytes.byteLength > MAX_CACHE_BYTES) return false
+  try {
+    await env.APP_DATA_PACKS.put(mediaCacheKey(fileId), bytes, {
+      metadata: {
+        mime_type: String(mimeType || 'application/octet-stream'),
+        file_name: String(fileName || ''),
+        cached_at: new Date().toISOString(),
+      },
+    })
+    return true
+  } catch (error) {
+    console.error('Unable to cache media in Cloudflare KV', fileId, error)
+    return false
+  }
+}
+
+async function cachedMedia(env, fileId) {
+  if (!fileId || !env.APP_DATA_PACKS) return null
+  try {
+    if (typeof env.APP_DATA_PACKS.getWithMetadata === 'function') {
+      const stored = await env.APP_DATA_PACKS.getWithMetadata(mediaCacheKey(fileId), 'arrayBuffer')
+      if (!stored?.value) return null
+      const metadata = stored.metadata || {}
+      return new Response(stored.value, {
+        status: 200,
+        headers: {
+          'Content-Type': metadata.mime_type || 'application/octet-stream',
+          'Content-Disposition': metadata.file_name
+            ? `inline; filename*=UTF-8''${encodeURIComponent(metadata.file_name)}`
+            : 'inline',
+          'Cache-Control': 'private, max-age=86400, stale-while-revalidate=604800',
+          'X-ChefOps-Media-Source': 'cloudflare-kv',
+        },
+      })
+    }
+    const value = await env.APP_DATA_PACKS.get(mediaCacheKey(fileId), 'arrayBuffer')
+    return value ? new Response(value, {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/octet-stream',
+        'Cache-Control': 'private, max-age=86400, stale-while-revalidate=604800',
+        'X-ChefOps-Media-Source': 'cloudflare-kv',
+      },
+    }) : null
+  } catch (error) {
+    console.error('Unable to read cached media from Cloudflare KV', fileId, error)
+    return null
+  }
+}
+
+async function uploadToDrive(env, file, folderType, outletName) {
+  const year = String(new Date().getFullYear())
+  const yearFolder = await ensureFolder(env, env.GOOGLE_DRIVE_FOLDER_ID, year)
+  const outletFolder = await ensureFolder(env, yearFolder.id, outletName)
+  const typeFolder = await ensureFolder(env, outletFolder.id, folderType)
+
+  const boundary = `chefops_${crypto.randomUUID()}`
+  const metadata = JSON.stringify({ name: file.name, parents: [typeFolder.id] })
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
+    `--${boundary}\r\nContent-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
+    file,
+    `\r\n--${boundary}--`,
+  ])
+  const response = await googleFetch(
+    env,
+    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
+      body,
+    },
+  )
+  return response.json()
 }
 
 export async function uploadDriveFile(request, env, user) {
@@ -82,40 +166,72 @@ export async function uploadDriveFile(request, env, user) {
       throw error
     }
   }
-  const year = String(new Date().getFullYear())
-  const yearFolder = await ensureFolder(env, env.GOOGLE_DRIVE_FOLDER_ID, year)
-  const outletFolder = await ensureFolder(env, yearFolder.id, outletName)
-  const typeFolder = await ensureFolder(env, outletFolder.id, folderType)
 
-  const boundary = `chefops_${crypto.randomUUID()}`
-  const metadata = JSON.stringify({ name: file.name, parents: [typeFolder.id] })
-  const body = new Blob([
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
-    `--${boundary}\r\nContent-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
-    file,
-    `\r\n--${boundary}--`,
-  ])
-  const response = await googleFetch(
-    env,
-    'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,mimeType,size,webViewLink',
-    {
-      method: 'POST',
-      headers: { 'Content-Type': `multipart/related; boundary=${boundary}` },
-      body,
-    },
-  )
-  const uploaded = await response.json()
   const apiOrigin = new URL(request.url).origin
-  return {
-    drive_file_id: uploaded.id,
-    file_name: uploaded.name,
-    mime_type: uploaded.mimeType,
-    file_size: Number(uploaded.size || file.size),
-    view_url: uploaded.webViewLink || '',
-    file_url: `${apiOrigin}/api/files/${encodeURIComponent(uploaded.id)}`,
+  const fallbackId = `kv_${crypto.randomUUID()}`
+  const bytes = await file.arrayBuffer()
+  const cacheEligible = String(file.type || '').startsWith('image/')
+  const fallbackCached = cacheEligible
+    ? await cacheMedia(env, fallbackId, bytes, { mimeType: file.type, fileName: file.name })
+    : false
+
+  try {
+    const uploaded = await uploadToDrive(env, file, folderType, outletName)
+    if (!uploaded?.id) throw new Error('Google Drive did not return a file ID')
+    if (cacheEligible) {
+      await cacheMedia(env, uploaded.id, bytes, {
+        mimeType: uploaded.mimeType || file.type,
+        fileName: uploaded.name || file.name,
+      })
+    }
+    return {
+      drive_file_id: uploaded.id,
+      file_name: uploaded.name || file.name,
+      mime_type: uploaded.mimeType || file.type,
+      file_size: Number(uploaded.size || file.size),
+      view_url: uploaded.webViewLink || '',
+      file_url: `${apiOrigin}/api/files/${encodeURIComponent(uploaded.id)}`,
+      storage: cacheEligible ? 'drive+cloudflare-kv' : 'drive',
+      drive_sync_status: 'synced',
+    }
+  } catch (error) {
+    if (!fallbackCached) throw error
+    console.error('Google Drive upload deferred; Cloudflare media copy remains active', error)
+    return {
+      drive_file_id: fallbackId,
+      file_name: file.name,
+      mime_type: file.type || 'application/octet-stream',
+      file_size: Number(file.size || bytes.byteLength),
+      view_url: '',
+      file_url: `${apiOrigin}/api/files/${encodeURIComponent(fallbackId)}`,
+      storage: 'cloudflare-kv',
+      drive_sync_status: 'deferred',
+      drive_sync_error: String(error?.message || error).slice(0, 500),
+    }
   }
 }
 
 export async function downloadDriveFile(env, fileId) {
-  return googleFetch(env, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`)
+  const id = String(fileId || '').trim()
+  const cached = await cachedMedia(env, id)
+  if (cached) return cached
+
+  if (id.startsWith('kv_')) {
+    const error = new Error('Cached media file was not found')
+    error.status = 404
+    error.code = 'media_not_found'
+    throw error
+  }
+
+  const upstream = await googleFetch(env, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`)
+  const bytes = await upstream.arrayBuffer()
+  const mimeType = upstream.headers.get('Content-Type') || 'application/octet-stream'
+  const fileName = upstream.headers.get('X-Goog-Meta-File-Name') || ''
+  await cacheMedia(env, id, bytes, { mimeType, fileName })
+
+  const headers = new Headers(upstream.headers)
+  headers.set('Content-Type', mimeType)
+  headers.set('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800')
+  headers.set('X-ChefOps-Media-Source', 'google-drive')
+  return new Response(bytes, { status: upstream.status, headers })
 }
