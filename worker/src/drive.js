@@ -123,6 +123,57 @@ async function uploadToDrive(env, file, folderType, outletName) {
   return response.json()
 }
 
+async function publicDriveMedia(fileId) {
+  const id = encodeURIComponent(String(fileId || '').trim())
+  const candidates = [
+    `https://drive.usercontent.google.com/download?id=${id}&export=download&confirm=t`,
+    `https://lh3.googleusercontent.com/d/${id}=w2400`,
+  ]
+
+  let lastError = null
+  for (const candidate of candidates) {
+    try {
+      const response = await fetch(candidate, {
+        method: 'GET',
+        redirect: 'follow',
+        headers: {
+          Accept: 'image/*,video/*,application/pdf,application/octet-stream;q=0.8,*/*;q=0.5',
+          'User-Agent': 'Stupiaks-Ops-Media-Proxy/1.0',
+        },
+      })
+      if (!response.ok) {
+        lastError = new Error(`Public Drive media request failed (${response.status})`)
+        continue
+      }
+
+      const contentType = String(response.headers.get('Content-Type') || '').toLowerCase()
+      if (contentType.includes('text/html')) {
+        lastError = new Error('Public Drive returned an HTML page instead of media')
+        continue
+      }
+
+      const bytes = await response.arrayBuffer()
+      if (!bytes.byteLength) {
+        lastError = new Error('Public Drive returned an empty file')
+        continue
+      }
+      return {
+        bytes,
+        mimeType: contentType || 'application/octet-stream',
+        fileName: '',
+        source: candidate.includes('googleusercontent.com') ? 'google-public-image' : 'google-public-download',
+      }
+    } catch (error) {
+      lastError = error
+    }
+  }
+
+  const error = new Error(lastError?.message || 'Public Drive media is unavailable')
+  error.status = 502
+  error.code = 'public_drive_media_unavailable'
+  throw error
+}
+
 export async function uploadDriveFile(request, env, user) {
   const form = await request.formData()
   const file = form.get('file')
@@ -223,15 +274,41 @@ export async function downloadDriveFile(env, fileId) {
     throw error
   }
 
-  const upstream = await googleFetch(env, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`)
-  const bytes = await upstream.arrayBuffer()
-  const mimeType = upstream.headers.get('Content-Type') || 'application/octet-stream'
-  const fileName = upstream.headers.get('X-Goog-Meta-File-Name') || ''
-  await cacheMedia(env, id, bytes, { mimeType, fileName })
+  let bytes = null
+  let mimeType = 'application/octet-stream'
+  let fileName = ''
+  let source = 'google-drive'
+  try {
+    const upstream = await googleFetch(env, `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(id)}?alt=media`)
+    bytes = await upstream.arrayBuffer()
+    mimeType = upstream.headers.get('Content-Type') || mimeType
+    fileName = upstream.headers.get('X-Goog-Meta-File-Name') || ''
+  } catch (googleError) {
+    console.error('Authenticated Drive media read failed; trying public delivery', id, googleError)
+    const fallback = await publicDriveMedia(id)
+    bytes = fallback.bytes
+    mimeType = fallback.mimeType
+    fileName = fallback.fileName
+    source = fallback.source
+  }
 
-  const headers = new Headers(upstream.headers)
-  headers.set('Content-Type', mimeType)
-  headers.set('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800')
-  headers.set('X-ChefOps-Media-Source', 'google-drive')
-  return new Response(bytes, { status: upstream.status, headers })
+  if (!bytes?.byteLength) {
+    const error = new Error('Media file is empty')
+    error.status = 502
+    error.code = 'empty_media_file'
+    throw error
+  }
+
+  await cacheMedia(env, id, bytes, { mimeType, fileName })
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': mimeType,
+      'Content-Disposition': fileName
+        ? `inline; filename*=UTF-8''${encodeURIComponent(fileName)}`
+        : 'inline',
+      'Cache-Control': 'private, max-age=86400, stale-while-revalidate=604800',
+      'X-ChefOps-Media-Source': source,
+    },
+  })
 }
