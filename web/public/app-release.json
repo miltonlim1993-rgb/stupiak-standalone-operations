@@ -1,14 +1,14 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.16",
-  "minimum_apk_version": "4.5.16",
+  "apk_version": "4.5.17",
+  "minimum_apk_version": "4.5.17",
   "force_update": true,
-  "pwa_version": "native-camera-pwa-v31",
-  "minimum_pwa_version": "native-camera-pwa-v31",
+  "pwa_version": "registered-native-camera-pwa-v32",
+  "minimum_pwa_version": "registered-native-camera-pwa-v32",
   "pwa_force_update": true,
-  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.16",
+  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.17",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS 4.5.16 camera fix. Task evidence and Urgent Issue capture now open the Android native camera through Capacitor instead of relying on a hidden file input click. Website and installed PWA clients use a direct picker fallback and show visible capture errors instead of failing silently.",
-  "release_trigger": "2026-08-02-task-issue-native-camera-fix"
+  "release_notes": "Mandatory OPS 4.5.17 camera closure. Task evidence and Urgent Issue capture now explicitly register the installed Capacitor Camera native proxy before calling takePhoto, use the rear camera, return the captured File into the existing watermark and upload workflows, and show structured native errors instead of failing silently. Website and installed PWA clients retain the direct picker fallback.",
+  "release_trigger": "2026-08-02-register-task-issue-native-camera-proxy"
 }
