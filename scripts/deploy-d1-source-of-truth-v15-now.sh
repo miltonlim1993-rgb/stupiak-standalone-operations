@@ -36,7 +36,7 @@ read_directory_counts() {
     for (const row of rows) {
       if (row.entity === "User") counts.User = Number(row.count || 0)
       if (row.entity === "Outlet") counts.Outlet = Number(row.count || 0)
-      if (row.metric === "active_users") counts.active_users = Number(row.count || 0)
+      if (row.entity === "active_users") counts.active_users = Number(row.count || 0)
     }
     process.stdout.write(`${counts.User} ${counts.Outlet} ${counts.active_users}`)
   '
@@ -81,7 +81,8 @@ export CLOUDFLARE_SHEET_SYNC_DLQ_NAME="$DLQ_NAME"
 npm run cf:render
 
 echo "==> Verifying existing D1 directory data before deployment"
-DIRECTORY_JSON="$(npx wrangler d1 execute OPS_DB --remote --config worker/wrangler.production.jsonc --json --command "SELECT entity, COUNT(*) AS count FROM ops_records WHERE entity IN ('User','Outlet') AND deleted_at = '' GROUP BY entity; SELECT 'active_users' AS metric, COUNT(*) AS count FROM ops_records WHERE entity = 'User' AND deleted_at = '' AND lower(json_extract(payload_json, '$.status')) = 'active';")"
+DIRECTORY_QUERY="SELECT entity, COUNT(*) AS count FROM ops_records WHERE entity IN ('User','Outlet') AND deleted_at = '' GROUP BY entity UNION ALL SELECT 'active_users' AS entity, COUNT(*) AS count FROM ops_records WHERE entity = 'User' AND deleted_at = '' AND lower(json_extract(payload_json, '$.status')) = 'active'"
+DIRECTORY_JSON="$(npx wrangler d1 execute OPS_DB --remote --config worker/wrangler.production.jsonc --json --command "$DIRECTORY_QUERY")"
 read -r USER_COUNT OUTLET_COUNT ACTIVE_USER_COUNT <<<"$(printf '%s' "$DIRECTORY_JSON" | read_directory_counts)"
 echo "D1_USER_COUNT=$USER_COUNT"
 echo "D1_OUTLET_COUNT=$OUTLET_COUNT"
