@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Download, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
 import { opsClient } from '@/api/opsClient'
 
-const CURRENT_RELEASE = '4.5.13'
+const CURRENT_RELEASE = '4.5.15'
 const DEFAULT_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk'
 const DEFAULT_RELEASE_API = 'https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest'
-const CHECK_MS = 60_000
+const CHECK_MS = 30_000
 const AUTO_OPEN_COOLDOWN_MS = 60_000
 
 function nativeAndroid() {
@@ -17,20 +17,26 @@ function nativeAndroid() {
   )
 }
 
-function parts(value) {
-  return String(value || '')
-    .match(/\d+/g)?.map((item) => Number(item)) || [0]
+function versionParts(value) {
+  return String(value || '').match(/\d+/g)?.map(Number) || [0]
 }
 
 function compareVersions(left, right) {
-  const a = parts(left)
-  const b = parts(right)
+  const a = versionParts(left)
+  const b = versionParts(right)
   const length = Math.max(a.length, b.length)
   for (let index = 0; index < length; index += 1) {
     const difference = Number(a[index] || 0) - Number(b[index] || 0)
     if (difference) return difference
   }
   return 0
+}
+
+function cacheBustedUrl(value, version) {
+  const url = String(value || '').trim()
+  if (!url) return ''
+  const separator = url.includes('?') ? '&' : '?'
+  return `${url}${separator}ops_version=${encodeURIComponent(version)}&t=${Date.now()}`
 }
 
 async function installedVersion() {
@@ -50,6 +56,7 @@ async function remoteReleaseManifest() {
   const response = await fetch(`${opsClient.apiBaseUrl}/app-release.json?_=${Date.now()}`, {
     cache: 'no-store',
     credentials: 'omit',
+    headers: { 'Cache-Control': 'no-cache' },
   })
   if (!response.ok) throw new Error(`Release manifest unavailable (${response.status})`)
   return response.json()
@@ -60,18 +67,24 @@ async function verifiedRelease(manifest, targetVersion) {
   try {
     const response = await fetch(`${apiUrl}${apiUrl.includes('?') ? '&' : '?'}_=${Date.now()}`, {
       cache: 'no-store',
-      headers: { Accept: 'application/vnd.github+json' },
+      headers: {
+        Accept: 'application/vnd.github+json',
+        'Cache-Control': 'no-cache',
+      },
     })
     if (!response.ok) return null
     const release = await response.json()
     const title = `${release.name || ''} ${release.tag_name || ''}`
     if (!title.includes(targetVersion)) return null
-    const asset = (release.assets || []).find((item) => item.name === 'stupiaks-ops-task-sop-alarm.apk')
+    const expectedAsset = String(manifest.apk_asset_name || 'stupiaks-ops-task-sop-alarm.apk')
+    const asset = (release.assets || []).find((item) => item.name === expectedAsset)
       || (release.assets || []).find((item) => String(item.name || '').endsWith('.apk'))
-    if (!asset?.browser_download_url && !manifest.apk_url) return null
+    if (!asset?.browser_download_url || Number(asset.size || 0) < 1_000_000) return null
     return {
-      url: asset?.browser_download_url || manifest.apk_url || DEFAULT_APK_URL,
+      url: cacheBustedUrl(asset.browser_download_url, targetVersion),
       title: release.name || `Stupiak's Ops ${targetVersion}`,
+      assetName: asset.name,
+      assetSize: Number(asset.size || 0),
     }
   } catch {
     return null
@@ -133,9 +146,10 @@ export default function AppUpdateBanner({ global = false } = {}) {
       activateWaitingWorker(current)
       current.addEventListener('updatefound', () => {
         const worker = current.installing
-        if (!worker) return
-        worker.addEventListener('statechange', () => {
-          if (worker.state === 'installed' && navigator.serviceWorker.controller) activateWaitingWorker(current)
+        worker?.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            activateWaitingWorker(current)
+          }
         })
       }, { once: true })
       current.update().catch(() => undefined)
@@ -144,7 +158,7 @@ export default function AppUpdateBanner({ global = false } = {}) {
     const onControllerChange = () => {
       if (reloading) return
       reloading = true
-      localStorage.setItem('chefops.pending-shell-version', CURRENT_RELEASE)
+      localStorage.setItem('chefops.pending-shell-version', 'label-d1-runtime-pwa-v30')
       window.location.reload()
     }
     const onActive = () => {
@@ -181,12 +195,9 @@ export default function AppUpdateBanner({ global = false } = {}) {
           remoteReleaseManifest(),
         ])
         if (cancelled) return
-        const targetVersion = String(
-          manifest.minimum_apk_version
-          || manifest.apk_version
-          || CURRENT_RELEASE,
-        ).trim()
-        const updateRequired = Boolean(manifest.force_update !== false) && compareVersions(installed, targetVersion) < 0
+        const targetVersion = String(manifest.minimum_apk_version || manifest.apk_version || CURRENT_RELEASE).trim()
+        const updateRequired = Boolean(manifest.force_update !== false)
+          && compareVersions(installed, targetVersion) < 0
         if (!updateRequired) {
           setApkUpdate(null)
           setStatusText(userRequested ? `已是最新版本 ${installed}` : '')
@@ -202,11 +213,13 @@ export default function AppUpdateBanner({ global = false } = {}) {
           releaseTitle: release?.title || `Stupiak's Ops ${targetVersion}`,
           releaseNotes: manifest.release_notes || 'This version is required to continue using OPS.',
           releaseReady: Boolean(release?.url),
+          assetName: release?.assetName || '',
+          assetSize: release?.assetSize || 0,
         }
         setApkUpdate(update)
         setStatusText(update.releaseReady
           ? ''
-          : `版本 ${targetVersion} 正在完成签名发布。旧版已锁定，系统会每分钟自动重试。`)
+          : `版本 ${targetVersion} 正在完成签名发布。旧版已锁定，系统会每 30 秒自动重试。`)
         autoOpenRequiredApk(update)
       } catch (error) {
         if (userRequested) setStatusText(error.message || '无法检查更新，请确认网络连接。')
@@ -219,15 +232,16 @@ export default function AppUpdateBanner({ global = false } = {}) {
     const onVisible = () => {
       if (document.visibilityState === 'visible') check()
     }
+    const onOnline = () => check()
     check()
     window.addEventListener('focus', onVisible)
-    window.addEventListener('online', check)
+    window.addEventListener('online', onOnline)
     document.addEventListener('visibilitychange', onVisible)
     const timer = window.setInterval(check, CHECK_MS)
     return () => {
       cancelled = true
       window.removeEventListener('focus', onVisible)
-      window.removeEventListener('online', check)
+      window.removeEventListener('online', onOnline)
       document.removeEventListener('visibilitychange', onVisible)
       window.clearInterval(timer)
     }
@@ -240,7 +254,7 @@ export default function AppUpdateBanner({ global = false } = {}) {
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-red-700"><ShieldAlert className="h-7 w-7" /></span>
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-red-600">Mandatory Android update</p>
           <h1 className="mt-2 text-2xl font-bold">必须更新 OPS 才能继续</h1>
-          <p className="mt-2 text-sm leading-6 text-muted-foreground">系统会自动打开固定 APK 下载。Android 仍会显示系统安装确认；覆盖安装后重新打开 OPS 即可。</p>
+          <p className="mt-2 text-sm leading-6 text-muted-foreground">系统只接受 GitHub 固定发布页中已签名、版本匹配且大小有效的最新 APK。覆盖安装后重新打开 OPS。</p>
           <div className="mt-5 grid grid-cols-2 gap-2">
             <VersionStat label="Installed" value={apkUpdate.installedVersion} />
             <VersionStat label="Required" value={apkUpdate.targetVersion} />
@@ -252,12 +266,12 @@ export default function AppUpdateBanner({ global = false } = {}) {
           {statusText ? <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">{statusText}</p> : null}
           <button type="button" className="mt-5 flex h-12 w-full items-center justify-center rounded-xl bg-red-600 px-4 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50" disabled={!apkUpdate.releaseReady} onClick={() => openApkDownload(apkUpdate.apkUrl)}>
             {apkUpdate.releaseReady ? <Download className="mr-2 h-5 w-5" /> : <Loader2 className="mr-2 h-5 w-5 animate-spin" />}
-            {apkUpdate.releaseReady ? '打开下载并覆盖安装' : '正在等待签名 APK'}
+            {apkUpdate.releaseReady ? '下载最新签名 APK 并覆盖安装' : '正在等待最新签名 APK'}
           </button>
           <button type="button" className="mt-2 flex h-11 w-full items-center justify-center rounded-xl border px-4 text-sm font-semibold" disabled={checking} onClick={() => window.location.reload()}>
             {checking ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}安装完成后重新检查
           </button>
-          <p className="mt-3 text-center text-[11px] leading-5 text-muted-foreground">旧版会保持锁定，不能略过。无需管理层另外提醒员工下载。</p>
+          <p className="mt-3 text-center text-[11px] leading-5 text-muted-foreground">旧版保持锁定，不能跳过；OPS 会每 30 秒、回到前台及恢复网络时自动重查。</p>
         </section>
       </div>
     )
@@ -273,7 +287,7 @@ export default function AppUpdateBanner({ global = false } = {}) {
       <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
         <RefreshCw className="h-8 w-8 animate-spin text-amber-700" />
         <h2 className="mt-4 text-xl font-bold">正在强制更新 OPS</h2>
-        <p className="mt-2 text-sm leading-6 text-slate-600">网站／PWA 已发现新版本，完成安装后会自动重新载入。</p>
+        <p className="mt-2 text-sm leading-6 text-slate-600">网站／PWA 已发现新 shell，正在清除旧缓存、接管页面并自动重新载入。</p>
       </div>
     </div>
   )
