@@ -8,6 +8,7 @@ import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
 import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
+import { handleD1OperationalTaskAction } from './realtime-task-action-d1.js'
 import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
 import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
 import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
@@ -20,7 +21,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v3-pwa-task-bootstrap'
+const WORKER_REVISION = 'realtime-resilience-v4-d1-task-actions'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -208,14 +209,17 @@ export default {
       const completedTaskResponse = await guardCompletedOperationalTask(workflowRequest, runEnv, url)
       if (completedTaskResponse) return withApiHeaders(request, env, completedTaskResponse)
 
-      const realtimeWorkflowResponse = url.pathname === '/api/tasks/operational/action'
+      const d1TaskResponse = url.pathname === '/api/tasks/operational/action'
         ? await withSubmissionLock(
             workflowRequest,
             runEnv,
             url,
-            () => handleRealtimeWorkflowApi(workflowRequest, runEnv, url),
+            () => handleD1OperationalTaskAction(workflowRequest, runEnv, url),
           )
-        : await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
+        : await handleD1OperationalTaskAction(workflowRequest, runEnv, url)
+      if (d1TaskResponse) return withApiHeaders(request, env, d1TaskResponse)
+
+      const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
       if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
 
       const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
