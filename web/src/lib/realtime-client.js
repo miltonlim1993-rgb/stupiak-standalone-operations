@@ -40,16 +40,25 @@ export function startRealtimeConnections({ outletIds = [], onEvent, onState } = 
 
   const connect = async (outletId, attempt = 0) => {
     if (stopped) return
-    const controller = controllers.get(outletId) || { socket: null, timer: null, ping: null, attempt: 0 }
+    const controller = controllers.get(outletId) || {
+      socket: null,
+      timer: null,
+      ping: null,
+      attempt: 0,
+      generation: 0,
+      lastMessageAt: 0,
+    }
     controllers.set(outletId, controller)
     controller.attempt = attempt
+    controller.generation += 1
+    const generation = controller.generation
     clearTimeout(controller.timer)
     clearInterval(controller.ping)
 
     try {
       emitState(outletId, attempt ? 'reconnecting' : 'connecting', { attempt })
       const ticket = await issueTicket(outletId)
-      if (stopped) return
+      if (stopped || controller.generation !== generation) return
       const params = new URLSearchParams({
         ticket,
         outlet_id: outletId,
@@ -59,14 +68,23 @@ export function startRealtimeConnections({ outletIds = [], onEvent, onState } = 
       controller.socket = socket
 
       socket.addEventListener('open', () => {
+        if (controller.socket !== socket || controller.generation !== generation) return
         controller.attempt = 0
+        controller.lastMessageAt = Date.now()
         emitState(outletId, 'connected')
         controller.ping = window.setInterval(() => {
+          if (controller.socket !== socket) return
+          if (Date.now() - controller.lastMessageAt > 75_000) {
+            try { socket.close(4001, 'Heartbeat timeout') } catch {}
+            return
+          }
           if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify({ type: 'ping' }))
         }, 25_000)
       })
 
       socket.addEventListener('message', (message) => {
+        if (controller.socket !== socket || controller.generation !== generation) return
+        controller.lastMessageAt = Date.now()
         let event = null
         try { event = JSON.parse(String(message.data || '')) } catch {}
         if (!event || event.type === 'pong' || event.type === 'realtime.connected') return
@@ -75,7 +93,8 @@ export function startRealtimeConnections({ outletIds = [], onEvent, onState } = 
 
       const reconnect = () => {
         clearInterval(controller.ping)
-        if (stopped || controller.socket !== socket) return
+        if (stopped || controller.socket !== socket || controller.generation !== generation) return
+        controller.socket = null
         emitState(outletId, 'disconnected')
         const nextAttempt = Math.min(controller.attempt + 1, 8)
         const delay = Math.min(30_000, 1_000 * (2 ** nextAttempt)) + Math.floor(Math.random() * 750)
@@ -86,6 +105,7 @@ export function startRealtimeConnections({ outletIds = [], onEvent, onState } = 
         try { socket.close() } catch {}
       })
     } catch (error) {
+      if (stopped || controller.generation !== generation) return
       emitState(outletId, 'error', { error: error.message || String(error) })
       const nextAttempt = Math.min(attempt + 1, 8)
       const delay = Math.min(30_000, 1_000 * (2 ** nextAttempt)) + Math.floor(Math.random() * 750)
@@ -93,11 +113,40 @@ export function startRealtimeConnections({ outletIds = [], onEvent, onState } = 
     }
   }
 
+  const reconnectAll = () => {
+    if (stopped || !navigator.onLine || document.visibilityState === 'hidden') return
+    targets.forEach((outletId) => {
+      const controller = controllers.get(outletId)
+      if (controller) {
+        controller.generation += 1
+        clearTimeout(controller.timer)
+        clearInterval(controller.ping)
+        const socket = controller.socket
+        controller.socket = null
+        try { socket?.close(4000, 'App resumed') } catch {}
+      }
+      window.setTimeout(() => connect(outletId, 0), 50)
+    })
+  }
+
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') reconnectAll()
+  }
+
   targets.forEach((outletId) => connect(outletId))
+  window.addEventListener('online', reconnectAll)
+  window.addEventListener('pageshow', reconnectAll)
+  window.addEventListener('focus', reconnectAll)
+  document.addEventListener('visibilitychange', onVisible)
 
   return () => {
     stopped = true
+    window.removeEventListener('online', reconnectAll)
+    window.removeEventListener('pageshow', reconnectAll)
+    window.removeEventListener('focus', reconnectAll)
+    document.removeEventListener('visibilitychange', onVisible)
     for (const controller of controllers.values()) {
+      controller.generation += 1
       clearTimeout(controller.timer)
       clearInterval(controller.ping)
       try { controller.socket?.close(1000, 'Client stopped') } catch {}
