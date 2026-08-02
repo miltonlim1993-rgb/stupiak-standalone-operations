@@ -74,10 +74,23 @@ requireText('web/src/lib/realtime-client.js', [
   "document.addEventListener('visibilitychange', onVisible)",
   'Heartbeat timeout',
 ])
+requireText('web/src/lib/task-alerts.js', [
+  'taskWorkHasStarted',
+  'cancelTaskAlertsForTask',
+  "status === 'in_progress'",
+])
+requireText('web/src/components/RosterGatedTaskAlarmManager.jsx', [
+  'claimedTaskIds',
+  'cancelTaskAlertsForTask',
+  "window.addEventListener('chefops:realtime'",
+])
 requireText('web/src/pages/OperationalTasksLive.jsx', [
   "window.addEventListener('chefops:realtime', onRealtime)",
   "window.addEventListener('pageshow', onActive)",
   'OperationalTasksV2 key={revision}',
+  'AUTOSAVE_DELAY_MS',
+  "buttonWithText(drawer, '保存进度')",
+  '草稿已自动保存',
 ])
 requireText('web/src/App.jsx', [
   "const Tasks = lazy(() => import('@/pages/OperationalTasksLive'))",
@@ -86,20 +99,25 @@ requireText('web/src/lib/app-pack.js', [
   '/api/app/v4/pack/manifest?',
 ])
 requireText('web/src/main.jsx', [
-  "const SHELL_VERSION = 'realtime-resilience-v3-ios-live-task-v26'",
-  "register('/sw-v26.js'",
+  "const SHELL_VERSION = 'shared-task-claim-autosave-pwa-v27'",
+  "register('/sw-v27.js'",
 ])
 requireText('web/public/sw.js', [
-  "const VERSION = 'chefops-realtime-resilience-v3-ios-live-task-v26'",
+  "const VERSION = 'chefops-shared-task-claim-autosave-pwa-v27'",
+  'CANCEL_TASK_ALERTS',
+  'cancelTaskAlerts',
 ])
 requireText('web/public/sw-v24.js', [
-  'realtime-resilience-v3-ios-live-task-v26',
+  'shared-task-claim-autosave-pwa-v27',
 ])
 requireText('web/public/sw-v25.js', [
-  'realtime-resilience-v3-ios-live-task-v26',
+  'shared-task-claim-autosave-pwa-v27',
 ])
 requireText('web/public/sw-v26.js', [
-  'realtime-resilience-v3-ios-live-task-v26',
+  'shared-task-claim-autosave-pwa-v27',
+])
+requireText('web/public/sw-v27.js', [
+  'shared-task-claim-autosave-pwa-v27',
 ])
 
 if (failures.length) {
@@ -109,4 +127,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('D1-first submissions, iPhone PWA resume sync, Task bootstrap fallback, idempotency, WebSocket broadcast, Queue mirroring and last-known-good packages are wired.')
+console.log('D1-first submissions, shared task alarm cancellation, draft autosave, iPhone resume sync, Task bootstrap fallback, WebSocket broadcast and Queue mirroring are wired.')
