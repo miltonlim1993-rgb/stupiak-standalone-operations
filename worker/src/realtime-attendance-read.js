@@ -5,6 +5,7 @@ import { assertOutletAccess, assertReadPermission } from './permissions.js'
 import { spreadsheetIdForEntity } from './storage.js'
 
 const MAX_ROWS = 5000
+const CANONICAL_OPERATIONS_2026_ID = '1bFkU_tFcuEz6UFFqz7ehw8F1ttY_MkzfmQKkk_pN9xw'
 
 function now() {
   return new Date().toISOString()
@@ -88,23 +89,47 @@ async function d1Attendance(env, outletId) {
 }
 
 function valuesUrl(spreadsheetId) {
-  const range = encodeURIComponent("'Attendance'!A:Q")
+  const range = encodeURIComponent("'Attendance'!A1:P5000")
   return `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?majorDimension=ROWS`
 }
 
-async function readAttendanceSheet(env, outletId, year) {
-  const target = spreadsheetIdForEntity(env, 'Attendance', { year })
-  const response = await googleFetch(env, valuesUrl(target.spreadsheetId))
-  const payload = await response.json()
-  const values = Array.isArray(payload.values) ? payload.values : []
+function attendanceRows(values, outletId) {
   const headers = (values[0] || []).map((value) => String(value || '').trim())
   if (!headers.includes('id') || !headers.includes('outlet_id') || !headers.includes('date')) return []
-
   return values.slice(1).flatMap((cells) => {
     const row = Object.fromEntries(headers.map((header, index) => [header, cells[index] ?? '']))
     if (!rowId(row) || String(row.outlet_id || '') !== outletId) return []
-    return [row]
+    return [{ ...row, deleted_at: '' }]
   })
+}
+
+function attendanceSpreadsheetIds(env, year) {
+  const ids = []
+  try {
+    const configured = String(spreadsheetIdForEntity(env, 'Attendance', { year })?.spreadsheetId || '').trim()
+    if (configured) ids.push(configured)
+  } catch (error) {
+    console.error('Configured Attendance spreadsheet could not be resolved', year, error)
+  }
+  if (Number(year) === 2026) ids.push(CANONICAL_OPERATIONS_2026_ID)
+  return [...new Set(ids)]
+}
+
+async function readAttendanceSheet(env, outletId, year) {
+  const errors = []
+  for (const spreadsheetId of attendanceSpreadsheetIds(env, year)) {
+    try {
+      const response = await googleFetch(env, valuesUrl(spreadsheetId))
+      const payload = await response.json()
+      const rows = attendanceRows(Array.isArray(payload.values) ? payload.values : [], outletId)
+      if (rows.length) return { rows, spreadsheetId }
+    } catch (error) {
+      errors.push(error)
+      console.error('Attendance spreadsheet candidate failed', spreadsheetId, error)
+    }
+  }
+  if (errors.length) throw errors[errors.length - 1]
+  return { rows: [], spreadsheetId: '' }
 }
 
 async function persistAttendance(env, outletId, rows) {
@@ -212,14 +237,16 @@ export async function handleRealtimeAttendanceRead(request, env, url) {
     let source = visible.length ? 'd1' : 'd1-empty'
     let legacyErrorCode = ''
     let seeded = 0
+    let spreadsheetId = ''
 
     if (!visible.length && url.searchParams.get('legacy_seed') !== '0') {
       try {
-        const sheetRows = await readAttendanceSheet(env, outletId, year)
-        seeded = await persistAttendance(env, outletId, sheetRows)
-        allRows = mergeRows(await d1Attendance(env, outletId), sheetRows)
+        const sheet = await readAttendanceSheet(env, outletId, year)
+        spreadsheetId = sheet.spreadsheetId
+        seeded = await persistAttendance(env, outletId, sheet.rows)
+        allRows = mergeRows(await d1Attendance(env, outletId), sheet.rows)
         visible = sortRows(filterRows(allRows, filter, false), sort).slice(0, limit)
-        source = visible.length ? 'attendance-sheet-revived-d1' : 'd1-empty'
+        source = visible.length ? 'attendance-canonical-sheet-d1' : 'd1-empty'
       } catch (error) {
         legacyErrorCode = String(error?.code || 'attendance_hydration_unavailable')
         console.error('Direct Attendance hydration unavailable', outletId, year, error)
@@ -231,6 +258,7 @@ export async function handleRealtimeAttendanceRead(request, env, url) {
       count: visible.length,
       source,
       seeded,
+      spreadsheet_id: spreadsheetId,
       legacy_error_code: legacyErrorCode,
       server_time: now(),
     })
