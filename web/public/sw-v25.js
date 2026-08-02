@@ -1,4 +1,4 @@
-// Stupiak's Ops realtime resilience PWA shell v25.
-// A new worker URL forces iPhone and installed PWA clients to replace the
-// pre-D1 cached shell and activate the current Task workspace.
-importScripts('/sw.js?realtime-resilience-v2-pwa-v25')
+// Compatibility updater for existing v25 PWA installations.
+// Updating this file wakes already-installed iPhone PWAs and moves them to the
+// realtime Task refresh and resume-reconnect shell.
+importScripts('/sw.js?realtime-resilience-v3-ios-live-task-v26')
