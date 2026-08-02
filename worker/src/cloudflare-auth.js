@@ -114,6 +114,10 @@ export async function handleCloudflareAuth(request, env, url) {
     }
     return null
   } catch (error) {
+    if (temporaryDirectoryError(error) && !error.publicMessage) {
+      error.publicMessage = 'Account directory is temporarily unavailable. Approved users with a cached profile can continue; please retry shortly.'
+      error.code = error.code || 'auth_directory_unavailable'
+    }
     return errorResponse(request, env, error)
   }
 }
