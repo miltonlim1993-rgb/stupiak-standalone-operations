@@ -8,7 +8,8 @@ import {
   assertUpdatePermission,
 } from './permissions.js'
 import { getSchema } from './schema.js'
-import { appendRecord, ensureEntitySheet, updateRecordFlexible } from './sheets.js'
+import { syncCloseUpToSalesTemplate } from './closeup-sync.js'
+import { appendRecord, ensureEntitySheet, listRecords, updateRecordFlexible } from './sheets.js'
 
 const REALTIME_ENTITIES = new Set([
   'Task',
@@ -28,7 +29,9 @@ const REALTIME_ENTITIES = new Set([
 ])
 
 const OPERATIONS = new Set(['create', 'upsert', 'update', 'delete'])
-const MAX_READ_LIMIT = 500
+const MAX_READ_LIMIT = 5000
+const LEGACY_SEED_TIMEOUT_MS = 4500
+const LEGACY_SEED_INFLIGHT = new Map()
 
 function now() {
   return new Date().toISOString()
@@ -381,7 +384,7 @@ async function listRecordsFromD1(env, entity, outletId, options = {}) {
     SELECT r.*,
       COALESCE((SELECT o.status FROM sheet_sync_outbox o
         WHERE o.entity = r.entity AND o.entity_id = r.entity_id
-        ORDER BY o.id DESC LIMIT 1), 'pending') AS sync_status,
+        ORDER BY o.id DESC LIMIT 1), 'synced') AS sync_status,
       COALESCE((SELECT o.attempts FROM sheet_sync_outbox o
         WHERE o.entity = r.entity AND o.entity_id = r.entity_id
         ORDER BY o.id DESC LIMIT 1), 0) AS sync_attempts,
@@ -403,11 +406,144 @@ async function listRecordsFromD1(env, entity, outletId, options = {}) {
       version: Number(row.version || 0),
       updated_at: row.updated_at,
       deleted_at: row.deleted_at || '',
-      sync_status: row.sync_status || 'pending',
+      sync_status: row.sync_status || 'synced',
       sync_attempts: Number(row.sync_attempts || 0),
       last_sync_error: row.last_sync_error || '',
     },
   }))
+}
+
+async function digestText(value) {
+  const bytes = new TextEncoder().encode(String(value || ''))
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function timeoutAfter(ms) {
+  return new Promise((_, reject) => {
+    const error = new Error('Legacy Sheet hydration timed out')
+    error.code = 'legacy_seed_timeout'
+    setTimeout(() => reject(error), ms)
+  })
+}
+
+async function seedMarkerKey(entity, outletId, options) {
+  const fingerprint = await digestText(JSON.stringify({
+    filter: options.filter || {},
+    sort: options.sort || '',
+    year: options.year || '',
+    limit: options.limit || '',
+  }))
+  return `realtime:legacy-seed:${entity}:${outletId}:${fingerprint.slice(0, 24)}`
+}
+
+async function readSeedMarker(env, key) {
+  if (!env.APP_DATA_PACKS?.get) return null
+  try { return await env.APP_DATA_PACKS.get(key, 'json') } catch { return null }
+}
+
+async function writeSeedMarker(env, key, value, ttl) {
+  if (!env.APP_DATA_PACKS?.put) return
+  try {
+    await env.APP_DATA_PACKS.put(key, JSON.stringify(value), { expirationTtl: Math.max(60, ttl) })
+  } catch (error) {
+    console.error('Unable to store realtime legacy seed marker', error)
+  }
+}
+
+async function persistLegacyRows(env, entity, outletId, rows) {
+  const db = database(env)
+  const schema = getSchema(entity)
+  const idField = schema.idField || 'id'
+  let seeded = 0
+  const statements = []
+  const timestamp = now()
+
+  for (const row of rows || []) {
+    const entityId = String(row?.[idField] || row?.id || '').trim()
+    if (!entityId) continue
+    const createdAt = String(row.created_at || row.created_date || timestamp)
+    const updatedAt = String(row.updated_at || row.updated_date || createdAt || timestamp)
+    const createdBy = String(row.created_by || row.user_email || row.submitted_by_email || 'legacy-sheet')
+    const updatedBy = String(row.updated_by || createdBy)
+    const deletedAt = String(row.deleted_at || '')
+    const version = Math.max(1, numberVersion(row.version, 1))
+    const normalized = { ...row }
+    if (schema.headers.includes('outlet_id')) normalized.outlet_id = outletId
+
+    statements.push(db.prepare(`
+      INSERT INTO ops_records (
+        entity, entity_id, outlet_id, business_date, status, payload_json,
+        version, created_at, created_by, updated_at, updated_by, deleted_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(entity, entity_id) DO NOTHING
+    `).bind(
+      entity,
+      entityId,
+      outletId,
+      businessDate(normalized),
+      String(normalized.status || ''),
+      JSON.stringify(normalized),
+      version,
+      createdAt,
+      createdBy,
+      updatedAt,
+      updatedBy,
+      deletedAt,
+    ))
+  }
+
+  for (let index = 0; index < statements.length; index += 50) {
+    const chunk = statements.slice(index, index + 50)
+    if (chunk.length) {
+      await db.batch(chunk)
+      seeded += chunk.length
+    }
+  }
+  return seeded
+}
+
+async function seedLegacyRecords(env, entity, outletId, options = {}) {
+  const markerKey = await seedMarkerKey(entity, outletId, options)
+  const marker = await readSeedMarker(env, markerKey)
+  if (marker?.status === 'empty' || marker?.status === 'failed') {
+    return { seeded: 0, skipped: true, error_code: marker.error_code || '' }
+  }
+  if (LEGACY_SEED_INFLIGHT.has(markerKey)) return LEGACY_SEED_INFLIGHT.get(markerKey)
+
+  const task = (async () => {
+    const filter = { ...(options.filter || {}), outlet_id: outletId }
+    try {
+      const rows = await Promise.race([
+        listRecords(env, entity, {
+          filter,
+          sort: options.sort || '',
+          limit: Math.max(1, Math.min(Number(options.limit) || MAX_READ_LIMIT, MAX_READ_LIMIT)),
+          year: options.year || undefined,
+        }),
+        timeoutAfter(LEGACY_SEED_TIMEOUT_MS),
+      ])
+      const seeded = await persistLegacyRows(env, entity, outletId, rows || [])
+      await writeSeedMarker(env, markerKey, {
+        status: seeded ? 'seeded' : 'empty',
+        seeded,
+        checked_at: now(),
+      }, seeded ? 86400 : 600)
+      return { seeded, skipped: false, error_code: '' }
+    } catch (error) {
+      const errorCode = String(error?.code || 'legacy_seed_unavailable')
+      console.error('Legacy realtime hydration unavailable', entity, outletId, error)
+      await writeSeedMarker(env, markerKey, {
+        status: 'failed',
+        error_code: errorCode,
+        checked_at: now(),
+      }, 120)
+      return { seeded: 0, skipped: false, error_code: errorCode }
+    }
+  })()
+
+  LEGACY_SEED_INFLIGHT.set(markerKey, task)
+  try { return await task } finally { if (LEGACY_SEED_INFLIGHT.get(markerKey) === task) LEGACY_SEED_INFLIGHT.delete(markerKey) }
 }
 
 async function mirrorToSheets(env, message) {
@@ -427,6 +563,26 @@ async function mirrorToSheets(env, message) {
     if (error?.code !== 'record_not_found') throw error
     if (message.operation !== 'delete') await appendRecord(env, entity, record, { year })
   }
+}
+
+async function applyCloseUpSyncPatch(env, message, patch) {
+  if (!env.OPS_DB?.prepare || !patch || typeof patch !== 'object') return
+  const row = await env.OPS_DB.prepare(
+    "SELECT payload_json FROM ops_records WHERE entity = 'CloseUp' AND entity_id = ? LIMIT 1",
+  ).bind(message.entity_id).first()
+  if (!row) return
+  const current = parseJson(row.payload_json, {}) || {}
+  const next = { ...current, ...patch }
+  await env.OPS_DB.prepare(`
+    UPDATE ops_records
+    SET payload_json = ?, status = ?, updated_at = ?
+    WHERE entity = 'CloseUp' AND entity_id = ?
+  `).bind(
+    JSON.stringify(next),
+    String(next.status || ''),
+    now(),
+    message.entity_id,
+  ).run()
 }
 
 async function setOutboxSuccess(env, mutationId) {
@@ -457,6 +613,10 @@ export async function processSheetMirrorQueue(batch, env) {
     const body = message.body || {}
     try {
       await mirrorToSheets(env, body)
+      if (body.entity === 'CloseUp' && body.operation !== 'delete') {
+        const syncPatch = await syncCloseUpToSalesTemplate(env, body.record || {})
+        await applyCloseUpSyncPatch(env, body, syncPatch)
+      }
       await setOutboxSuccess(env, body.mutation_id)
       message.ack()
     } catch (error) {
@@ -503,7 +663,7 @@ export async function handleRealtimeDataApi(request, env, url) {
       const user = await getCurrentUser(request, env)
       return json(request, env, {
         ok: true,
-        revision: 'realtime-d1-foundation-v1',
+        revision: 'realtime-d1-primary-v2',
         database: Boolean(env.OPS_DB?.prepare),
         outlet_websocket: Boolean(env.OUTLET_REALTIME?.getByName),
         sheet_queue: Boolean(env.SHEET_SYNC_QUEUE?.send),
@@ -523,12 +683,34 @@ export async function handleRealtimeDataApi(request, env, url) {
       const outletId = requireOutlet(url.searchParams.get('outlet_id') || user.outlet_id)
       assertReadPermission(user, entity)
       assertOutletAccess(user, outletId)
-      const records = await listRecordsFromD1(env, entity, outletId, {
+      const options = {
         since: url.searchParams.get('since') || '',
         includeDeleted: url.searchParams.get('include_deleted') === '1',
         limit: url.searchParams.get('limit') || 100,
+        filter: parseJson(url.searchParams.get('filter'), {}) || {},
+        sort: url.searchParams.get('sort') || '',
+        year: url.searchParams.get('year') || undefined,
+      }
+      let records = await listRecordsFromD1(env, entity, outletId, options)
+      let source = records.length ? 'd1' : 'd1-empty'
+      let legacyErrorCode = ''
+
+      if (!records.length && url.searchParams.get('legacy_seed') !== '0') {
+        const seeded = await seedLegacyRecords(env, entity, outletId, options)
+        legacyErrorCode = seeded.error_code || ''
+        if (seeded.seeded) {
+          records = await listRecordsFromD1(env, entity, outletId, options)
+          source = records.length ? 'legacy-seeded-d1' : 'd1-empty'
+        }
+      }
+
+      return json(request, env, {
+        records,
+        count: records.length,
+        source,
+        legacy_error_code: legacyErrorCode,
+        server_time: now(),
       })
-      return json(request, env, { records, count: records.length, server_time: now() })
     }
 
     if (url.pathname === '/api/realtime/data/sync/retry' && request.method === 'POST') {
