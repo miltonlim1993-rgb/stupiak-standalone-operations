@@ -6,7 +6,8 @@ import { spreadsheetIdForEntity } from './storage.js'
 
 const MAX_ROWS = 5000
 const CANONICAL_OPERATIONS_2026_ID = '1bFkU_tFcuEz6UFFqz7ehw8F1ttY_MkzfmQKkk_pN9xw'
-const HYDRATE_TIMEOUT_MS = 8000
+const HYDRATE_TIMEOUT_MS = 15000
+const HISTORY_MARKER_VERSION = 'stock-history-complete-v2'
 
 function now() {
   return new Date().toISOString()
@@ -177,12 +178,20 @@ async function persistStockCounts(env, outletId, rows) {
         outlet_id = excluded.outlet_id,
         business_date = excluded.business_date,
         status = excluded.status,
-        payload_json = excluded.payload_json,
+        payload_json = CASE
+          WHEN ops_records.payload_json = '' OR ops_records.deleted_at <> '' THEN excluded.payload_json
+          ELSE ops_records.payload_json
+        END,
         version = CASE WHEN ops_records.version > excluded.version THEN ops_records.version ELSE excluded.version END,
-        updated_at = excluded.updated_at,
-        updated_by = excluded.updated_by,
+        updated_at = CASE
+          WHEN ops_records.updated_at = '' THEN excluded.updated_at
+          ELSE ops_records.updated_at
+        END,
+        updated_by = CASE
+          WHEN ops_records.updated_by = '' THEN excluded.updated_by
+          ELSE ops_records.updated_by
+        END,
         deleted_at = ''
-      WHERE ops_records.deleted_at <> ''
     `).bind(
       id,
       outletId,
@@ -215,10 +224,34 @@ function requestedDate(filter = {}, year) {
   return `${Number(year) || new Date().getUTCFullYear()}-12-31`
 }
 
-function needsHistoricalHydration(rows, filter, year) {
-  const upperDate = requestedDate(filter, year)
-  const active = (rows || []).filter((row) => !String(row.deleted_at || row.__realtime?.deleted_at || '').trim())
-  return !active.some((row) => {
+function markerKey(outletId, year) {
+  return `migration:stock-history:${HISTORY_MARKER_VERSION}:${outletId}:${year}`
+}
+
+async function readHistoryMarker(env, outletId, year) {
+  if (!env.APP_DATA_PACKS?.get) return null
+  try {
+    return await env.APP_DATA_PACKS.get(markerKey(outletId, year), 'json')
+  } catch (error) {
+    console.error('Unable to read stock history marker', outletId, year, error)
+    return null
+  }
+}
+
+async function writeHistoryMarker(env, outletId, year, payload) {
+  if (!env.APP_DATA_PACKS?.put) return
+  await env.APP_DATA_PACKS.put(markerKey(outletId, year), JSON.stringify({
+    version: HISTORY_MARKER_VERSION,
+    outlet_id: outletId,
+    year,
+    hydrated_at: now(),
+    ...payload,
+  }))
+}
+
+function historicalRows(rows, upperDate) {
+  return (rows || []).filter((row) => {
+    if (String(row.deleted_at || row.__realtime?.deleted_at || '').trim()) return false
     const date = String(row.count_date || '')
     return date && date < upperDate
   })
@@ -252,20 +285,32 @@ export async function handleRealtimeStockRead(request, env, url) {
     const includeDeleted = url.searchParams.get('include_deleted') === '1'
     const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 100), MAX_ROWS))
     const year = Number(url.searchParams.get('year') || String(filter.count_date?.$lte || filter.count_date || '').slice(0, 4) || new Date().getUTCFullYear())
+    const upperDate = requestedDate(filter, year)
 
     let allRows = await d1StockCounts(env, outletId)
     let source = allRows.length ? 'd1' : 'd1-empty'
     let seeded = 0
     let spreadsheetId = ''
     let legacyErrorCode = ''
+    let marker = await readHistoryMarker(env, outletId, year)
+    const forceHistory = url.searchParams.get('force_history') === '1'
 
-    if (url.searchParams.get('legacy_seed') !== '0' && needsHistoricalHydration(allRows, filter, year)) {
+    if (url.searchParams.get('legacy_seed') !== '0' && (forceHistory || marker?.version !== HISTORY_MARKER_VERSION)) {
       try {
         const sheet = await readStockSheet(env, outletId, year)
         spreadsheetId = sheet.spreadsheetId
         seeded = await persistStockCounts(env, outletId, sheet.rows)
         allRows = await d1StockCounts(env, outletId)
-        if (sheet.rows.length) source = 'stock-history-sheet-d1'
+        const historicalCount = historicalRows(allRows, upperDate).length
+        if (sheet.rows.length && historicalCount > 0) {
+          await writeHistoryMarker(env, outletId, year, {
+            source_rows: sheet.rows.length,
+            historical_rows: historicalCount,
+            spreadsheet_id: spreadsheetId,
+          })
+          marker = { version: HISTORY_MARKER_VERSION }
+          source = 'stock-history-complete-sheet-d1'
+        }
       } catch (error) {
         legacyErrorCode = String(error?.code || 'stock_history_unavailable')
         console.error('Historical StockCounts hydration unavailable', outletId, year, error)
@@ -279,6 +324,8 @@ export async function handleRealtimeStockRead(request, env, url) {
       source,
       seeded,
       spreadsheet_id: spreadsheetId,
+      history_marker: marker?.version || '',
+      historical_rows: historicalRows(allRows, upperDate).length,
       legacy_error_code: legacyErrorCode,
       server_time: now(),
     })
