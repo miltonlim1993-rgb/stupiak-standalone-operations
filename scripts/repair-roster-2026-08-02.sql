@@ -1,4 +1,3 @@
-BEGIN TRANSACTION;
 INSERT INTO ops_records (
 entity, entity_id, outlet_id, business_date, status, payload_json,
 version, created_at, created_by, updated_at, updated_by, deleted_at
@@ -103,4 +102,3 @@ version=CASE WHEN ops_records.version > excluded.version THEN ops_records.versio
 updated_at=excluded.updated_at,
 updated_by=excluded.updated_by,
 deleted_at='';
-COMMIT;
