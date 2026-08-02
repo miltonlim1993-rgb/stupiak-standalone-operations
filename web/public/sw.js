@@ -1,5 +1,5 @@
-// Production release refresh: 4.5.11 / PWA v22
-const VERSION = 'chefops-v4-5-11-auto-task-package-v22'
+// Production release refresh: realtime resilience / PWA v25
+const VERSION = 'chefops-realtime-resilience-v2-pwa-v25'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
