@@ -125,7 +125,27 @@ async function persistAttendance(env, outletId, rows) {
         entity, entity_id, outlet_id, business_date, status, payload_json,
         version, created_at, created_by, updated_at, updated_by, deleted_at
       ) VALUES ('Attendance', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      ON CONFLICT(entity, entity_id) DO NOTHING
+      ON CONFLICT(entity, entity_id) DO UPDATE SET
+        outlet_id = excluded.outlet_id,
+        business_date = excluded.business_date,
+        status = excluded.status,
+        payload_json = excluded.payload_json,
+        version = CASE
+          WHEN ops_records.version > excluded.version THEN ops_records.version
+          ELSE excluded.version
+        END,
+        created_at = CASE
+          WHEN ops_records.created_at <> '' THEN ops_records.created_at
+          ELSE excluded.created_at
+        END,
+        created_by = CASE
+          WHEN ops_records.created_by <> '' THEN ops_records.created_by
+          ELSE excluded.created_by
+        END,
+        updated_at = excluded.updated_at,
+        updated_by = excluded.updated_by,
+        deleted_at = excluded.deleted_at
+      WHERE ops_records.deleted_at <> '' OR excluded.updated_at >= ops_records.updated_at
     `).bind(
       id,
       outletId,
@@ -202,7 +222,7 @@ export async function handleRealtimeAttendanceRead(request, env, url) {
         seeded = await persistAttendance(env, outletId, sheetRows)
         allRows = mergeRows(await d1Attendance(env, outletId), sheetRows)
         visible = sortRows(filterRows(allRows, filter, includeDeleted), sort).slice(0, limit)
-        source = visible.length ? 'attendance-sheet-seeded-d1' : 'd1-empty'
+        source = visible.length ? 'attendance-sheet-restored-d1' : 'd1-empty'
       } catch (error) {
         legacyErrorCode = String(error?.code || 'attendance_hydration_unavailable')
         console.error('Direct Attendance hydration unavailable', outletId, year, error)
