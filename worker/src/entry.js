@@ -16,13 +16,14 @@ import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import { withSubmissionLock } from './submission-locks.js'
 import { augmentHealthResponse } from './realtime-health.js'
 import { handleRealtimeAttendanceRead } from './realtime-attendance-read.js'
+import { handleBundledSopMedia } from './bundled-sop-media.js'
 import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v11-roster-sop-recovery'
+const WORKER_REVISION = 'realtime-resilience-v12-bundled-sop-roster-repair'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -167,6 +168,9 @@ export default {
 
       const authResponse = await handleCloudflareAuth(request, runEnv, url)
       if (authResponse) return withApiHeaders(request, env, authResponse)
+
+      const bundledSopMediaResponse = await handleBundledSopMedia(request, runEnv, url)
+      if (bundledSopMediaResponse) return withApiHeaders(request, env, bundledSopMediaResponse)
 
       const atomicStockResponse = url.pathname === '/api/stock-counts/batch'
         ? await withSubmissionLock(
