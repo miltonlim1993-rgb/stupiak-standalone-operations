@@ -1,4 +1,4 @@
 // Compatibility updater for existing v24 PWA installations.
-// Keeping this URL changing lets older iPhone home-screen apps discover the
-// live Task shell before the new app registers sw-v26.js.
-importScripts('/sw.js?realtime-resilience-v3-ios-live-task-v26')
+// Older iPhone home-screen apps are moved to the shared task claim and
+// draft autosave shell before the app registers sw-v27.js.
+importScripts('/sw.js?shared-task-claim-autosave-pwa-v27')
