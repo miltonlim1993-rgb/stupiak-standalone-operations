@@ -8,12 +8,13 @@ PRODUCTION_ORIGIN="https://stupiaks-ops.sporkburger19.workers.dev"
 HEALTH_URL="$PRODUCTION_ORIGIN/api/health"
 AUTH_ME_URL="$PRODUCTION_ORIGIN/api/auth/me"
 PWA_WORKER_URL="$PRODUCTION_ORIGIN/sw-v27.js"
+MEDIA_URL="$PRODUCTION_ORIGIN/sop-media/opening-preparation.webp"
 DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-EXPECTED_REVISION="realtime-resilience-v10-public-drive-media-fallback"
-EXPECTED_PWA_TOKEN="auth-session-stability-pwa-v28"
+EXPECTED_REVISION="realtime-resilience-v13-stock-history-media-ui"
+EXPECTED_PWA_TOKEN="stock-history-media-ui-v13"
 
 json_database_id() {
   local database_name="$1"
@@ -98,7 +99,7 @@ git pull --ff-only origin main
 echo "==> Installing exact dependencies"
 npm ci
 
-echo "==> Auditing media, roster and D1-primary workspace closure"
+echo "==> Auditing realtime, stock-history and media UI closure"
 node scripts/audit-realtime-closure.mjs
 
 echo "==> Resolving D1 database: $DB_NAME"
@@ -136,7 +137,7 @@ npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.produc
 echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
-echo "==> Verifying media, roster, D1-primary reads, auth, Queue and WebSocket"
+echo "==> Verifying v13, auth, D1, Queue, WebSocket and bundled media"
 headers=''
 body=''
 pwa_body=''
@@ -146,15 +147,23 @@ for attempt in $(seq 1 30); do
   headers="$(mktemp)"
   auth_headers="$(mktemp)"
   auth_body_file="$(mktemp)"
+  media_headers="$(mktemp)"
+  media_file="$(mktemp)"
   body="$(curl -fsS --max-time 20 -D "$headers" "$HEALTH_URL" || true)"
   pwa_body="$(curl -fsS --max-time 20 "$PWA_WORKER_URL?_=$RANDOM" || true)"
   auth_status="$(curl -sS --max-time 15 -D "$auth_headers" -o "$auth_body_file" -w '%{http_code}' "$AUTH_ME_URL" || true)"
   auth_body="$(cat "$auth_body_file" 2>/dev/null || true)"
+  curl -fsS --max-time 30 -D "$media_headers" -o "$media_file" "$MEDIA_URL?_=$RANDOM" || true
+  media_bytes="$(wc -c < "$media_file" | tr -d ' ')"
+  rm -f "$media_file"
+
   if grep -Fqi "X-ChefOps-Worker-Revision: $EXPECTED_REVISION" "$headers" \
     && printf '%s' "$body" | health_realtime_ready \
     && printf '%s' "$pwa_body" | grep -Fq "$EXPECTED_PWA_TOKEN" \
-    && auth_endpoint_ready "$auth_status" "$auth_headers" "$auth_body_file"; then
-    rm -f "$headers" "$auth_headers" "$auth_body_file"
+    && auth_endpoint_ready "$auth_status" "$auth_headers" "$auth_body_file" \
+    && grep -Fqi 'Content-Type: image/webp' "$media_headers" \
+    && [[ "$media_bytes" -gt 100000 ]]; then
+    rm -f "$headers" "$auth_headers" "$auth_body_file" "$media_headers"
     printf '%s\n' "$body"
     echo "REALTIME_DEPLOYMENT_VERIFIED=true"
     echo "D1_MIGRATIONS_APPLIED=true"
@@ -167,9 +176,12 @@ for attempt in $(seq 1 30); do
     echo "LIVE_WORKSPACE_READS_D1_PRIMARY=true"
     echo "LEGACY_SHEET_READ_ERRORS_ISOLATED=true"
     echo "DUTY_ROSTER_DIRECT_D1_HYDRATION=true"
+    echo "STOCK_HISTORY_SHEET_D1_HYDRATION=true"
     echo "TASK_MEDIA_CLOUDFLARE_CACHE=true"
     echo "GOOGLE_DRIVE_MEDIA_PROXY_NORMALIZED=true"
     echo "PUBLIC_DRIVE_MEDIA_FALLBACK=true"
+    echo "SOP_MEDIA_UI_DIRECT_MAPPING=true"
+    echo "TASK_MEDIA_OBJECT_CONTAIN=true"
     echo "STOCK_SUBMISSIONS_PACKAGE_D1_ONLY=true"
     echo "CLOSEUP_SUBMISSIONS_D1_ONLY=true"
     echo "CLOSEUP_SHEET_SYNC_ASYNC=true"
@@ -179,11 +191,11 @@ for attempt in $(seq 1 30); do
     echo "MULTI_DEVICE_TESTING_READY=true"
     exit 0
   fi
-  rm -f "$headers" "$auth_headers" "$auth_body_file"
+  rm -f "$headers" "$auth_headers" "$auth_body_file" "$media_headers"
   sleep 5
 done
 
-echo "Deployment command completed, but media/roster/D1-primary readiness was not observed in production." >&2
+echo "Deployment command completed, but v13 readiness was not observed in production." >&2
 echo "Expected Worker revision: $EXPECTED_REVISION" >&2
 echo "Expected PWA token: $EXPECTED_PWA_TOKEN" >&2
 echo "Last health response: $body" >&2
