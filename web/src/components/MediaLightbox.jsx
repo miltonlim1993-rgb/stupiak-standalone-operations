@@ -1,6 +1,37 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import { ExternalLink, Minus, Plus, RotateCcw, X } from 'lucide-react'
+
+function googleDriveFileId(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  const patterns = [
+    /\/api\/files\/([^/?#]+)/i,
+    /drive\.google\.com\/file\/d\/([^/?#]+)/i,
+    /drive\.google\.com\/open\?[^#]*\bid=([^&#]+)/i,
+    /drive\.google\.com\/uc\?[^#]*\bid=([^&#]+)/i,
+    /docs\.google\.com\/[^/]+\/d\/([^/?#]+)/i,
+  ]
+  for (const pattern of patterns) {
+    const match = raw.match(pattern)
+    if (match?.[1]) return decodeURIComponent(match[1])
+  }
+  try {
+    const url = new URL(raw, window.location.origin)
+    const id = url.searchParams.get('id')
+    if (id && /google\.com$/i.test(url.hostname.replace(/^www\./, ''))) return id
+  } catch {}
+  return ''
+}
+
+function displayMediaUrl(value) {
+  const raw = String(value || '').trim()
+  if (!raw) return ''
+  if (/^(blob:|data:)/i.test(raw)) return raw
+  const fileId = googleDriveFileId(raw)
+  if (fileId) return `${window.location.origin}/api/files/${encodeURIComponent(fileId)}`
+  return raw
+}
 
 export default function MediaLightbox({
   open,
@@ -13,12 +44,14 @@ export default function MediaLightbox({
   const [zoom, setZoom] = useState(1)
   const [failed, setFailed] = useState(false)
   const isVideo = type === 'video'
+  const mediaSrc = useMemo(() => displayMediaUrl(src), [src])
+  const mediaPoster = useMemo(() => displayMediaUrl(poster), [poster])
 
   useEffect(() => {
     if (!open) return
     setZoom(1)
     setFailed(false)
-  }, [open, src, type])
+  }, [open, mediaSrc, type])
 
   const changeZoom = (next) => {
     setZoom(Math.max(0.75, Math.min(4, Number(Number(next).toFixed(2)))))
@@ -49,8 +82,8 @@ export default function MediaLightbox({
                   <button type="button" onClick={() => changeZoom(zoom + 0.25)} className="sop-lightbox-control" aria-label="Zoom in"><Plus className="h-4 w-4" /></button>
                 </>
               ) : null}
-              {src ? (
-                <a href={src} target="_blank" rel="noreferrer" className="sop-lightbox-control" aria-label="Open original file">
+              {mediaSrc ? (
+                <a href={mediaSrc} target="_blank" rel="noreferrer" className="sop-lightbox-control" aria-label="Open original file">
                   <ExternalLink className="h-4 w-4" />
                 </a>
               ) : null}
@@ -70,17 +103,17 @@ export default function MediaLightbox({
             }}
           >
             <div className="flex min-h-full min-w-full items-center justify-center p-3 sm:p-6">
-              {!src || failed ? (
+              {!mediaSrc || failed ? (
                 <div className="max-w-sm rounded-2xl border border-white/15 bg-white/10 p-5 text-center">
                   <p className="text-sm font-semibold">Unable to display this media.</p>
                   <p className="mt-2 text-xs leading-5 text-white/65">The original file may be unavailable, still uploading, or not supported by this device.</p>
-                  {src ? <a href={src} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-semibold"><ExternalLink className="h-4 w-4" /> Open original</a> : null}
+                  {mediaSrc ? <a href={mediaSrc} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 rounded-xl border border-white/20 px-3 py-2 text-xs font-semibold"><ExternalLink className="h-4 w-4" /> Open original</a> : null}
                 </div>
               ) : isVideo ? (
                 <video
-                  key={src}
-                  src={src}
-                  poster={poster || undefined}
+                  key={mediaSrc}
+                  src={mediaSrc}
+                  poster={mediaPoster || undefined}
                   controls
                   playsInline
                   preload="metadata"
@@ -89,8 +122,8 @@ export default function MediaLightbox({
                 />
               ) : (
                 <img
-                  key={src}
-                  src={src}
+                  key={mediaSrc}
+                  src={mediaSrc}
                   alt={title}
                   draggable="false"
                   onError={() => setFailed(true)}
