@@ -28,7 +28,8 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v3-pwa-task-bootstrap'",
+  "const WORKER_REVISION = 'realtime-resilience-v4-d1-task-actions'",
+  'handleD1OperationalTaskAction',
   'handleRealtimeWorkflowApi',
   'handleJsonAtomicStockCountBatch',
   'handleRealtimeCloseUpSync',
@@ -37,6 +38,21 @@ requireText('worker/src/entry.js', [
   'augmentHealthResponse',
   'overlayOperationalBootstrapResponse(bootstrapRequest',
 ])
+requireText('worker/src/realtime-task-action-d1.js', [
+  'handleD1OperationalTaskAction',
+  'getPublishedAppPack',
+  'getAppPackModule',
+  "SELECT * FROM ops_records WHERE entity = ? AND entity_id = ?",
+  "sheet_read: false",
+  "operation: 'update'",
+])
+const d1TaskAction = read('worker/src/realtime-task-action-d1.js')
+if (d1TaskAction.includes("from './sheets.js'")) {
+  failures.push('worker/src/realtime-task-action-d1.js must not import Google Sheets')
+}
+if (d1TaskAction.includes('listRecords(') || d1TaskAction.includes('findRecord(')) {
+  failures.push('worker/src/realtime-task-action-d1.js must not read Google Sheets')
+}
 requireText('worker/src/realtime-task-bootstrap.js', [
   'CLOUDFLARE_PACKAGE_D1_FALLBACK',
   'createGeneratedTask',
@@ -127,4 +143,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('D1-first submissions, shared task alarm cancellation, draft autosave, iPhone resume sync, Task bootstrap fallback, WebSocket broadcast and Queue mirroring are wired.')
+console.log('D1-only Task actions, shared task alarm cancellation, draft autosave, iPhone resume sync, Task bootstrap fallback, WebSocket broadcast and Queue mirroring are wired.')
