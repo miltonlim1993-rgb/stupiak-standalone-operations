@@ -96,14 +96,14 @@ async function activeUserBySub(env, googleSub) {
   const pending = (async () => {
     try {
       const user = await findDirectoryUser(env, { googleSub: key })
-      if (user) return rememberUserEverywhere(env, user)
+      if (!user) return null
+      return rememberUserEverywhere(env, user)
     } catch (error) {
       console.error('D1 user lookup failed; checking last-known-good auth cache', error)
+      const fallback = await cachedUserFromKv(env, { googleSub: key })
+      if (fallback) rememberUser(fallback)
+      return fallback
     }
-
-    const fallback = await cachedUserFromKv(env, { googleSub: key })
-    if (fallback) rememberUser(fallback)
-    return fallback
   })()
 
   USER_INFLIGHT.set(key, pending)
@@ -204,14 +204,12 @@ export async function getCurrentUser(request, env, { optional = false } = {}) {
 
 async function findLoginUser(env, { googleSub, email }) {
   try {
-    const d1User = await findDirectoryUser(env, { googleSub, email })
-    if (d1User) return d1User
+    return await findDirectoryUser(env, { googleSub, email })
   } catch (error) {
     const fallback = await cachedUserFromKv(env, { googleSub, email })
     if (fallback) return fallback
     throw error
   }
-  return cachedUserFromKv(env, { googleSub, email })
 }
 
 function shouldWriteLoginUpdate(user, { googleSub, email, fullName, avatarUrl, nowMs }) {
