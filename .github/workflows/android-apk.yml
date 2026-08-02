@@ -7,9 +7,11 @@ on:
     paths:
       - 'web/**'
       - 'worker/**'
+      - 'scripts/ops/**'
       - 'scripts/android-task-alarm/**'
       - 'scripts/android-app-update/**'
       - 'scripts/configure-android-*.mjs'
+      - 'scripts/deploy-realtime-ops-now.sh'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/android-apk.yml'
@@ -18,9 +20,11 @@ on:
     paths:
       - 'web/**'
       - 'worker/**'
+      - 'scripts/ops/**'
       - 'scripts/android-task-alarm/**'
       - 'scripts/android-app-update/**'
       - 'scripts/configure-android-*.mjs'
+      - 'scripts/deploy-realtime-ops-now.sh'
       - 'package.json'
       - 'package-lock.json'
       - '.github/workflows/android-apk.yml'
@@ -35,13 +39,15 @@ concurrency:
 jobs:
   validate:
     runs-on: ubuntu-latest
+    outputs:
+      publish_release: ${{ steps.release_change.outputs.publish_release }}
     env:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
-      ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.15-validation
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -52,25 +58,22 @@ jobs:
           java-version: 21
       - name: Install dependencies
         run: npm ci
-      - name: Validate OPS 4.5.15 mandatory update source
+      - name: Resolve manifest release contract
+        shell: bash
         run: |
-          grep -q '"apk_version": "4.5.15"' web/public/app-release.json
-          grep -q '"minimum_apk_version": "4.5.15"' web/public/app-release.json
-          grep -q '"force_update": true' web/public/app-release.json
-          grep -q '"pwa_version": "label-d1-runtime-pwa-v30"' web/public/app-release.json
-          grep -q '"pwa_force_update": true' web/public/app-release.json
-          grep -q "CURRENT_RELEASE = '4.5.15'" web/src/components/AppUpdateBanner.jsx
-          grep -q "AUTO_OPEN_COOLDOWN_MS" web/src/components/AppUpdateBanner.jsx
-          grep -q "Number(asset.size || 0) < 1_000_000" web/src/components/AppUpdateBanner.jsx
-          grep -q "sw-v30.js" web/src/main.jsx
-          grep -q "label-d1-runtime-pwa-v30" web/src/main.jsx
-          grep -q "label-d1-runtime-pwa-v30" web/public/sw-v30.js
-          grep -q "caches.delete" web/public/sw-v30.js
-          grep -q "realtime-resilience-v17-label-d1-runtime" worker/src/entry.js
-          grep -q "handleD1Labels" worker/src/entry.js
-          test -f worker/src/label-d1-store.js
-          test -f worker/src/label-d1-printer.js
-          test -f worker/src/label-d1-operations.js
+          set -euo pipefail
+          APK_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('web/public/app-release.json','utf8')).apk_version")"
+          PWA_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('web/public/app-release.json','utf8')).pwa_version")"
+          test -n "$APK_VERSION"
+          test -n "$PWA_VERSION"
+          echo "ANDROID_VERSION_CODE=1" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_NAME=${APK_VERSION}-validation" >> "$GITHUB_ENV"
+          echo "APK_VERSION_BASE=${APK_VERSION}" >> "$GITHUB_ENV"
+          echo "PWA_VERSION=${PWA_VERSION}" >> "$GITHUB_ENV"
+      - name: Audit canonical OPS architecture contract
+        run: npm run ops:audit:contract
+      - name: Validate operational alert and native plugin contracts
+        run: |
           grep -q "open_time: night ? '21:00' : '10:00'" worker/src/opening-checklist-feedback.js
           grep -q "due_time: night ? '00:00' : '17:30'" worker/src/opening-checklist-feedback.js
           grep -q "due_day_offset: night ? 1 : 0" worker/src/opening-checklist-feedback.js
@@ -99,9 +102,29 @@ jobs:
           chmod +x web/android/gradlew
           cd web/android
           ./gradlew assembleDebug
+      - name: Decide whether this main event publishes a signed release
+        id: release_change
+        shell: bash
+        run: |
+          set -euo pipefail
+          publish=false
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+            publish=true
+          elif [[ "${{ github.event_name }}" == "push" ]]; then
+            before="${{ github.event.before }}"
+            if [[ -n "$before" && "$before" != "0000000000000000000000000000000000000000" ]]; then
+              if git diff --name-only "$before" "${{ github.sha }}" | grep -Fxq 'web/public/app-release.json'; then
+                publish=true
+              fi
+            fi
+          fi
+          echo "publish_release=$publish" >> "$GITHUB_OUTPUT"
+          echo "SIGNED_RELEASE_REQUIRED=$publish"
 
   release:
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      (github.event_name == 'workflow_dispatch' || needs.validate.outputs.publish_release == 'true')
     needs: validate
     runs-on: ubuntu-latest
     env:
@@ -110,8 +133,6 @@ jobs:
       APK_ALARM_FILE_NAME: stupiaks-ops-task-sop-alarm.apk
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
-      ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.15.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -127,6 +148,18 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
+      - name: Resolve signed release contract from manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('web/public/app-release.json','utf8')).apk_version")"
+          PWA_VERSION="$(node -p "JSON.parse(require('fs').readFileSync('web/public/app-release.json','utf8')).pwa_version")"
+          test -n "$APK_VERSION"
+          test -n "$PWA_VERSION"
+          echo "ANDROID_VERSION_CODE=${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "ANDROID_VERSION_NAME=${APK_VERSION}.${{ github.run_number }}" >> "$GITHUB_ENV"
+          echo "APK_VERSION_BASE=${APK_VERSION}" >> "$GITHUB_ENV"
+          echo "PWA_VERSION=${PWA_VERSION}" >> "$GITHUB_ENV"
       - name: Validate signing secrets
         run: |
           test -n "${{ secrets.ANDROID_KEYSTORE_BASE64 }}"
@@ -135,6 +168,8 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
+      - name: Audit canonical OPS architecture contract
+        run: npm run ops:audit:contract
       - name: Generate and configure latest Android release project
         run: |
           npm run mobile:init
@@ -174,14 +209,19 @@ jobs:
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V10_FILE_NAME}"
           cp web/android/app/build/outputs/bundle/release/app-release.aab "release/${AAB_FILE_NAME}"
           cp web/public/app-release.json release/app-release.json
-          printf 'source_commit=%s\nandroid_version=%s\npwa_version=%s\n' \
-            "${GITHUB_SHA}" "${ANDROID_VERSION_NAME}" "label-d1-runtime-pwa-v30" \
+          node <<'NODE'
+          const fs = require('node:fs')
+          const manifest = JSON.parse(fs.readFileSync('web/public/app-release.json', 'utf8'))
+          fs.writeFileSync('release/RELEASE_NOTES.txt', `${manifest.release_notes || 'Mandatory Stupiak\'s Ops release.'}\n`)
+          NODE
+          printf 'source_commit=%s\nandroid_version=%s\napk_base_version=%s\npwa_version=%s\n' \
+            "${GITHUB_SHA}" "${ANDROID_VERSION_NAME}" "${APK_VERSION_BASE}" "${PWA_VERSION}" \
             > release/BUILD_INFO.txt
-          sha256sum release/*.apk release/*.aab release/app-release.json release/BUILD_INFO.txt \
+          sha256sum release/*.apk release/*.aab release/app-release.json release/BUILD_INFO.txt release/RELEASE_NOTES.txt \
             | tee release/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: stupiaks-ops-signed-release-4.5.15
+          name: stupiaks-ops-signed-release
           path: release/
           if-no-files-found: error
       - name: Publish fixed latest signed release
@@ -197,8 +237,8 @@ jobs:
             "release/app-release.json#Mandatory update manifest" \
             "release/BUILD_INFO.txt#Source commit and PWA build" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops D1 Label Runtime ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed mandatory Android release ${ANDROID_VERSION_NAME}, built from ${GITHUB_SHA}. Food Labels now use D1 for rules, printer profiles, creation, reprints and print logs; July Stock Count history is restored. Website and installed PWA clients force shell label-d1-runtime-pwa-v30, while outdated Android clients remain locked until this signed package is installed."
+            --title "Stupiak's Ops ${ANDROID_VERSION_NAME}" \
+            --notes-file release/RELEASE_NOTES.txt
       - name: Verify release page and fixed download URL serve this exact APK
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -206,7 +246,7 @@ jobs:
           mkdir -p verify-release
           gh release view "${APK_RELEASE_TAG}" --json name,tagName,assets \
             | tee verify-release/release.json
-          grep -q "4.5.15.${{ github.run_number }}" verify-release/release.json
+          grep -q "${ANDROID_VERSION_NAME}" verify-release/release.json
           gh release download "${APK_RELEASE_TAG}" \
             --pattern "${APK_ALARM_FILE_NAME}" \
             --dir verify-release

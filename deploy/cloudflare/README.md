@@ -1,111 +1,150 @@
 # Cloudflare production layout
 
+The authoritative operating procedure is [`docs/OPS-D1-PRODUCTION-RUNBOOK.md`](../../docs/OPS-D1-PRODUCTION-RUNBOOK.md).
+
 ## Canonical production service
 
-The only canonical OPS production origin is:
-
 ```text
-https://stupiaks-ops.sporkburger19.workers.dev
+Origin:  https://stupiaks-ops.sporkburger19.workers.dev
+Health:  https://stupiaks-ops.sporkburger19.workers.dev/api/health
+Worker:  stupiaks-ops
 ```
 
-Health verification must use:
+The Worker serves both the React SPA and `/api/*` from the same deployment.
 
-```text
-https://stupiaks-ops.sporkburger19.workers.dev/api/health
-```
+A Cloudflare Pages project such as `stupiakops`, including its Variables and secrets screen, is not canonical OPS production. Pages/Worker runtime variables configure application behavior after deployment; they do not authenticate a GitHub-hosted runner.
 
-The production Worker name is `stupiaks-ops`. It serves both the React SPA and `/api/*` from the same deployment.
+## Canonical production resources
 
-A Cloudflare Pages project such as `stupiakops`, including its **Variables and secrets** screen, is not the canonical OPS Worker deployment. Pages/Worker runtime variables configure application behavior after deployment; they do not authenticate a GitHub Actions runner to the Cloudflare account.
+| Resource | Value |
+|---|---|
+| Account ID | `bb2ac1970975a5018a17c878e61cb88f` |
+| D1 database | `stupiaks-ops-realtime` |
+| D1 database ID | `080c13d7-e2f5-4c01-a1ca-aa00094d6fc0` |
+| KV binding | `APP_DATA_PACKS` |
+| KV namespace ID | `f62696e1a2f14b8a9e0b84a540c7e997` |
+| Sheet Queue | `stupiaks-ops-sheet-sync` |
+| Sheet DLQ | `stupiaks-ops-sheet-sync-dlq` |
+| Durable Object | `OUTLET_REALTIME` / `OutletRealtimeHub` |
 
-## Production resources
+R2 remains optional until media migration is intentionally enabled.
 
-1. One Cloudflare Worker serves both the React SPA and `/api/*`.
-2. `APP_DATA_PACKS` KV stores the published package manifest and immutable modules.
-3. Devices download the package into IndexedDB and only download modules whose hashes changed.
-4. Google Sheets remain the owner-controlled source of truth.
-5. A scheduled publish runs hourly instead of every 15 minutes to reduce Google API traffic.
-6. `MEDIA_BUCKET` R2 is reserved for media migration; existing Drive media remains compatible during rollout.
+## Runtime architecture
 
-## Deployment paths
+1. D1 is canonical for migrated operational workflows.
+2. `ops_records` stores current record state.
+3. `ops_mutations` provides idempotent mutation replay.
+4. `sheet_sync_outbox` stores durable asynchronous Sheet mirror work.
+5. Queue mirroring runs after the D1 commit.
+6. Google Sheet or Queue failure does not undo a successful D1 commit.
+7. KV stores last fully published configuration/content packages for devices.
+8. Staff package downloads use KV and do not trigger Sheet rebuilding.
+9. Sheets remain an administrative source only for content not yet migrated, plus mirror/report/backup output.
 
-### GitHub Actions
+## Credential scopes
 
-`.github/workflows/deploy-cloudflare.yml` always builds and renders the production Wrangler configuration for relevant `main` changes.
+Do not confuse these:
 
-It deploys automatically only when the current GitHub Actions context can read both:
+1. Worker runtime secrets and bindings.
+2. Pages variables/secrets.
+3. GitHub Actions secrets.
+4. Local Wrangler OAuth.
 
-```text
-CLOUDFLARE_API_TOKEN
-CLOUDFLARE_ACCOUNT_ID
-```
+A token can exist in one scope and be unavailable in another. Do not request a replacement token until the actual execution scope has been identified.
 
-When those credentials are unavailable during a normal `main` push, the workflow records that deployment was skipped instead of reporting a misleading Wrangler failure. A manually dispatched deployment still fails deliberately when credentials are unavailable.
-
-`CLOUDFLARE_API_TOKEN` must be a GitHub Actions secret visible to this repository and workflow. A same-named value in Cloudflare Dashboard runtime variables is a different scope and cannot be read by GitHub.
-
-The workflow verifies the canonical `/api/health` endpoint after every successful deployment.
-
-### Local Wrangler deployment
-
-A trusted machine may deploy using its existing Wrangler OAuth login. Authenticate once:
+The trusted Mac has local Wrangler OAuth. Confirm it with:
 
 ```bash
-npx wrangler login
 npx wrangler whoami
 ```
 
-Provide the non-secret production resource identifiers required by the renderer:
+Warnings about unrelated newly introduced Wrangler scopes do not require relogin when Worker/D1/Queue scopes needed by this project are already available.
+
+## Read-only D1 audit
+
+Run before data repair or schema decisions:
 
 ```bash
-export CLOUDFLARE_APP_DATA_PACKS_ID="YOUR_KV_NAMESPACE_ID"
-# Optional until R2 is enabled:
-export CLOUDFLARE_MEDIA_BUCKET_NAME="stupiaks-ops-media"
+npm run ops:audit:d1
 ```
 
-Build, render and deploy:
+The audit checks every SQL statement for SELECT/WITH-only syntax and verifies Wrangler metadata reports zero writes.
+
+## Canonical production deployment
+
+Use:
 
 ```bash
-npm run cf:deploy
+npm run ops:deploy:verified
 ```
 
-Then verify the real production service, not a Pages preview:
+This deployment:
+
+1. requires a clean worktree;
+2. fast-forwards `main`;
+3. runs the architecture contract audit;
+4. confirms the fixed signed Android release exists;
+5. saves read-only protected D1 counts;
+6. builds Web and Worker dry-run;
+7. renders canonical bindings;
+8. deploys Worker and Web/PWA assets;
+9. verifies Worker revision, manifest, PWA shell, GitHub release, fixed APK URL, and SHA-256;
+10. saves read-only D1 counts again and reviews any difference.
+
+It does **not**:
+
+- create a D1 database;
+- create KV, Queues, DLQ, R2, or Durable Objects;
+- run a D1 migration;
+- run a historical backfill;
+- import Sheets;
+- call the directory marker;
+- call old v14–v17 migration scripts.
+
+Resource IDs are supplied through environment variables with canonical non-secret defaults:
 
 ```bash
-curl -fsS https://stupiaks-ops.sporkburger19.workers.dev/api/health
+export CLOUDFLARE_OPS_DB_ID="080c13d7-e2f5-4c01-a1ca-aa00094d6fc0"
+export CLOUDFLARE_APP_DATA_PACKS_ID="f62696e1a2f14b8a9e0b84a540c7e997"
+export CLOUDFLARE_SHEET_SYNC_QUEUE_NAME="stupiaks-ops-sheet-sync"
+export CLOUDFLARE_SHEET_SYNC_DLQ_NAME="stupiaks-ops-sheet-sync-dlq"
 ```
 
-Never report a production deployment as complete until this endpoint returns the expected release marker or behavior.
+Do not set or commit OAuth tokens in repository files.
 
-## One-time resource setup
+## Migration procedure
 
-Create KV when establishing a new account or environment:
+A normal deployment must not run migrations.
 
-```bash
-cd worker
-npx wrangler kv namespace create APP_DATA_PACKS
-```
+A reviewed D1 migration requires:
 
-Create R2 only when media migration is enabled:
+1. a read-only remote `sqlite_schema` audit;
+2. proof that the intended code needs a missing/changed object;
+3. review of the exact migration SQL;
+4. an explicit write and rollback explanation;
+5. separate execution from ordinary deployment;
+6. post-migration schema and behavior verification.
 
-```bash
-npx wrangler r2 bucket create stupiaks-ops-media
-```
+Never add `wrangler d1 migrations apply` back into the normal deployment script.
 
-GitHub Actions may use these repository secrets:
+## GitHub Actions
+
+GitHub Actions and local Wrangler OAuth are separate deployment scopes.
+
+The Cloudflare workflow must always run build and architecture checks. Production deployment should occur only in an explicit deploy context with readable:
 
 ```text
 CLOUDFLARE_API_TOKEN
 CLOUDFLARE_ACCOUNT_ID
-CLOUDFLARE_APP_DATA_PACKS_ID
-CLOUDFLARE_MEDIA_BUCKET_NAME
 ```
 
-Do not recreate or rotate a Cloudflare token merely because one runner cannot see it. First determine whether the credential exists in Cloudflare, a local Wrangler OAuth session, a GitHub repository secret, an environment secret, or another deployment system.
+GitHub also needs the canonical D1/KV/Queue identifiers when rendering production configuration. A same-named value in Cloudflare Dashboard runtime variables is not visible to GitHub Actions.
+
+Do not report production complete from a GitHub workflow alone. Verify the canonical production origin and D1.
 
 ## Worker runtime secrets
 
-Set these against the `stupiaks-ops` Worker. Never commit their values:
+Never commit values. Set only against the canonical `stupiaks-ops` Worker:
 
 ```bash
 cd worker
@@ -123,14 +162,32 @@ npx wrangler secret put BOOTSTRAP_OWNER_EMAIL
 npx wrangler secret put ALLOWED_ORIGINS
 ```
 
-Only add optional sales, cash, Statvara, or web-push secrets when those features are enabled.
+These Google credentials support remaining administrative/package/mirror workflows. They must not become a synchronous dependency for migrated staff runtime mutations.
 
-## First production publish
+## Production verification
 
-After the canonical Worker and secrets are ready:
+Do not say “deployed” until all applicable checks pass:
 
-1. Sign in as Owner at the canonical production origin.
-2. Open Ops Control.
-3. Publish/rebuild all data packages once.
-4. Confirm each outlet receives a manifest and its package modules.
-5. Confirm a second device launch uses the downloaded package without unnecessarily re-reading Google Sheets.
+```bash
+npm run ops:verify:production
+npm run ops:audit:d1
+```
+
+Required evidence includes:
+
+- expected `X-ChefOps-Worker-Revision` header;
+- health response `ok: true`;
+- production mandatory APK/PWA versions;
+- versioned service worker token and old-cache deletion;
+- GitHub fixed release title and asset;
+- fixed public APK SHA matching `SHA256SUMS.txt`;
+- real page/API action;
+- corresponding remote D1 record/mutation/outbox result.
+
+## Rollback
+
+- Save `wrangler deployments list` before and after release.
+- Roll back code by selecting/redeploying a reviewed previous deployment or commit.
+- Do not restore Sheets over D1 during code rollback.
+- Do not delete records created after a release.
+- APK/PWA rollback requires a verified signed artifact and a newly versioned service worker.
