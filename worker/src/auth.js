@@ -103,6 +103,22 @@ async function rememberUserEverywhere(env, user) {
   return user
 }
 
+function refreshUserDirectoryInBackground(env, googleSub) {
+  const refresh = (async () => {
+    try {
+      const users = await listRecords(env, 'User', { filter: { google_sub: googleSub }, limit: 1 })
+      const user = users[0] || null
+      if (user) await rememberUserEverywhere(env, user)
+      return user
+    } catch (error) {
+      if (!isTemporarySheetsError(error)) console.error('Unable to refresh cached auth directory', error)
+      return null
+    }
+  })()
+  if (env.__CHEFOPS_CTX?.waitUntil) env.__CHEFOPS_CTX.waitUntil(refresh)
+  else refresh.catch(() => undefined)
+}
+
 async function activeUserBySub(env, googleSub) {
   const key = String(googleSub || '')
   const cached = USER_CACHE.get(key)
@@ -110,6 +126,13 @@ async function activeUserBySub(env, googleSub) {
   if (USER_INFLIGHT.has(key)) return USER_INFLIGHT.get(key)
 
   const pending = (async () => {
+    const cloudflareUser = await cachedUserFromKv(env, { googleSub: key })
+    if (cloudflareUser) {
+      rememberUser(cloudflareUser)
+      refreshUserDirectoryInBackground(env, key)
+      return cloudflareUser
+    }
+
     try {
       const users = await listRecords(env, 'User', { filter: { google_sub: key }, limit: 1 })
       const user = users[0] || null
@@ -117,8 +140,7 @@ async function activeUserBySub(env, googleSub) {
       return user
     } catch (error) {
       if (!isTemporarySheetsError(error)) throw error
-      const fallback = await cachedUserFromKv(env, { googleSub: key })
-      return fallback ? rememberUser(fallback) : null
+      return null
     }
   })()
 
