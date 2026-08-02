@@ -2,7 +2,7 @@ const REQUIRED_TABLES = [
   'ops_records',
   'ops_mutations',
   'sheet_sync_outbox',
-  'submission_locks',
+  'ops_submission_locks',
 ]
 
 export async function realtimeHealth(env) {
