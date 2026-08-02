@@ -138,7 +138,7 @@ requireText('web/src/lib/app-pack.js', [
   '/api/app/v4/pack/manifest?',
 ])
 requireText('web/src/main.jsx', [
-  "const SHELL_VERSION = 'shared-task-claim-autosave-pwa-v27'",
+  "const SHELL_VERSION = 'auth-session-stability-pwa-v28'",
   "register('/sw-v27.js'",
 ])
 requireText('web/public/sw.js', [
@@ -149,9 +149,9 @@ requireText('web/public/sw.js', [
   'CANCEL_TASK_ALERTS',
   'cancelTaskAlerts',
 ])
-requireText('web/public/sw-v27.js', [
-  'auth-session-stability-pwa-v28',
-])
+for (const worker of ['sw-v24.js', 'sw-v25.js', 'sw-v26.js', 'sw-v27.js']) {
+  requireText(`web/public/${worker}`, ['auth-session-stability-pwa-v28'])
+}
 
 if (failures.length) {
   console.error('Realtime closure audit failed:')
