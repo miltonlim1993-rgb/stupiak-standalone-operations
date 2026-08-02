@@ -5,6 +5,7 @@ import {
   Package, Receipt, Tag, WalletCards,
 } from 'lucide-react'
 import { useAuth } from '@/lib/AuthContext'
+import { parseOutletIds } from '@/lib/outlets'
 import { ROLE_LABELS } from '@/lib/ops-helpers'
 import AppFoundation from '@/components/AppFoundation'
 import NotificationBell from '@/components/NotificationBell'
@@ -70,6 +71,7 @@ export default function Layout() {
   const [mode, setMode] = useState(initialMode)
   const [online, setOnline] = useState(() => navigator.onLine)
   const [taskBadgeCount, setTaskBadgeCount] = useState(() => Number(window.__chefopsTaskBadgeCount || 0))
+  const headerOutlet = String(user?.outlet_id || parseOutletIds(user)[0] || '').trim()
 
   useEffect(() => {
     if (!nativeAndroid()) return
@@ -144,7 +146,7 @@ export default function Layout() {
                 <span className="truncate text-lg font-bold tracking-tight">Stupiak’s Ops</span>
                 <span className="rounded-md bg-black px-1.5 py-0.5 text-[9px] font-bold text-white">v11</span>
               </div>
-              <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{user?.outlet_id || 'All assigned outlets'}</p></div>
+              <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{headerOutlet || 'No assigned outlet'}</p></div>
               <div className="flex items-center gap-2">
                 {!online ? <span className="hidden rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-800 sm:inline">Offline</span> : null}
                 <NotificationBell />
