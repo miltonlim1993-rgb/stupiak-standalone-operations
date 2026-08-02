@@ -38,7 +38,10 @@ NODE
 }
 
 normalized_snapshot() {
-  npx wrangler d1 execute "$DB_NAME" --remote --json --command \
+  local raw_json
+  raw_json="$(mktemp)"
+
+  if ! npx wrangler d1 execute "$DB_NAME" --remote --json --command \
 "SELECT entity,
  COUNT(*) AS total_count,
  COUNT(DISTINCT entity_id) AS unique_ids,
@@ -50,10 +53,14 @@ normalized_snapshot() {
    'PrinterProfile','FoodLabel','LabelPrintLog','LabelProduct','LabelRule'
  )
  GROUP BY entity
- ORDER BY entity;" \
-  | node <<'NODE'
+ ORDER BY entity;" > "$raw_json"; then
+    rm -f "$raw_json"
+    return 1
+  fi
+
+  if ! node - "$raw_json" <<'NODE'
 const fs = require('node:fs')
-const input = fs.readFileSync(0, 'utf8').trim()
+const input = fs.readFileSync(process.argv[2], 'utf8').trim()
 const parsed = JSON.parse(input)
 const block = Array.isArray(parsed) ? parsed[0] : parsed
 const meta = block?.meta || {}
@@ -64,12 +71,19 @@ const rows = Array.isArray(block?.results) ? block.results : []
 rows.sort((a, b) => String(a.entity).localeCompare(String(b.entity)))
 process.stdout.write(`${JSON.stringify(rows, null, 2)}\n`)
 NODE
+  then
+    rm -f "$raw_json"
+    return 1
+  fi
+
+  rm -f "$raw_json"
 }
 
 assert_release_ready() {
   local output="$1"
-  node - "$output" <<'NODE'
-const fs = require('node:fs')
+  node --input-type=module - "$output" <<'NODE'
+import fs from 'node:fs'
+
 const output = process.argv[2]
 const manifest = JSON.parse(fs.readFileSync('web/public/app-release.json', 'utf8'))
 const target = String(manifest.minimum_apk_version || manifest.apk_version || '')
@@ -90,7 +104,7 @@ if (!asset?.browser_download_url) throw new Error(`Missing ${expectedAsset}`)
 if (Number(asset.size || 0) < 1_000_000) throw new Error('APK asset is unexpectedly small')
 if (!sums?.browser_download_url) throw new Error('Missing SHA256SUMS.txt')
 fs.writeFileSync(output, `${JSON.stringify(release, null, 2)}\n`)
-console.log(`GITHUB_RELEASE_READY=true`)
+console.log('GITHUB_RELEASE_READY=true')
 console.log(`GITHUB_RELEASE_NAME=${release.name || ''}`)
 console.log(`GITHUB_APK_SIZE=${asset.size || 0}`)
 NODE
