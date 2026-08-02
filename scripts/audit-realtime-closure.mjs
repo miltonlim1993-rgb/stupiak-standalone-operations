@@ -28,12 +28,14 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v10-public-drive-media-fallback'",
+  "const WORKER_REVISION = 'realtime-resilience-v13-stock-history-media-ui'",
   'handleCloudflareAuth',
   'handleD1OperationalTaskAction',
   'handleD1CloseUpUpsert',
   'handleJsonAtomicStockCountBatch',
   'handleRealtimeAttendanceRead',
+  'handleRealtimeStockRead',
+  'handleBundledSopMedia',
   'handleRealtimeCloseUpSync',
   'handleRealtimeDataApi',
   'processSheetMirrorQueue',
@@ -93,15 +95,31 @@ if (d1StockBatch.includes("from './sheets.js'") || d1StockBatch.includes('listRe
   failures.push('worker/src/realtime-stock-batch-json.js must not read Google Sheets')
 }
 
-requireText('worker/src/realtime-attendance-read.js', [
-  'handleRealtimeAttendanceRead',
-  "'Attendance'!A:Q",
-  "WHERE entity = 'Attendance'",
-  'persistAttendance',
-  "source = visible.length ? 'd1' : 'd1-empty'",
-  "'attendance-sheet-seeded-d1'",
+requireText('worker/src/realtime-stock-read.js', [
+  'handleRealtimeStockRead',
+  "'StockCounts'!A1:W5000",
+  "WHERE entity = 'StockCount'",
+  'persistStockCounts',
+  'needsHistoricalHydration',
+  "source = 'stock-history-sheet-d1'",
+  'stock_history_timeout',
 ])
 
+requireText('worker/src/realtime-attendance-read.js', [
+  'handleRealtimeAttendanceRead',
+  "'Attendance'!A1:P5000",
+  "WHERE entity = 'Attendance'",
+  'persistAttendance',
+  "'attendance-canonical-sheet-d1'",
+  'CANONICAL_OPERATIONS_2026_ID',
+])
+
+requireText('worker/src/bundled-sop-media.js', [
+  'BUNDLED_SOP_MEDIA',
+  'handleBundledSopMedia',
+  "X-ChefOps-Media-Source",
+  'cloudflare-bundled-sop',
+])
 requireText('worker/src/drive.js', [
   "const MEDIA_CACHE_PREFIX = 'media:file:'",
   'cacheMedia',
@@ -152,6 +170,13 @@ requireText('web/src/api/opsClient.js', [
   'if (REALTIME_ENTITIES.has(entity) && outletId)',
   'return visibleRealtimeRows(rows, { filter, sort, limit })',
   "if (path === '/api/auth/me') return 0",
+])
+requireText('web/src/lib/media-ui.js', [
+  'BUNDLED_SOP_MEDIA',
+  'installMediaUiRepair',
+  'cloudflare-bundled-sop',
+  "alt.includes('task evidence')",
+  "image.style.objectFit = 'contain'",
 ])
 requireText('web/src/components/MediaLightbox.jsx', [
   'googleDriveFileId',
@@ -216,7 +241,8 @@ requireText('web/src/lib/app-pack.js', [
   '/api/app/v4/pack/manifest?',
 ])
 requireText('web/src/main.jsx', [
-  "const SHELL_VERSION = 'auth-session-stability-pwa-v28'",
+  "const SHELL_VERSION = 'stock-history-media-ui-pwa-v29'",
+  'installMediaUiRepair()',
   "register('/sw-v27.js'",
 ])
 requireText('web/public/sw.js', [
@@ -227,7 +253,8 @@ requireText('web/public/sw.js', [
   'CANCEL_TASK_ALERTS',
   'cancelTaskAlerts',
 ])
-for (const worker of ['sw-v24.js', 'sw-v25.js', 'sw-v26.js', 'sw-v27.js']) {
+requireText('web/public/sw-v27.js', ['stock-history-media-ui-v13'])
+for (const worker of ['sw-v24.js', 'sw-v25.js', 'sw-v26.js']) {
   requireText(`web/public/${worker}`, ['auth-session-stability-pwa-v28'])
 }
 
@@ -238,4 +265,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('D1-primary live reads, direct duty roster hydration, Cloudflare media cache, authenticated plus public Drive delivery, stable sessions, draft autosave, WebSocket broadcast and Queue mirroring are wired.')
+console.log('D1-primary live writes, direct roster and stock-history hydration, bundled SOP media UI, task media containment, stable sessions, WebSocket broadcast and Queue mirroring are wired.')
