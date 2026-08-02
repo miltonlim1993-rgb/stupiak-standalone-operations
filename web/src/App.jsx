@@ -20,7 +20,7 @@ import TaskBadgeManager from '@/components/TaskBadgeManager'
 const PageNotFound = lazy(() => import('@/lib/PageNotFound'))
 const Login = lazy(() => import('@/pages/Login'))
 const Dashboard = lazy(() => import('@/pages/Dashboard'))
-const Tasks = lazy(() => import('@/pages/OperationalTasksV2'))
+const Tasks = lazy(() => import('@/pages/OperationalTasksLive'))
 const StockCount = lazy(() => import('@/pages/StockCount'))
 const UrgentIssues = lazy(() => import('@/pages/UrgentIssues'))
 const More = lazy(() => import('@/pages/More'))
