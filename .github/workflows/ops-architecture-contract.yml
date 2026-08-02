@@ -64,12 +64,14 @@ jobs:
           cache: npm
       - name: Install exact dependencies
         run: npm ci
-      - name: Validate helper syntax
+      - name: Validate every helper syntax
         run: |
           bash -n scripts/ops/d1-readonly-audit.sh
+          bash -n scripts/ops/run-approved-backfill.sh
           bash -n scripts/deploy-realtime-ops-now.sh
           node --check scripts/ops/audit-architecture-contract.mjs
           node --check scripts/ops/verify-production-release.mjs
+          node --check scripts/ops/build-safe-backfill.mjs
       - name: Audit architecture contract
         run: npm run ops:audit:contract
       - name: Build Web and Worker dry-run
