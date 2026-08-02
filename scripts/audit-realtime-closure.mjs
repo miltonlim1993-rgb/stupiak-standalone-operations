@@ -28,13 +28,21 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v2'",
+  "const WORKER_REVISION = 'realtime-resilience-v3-pwa-task-bootstrap'",
   'handleRealtimeWorkflowApi',
   'handleJsonAtomicStockCountBatch',
   'handleRealtimeCloseUpSync',
   'handleRealtimeDataApi',
   'processSheetMirrorQueue',
   'augmentHealthResponse',
+  'overlayOperationalBootstrapResponse(bootstrapRequest',
+])
+requireText('worker/src/realtime-task-bootstrap.js', [
+  'CLOUDFLARE_PACKAGE_D1_FALLBACK',
+  'createGeneratedTask',
+  'getPublishedAppPack',
+  'INSERT INTO ops_records',
+  'INSERT INTO sheet_sync_outbox',
 ])
 requireText('worker/src/realtime-health.js', [
   "'ops_records'",
@@ -64,6 +72,19 @@ requireText('web/src/lib/realtime-mutations.js', [
 requireText('web/src/lib/app-pack.js', [
   '/api/app/v4/pack/manifest?',
 ])
+requireText('web/src/main.jsx', [
+  "const SHELL_VERSION = 'realtime-resilience-v2-pwa-v25'",
+  "register('/sw-v25.js'",
+])
+requireText('web/public/sw.js', [
+  "const VERSION = 'chefops-realtime-resilience-v2-pwa-v25'",
+])
+requireText('web/public/sw-v24.js', [
+  'realtime-resilience-v2-pwa-v25',
+])
+requireText('web/public/sw-v25.js', [
+  'realtime-resilience-v2-pwa-v25',
+])
 
 if (failures.length) {
   console.error('Realtime closure audit failed:')
@@ -72,4 +93,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('D1-first submissions, idempotency, WebSocket broadcast, Queue mirroring and last-known-good packages are wired.')
+console.log('D1-first submissions, PWA Task bootstrap fallback, idempotency, WebSocket broadcast, Queue mirroring and last-known-good packages are wired.')
