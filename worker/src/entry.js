@@ -15,13 +15,14 @@ import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import { withSubmissionLock } from './submission-locks.js'
 import { augmentHealthResponse } from './realtime-health.js'
+import { handleRealtimeAttendanceRead } from './realtime-attendance-read.js'
 import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v8-d1-primary'
+const WORKER_REVISION = 'realtime-resilience-v9-media-roster-recovery'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -209,6 +210,9 @@ export default {
 
       const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
       if (taskPhotoResponse) return withApiHeaders(request, env, taskPhotoResponse)
+
+      const attendanceReadResponse = await handleRealtimeAttendanceRead(request, runEnv, url)
+      if (attendanceReadResponse) return withApiHeaders(request, env, attendanceReadResponse)
 
       const realtimeDataResponse = await handleRealtimeDataApi(request, runEnv, url)
       if (realtimeDataResponse) return withApiHeaders(request, env, realtimeDataResponse)
