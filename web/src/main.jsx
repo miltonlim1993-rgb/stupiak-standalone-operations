@@ -14,7 +14,7 @@ import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 import { installRealtimeClientHeader } from '@/lib/client-id'
 import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
 
-const SHELL_VERSION = 'shared-task-claim-autosave-pwa-v27'
+const SHELL_VERSION = 'auth-session-stability-pwa-v28'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
