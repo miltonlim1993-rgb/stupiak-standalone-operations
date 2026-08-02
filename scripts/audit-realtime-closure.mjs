@@ -28,7 +28,7 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v5-cloudflare-auth'",
+  "const WORKER_REVISION = 'realtime-resilience-v6-stable-session'",
   'handleCloudflareAuth',
   'handleD1OperationalTaskAction',
   'handleRealtimeWorkflowApi',
@@ -43,6 +43,8 @@ requireText('worker/src/cloudflare-auth.js', [
   'handleCloudflareAuth',
   "path === '/api/auth/google'",
   "path === '/api/auth/me'",
+  'currentUserFromCloudflare',
+  'cachedGoogleLogin',
   'bootstrapOwnerLogin',
   'directory_fallback',
   'APP_DATA_PACKS.put',
@@ -103,6 +105,14 @@ requireText('web/src/lib/realtime-client.js', [
   "document.addEventListener('visibilitychange', onVisible)",
   'Heartbeat timeout',
 ])
+requireText('web/src/lib/AuthContext.jsx', [
+  'CACHED_USER_KEY',
+  'AUTH_CHECK_TIMEOUT_MS',
+  'readCachedUser',
+  'withTimeout',
+  'if (status === 401 || status === 403)',
+  'applyUser(fallbackUser)',
+])
 requireText('web/src/lib/task-alerts.js', [
   'taskWorkHasStarted',
   'cancelTaskAlertsForTask',
@@ -132,21 +142,15 @@ requireText('web/src/main.jsx', [
   "register('/sw-v27.js'",
 ])
 requireText('web/public/sw.js', [
-  "const VERSION = 'chefops-shared-task-claim-autosave-pwa-v27'",
+  "const VERSION = 'chefops-auth-session-stability-pwa-v28'",
+  'isAuthApi',
+  'networkOnly',
+  "code: 'auth_check_timeout'",
   'CANCEL_TASK_ALERTS',
   'cancelTaskAlerts',
 ])
-requireText('web/public/sw-v24.js', [
-  'shared-task-claim-autosave-pwa-v27',
-])
-requireText('web/public/sw-v25.js', [
-  'shared-task-claim-autosave-pwa-v27',
-])
-requireText('web/public/sw-v26.js', [
-  'shared-task-claim-autosave-pwa-v27',
-])
 requireText('web/public/sw-v27.js', [
-  'shared-task-claim-autosave-pwa-v27',
+  'auth-session-stability-pwa-v28',
 ])
 
 if (failures.length) {
@@ -156,4 +160,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('Cloudflare-first auth, D1-only Task actions, shared task alarm cancellation, draft autosave, iPhone resume sync, Task bootstrap fallback, WebSocket broadcast and Queue mirroring are wired.')
+console.log('Stable Cloudflare sessions, network-only auth checks, D1-only Task actions, shared task alarm cancellation, draft autosave, iPhone resume sync, WebSocket broadcast and Queue mirroring are wired.')
