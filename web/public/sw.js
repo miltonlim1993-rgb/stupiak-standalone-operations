@@ -1,5 +1,5 @@
-// Production release refresh: iPhone live Task sync / PWA v26
-const VERSION = 'chefops-realtime-resilience-v3-ios-live-task-v26'
+// Production release refresh: shared task claim + autosave / PWA v27
+const VERSION = 'chefops-shared-task-claim-autosave-pwa-v27'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
@@ -116,6 +116,9 @@ async function replaceAlertSchedule(alerts = []) {
         message: String(alert.message || ''),
         targetPage: String(alert.targetPage || '/tasks'),
         triggerAt: Number(alert.triggerAt),
+        taskId: String(alert.taskId || ''),
+        sopId: String(alert.sopId || ''),
+        outletId: String(alert.outletId || ''),
       })
     }
     transaction.oncomplete = resolve
@@ -123,6 +126,30 @@ async function replaceAlertSchedule(alerts = []) {
     transaction.onabort = () => reject(transaction.error)
   })
   db.close()
+}
+
+async function cancelTaskAlerts(taskId = '') {
+  const target = String(taskId || '').trim()
+  if (!target) return
+  const db = await openAlertDb()
+  await new Promise((resolve) => {
+    const transaction = db.transaction(ALERT_STORE, 'readwrite')
+    const request = transaction.objectStore(ALERT_STORE).openCursor()
+    request.onsuccess = () => {
+      const cursor = request.result
+      if (!cursor) return
+      if (String(cursor.value?.taskId || '') === target) cursor.delete()
+      cursor.continue()
+    }
+    transaction.oncomplete = resolve
+    transaction.onerror = resolve
+    transaction.onabort = resolve
+  })
+  db.close()
+  const notifications = await self.registration.getNotifications().catch(() => [])
+  for (const notification of notifications || []) {
+    if (String(notification?.data?.taskId || '') === target) notification.close()
+  }
 }
 
 async function allFromStore(storeName) {
@@ -167,6 +194,8 @@ async function showAlertNotification(item = {}) {
       url: item.targetPage || item.target_page || '/',
       id: item.id || '',
       kind: item.kind || 'task',
+      taskId: item.taskId || '',
+      outletId: item.outletId || '',
     },
   })
 }
@@ -190,6 +219,9 @@ self.addEventListener('message', (event) => {
   if (data.type === 'CLEAR_DATA_CACHE') event.waitUntil(caches.delete(DATA_CACHE))
   if (data.type === 'SYNC_ALERT_SCHEDULE') {
     event.waitUntil(replaceAlertSchedule(data.alerts || []).then(checkDueAlerts))
+  }
+  if (data.type === 'CANCEL_TASK_ALERTS') {
+    event.waitUntil(cancelTaskAlerts(data.taskId || ''))
   }
   if (data.type === 'SHOW_NOTIFICATION' && data.notification) {
     event.waitUntil(showAlertNotification(data.notification))
