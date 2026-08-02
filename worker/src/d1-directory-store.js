@@ -73,6 +73,7 @@ function cleanRecord(entity, payload, existing, entityId, actorEmail, operation)
   const clean = Object.fromEntries(Object.entries(payload || {}).filter(([key]) => allowed.has(key)))
   const timestamp = now()
   const record = { ...(existing || {}), ...clean }
+  delete record.__realtime
   const idField = schema.idField || 'id'
   record[idField] = entityId
   if (allowed.has('id')) record.id = entityId
