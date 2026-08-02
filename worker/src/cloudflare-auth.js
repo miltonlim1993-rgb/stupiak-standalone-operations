@@ -5,6 +5,7 @@ import {
   loginWithGoogle,
   rememberUser,
   sessionCookie,
+  sessionPayload,
   userWithProfileSetup,
   validateActualName,
   verifyGoogleCredential,
@@ -26,19 +27,46 @@ function temporaryDirectoryError(error) {
     || Number(error?.status || 0) >= 500
 }
 
+function userKvKeyBySub(googleSub) {
+  return `auth:user:sub:${String(googleSub || '').trim()}`
+}
+
+function userKvKeyByEmail(email) {
+  return `auth:user:email:${String(email || '').trim().toLowerCase()}`
+}
+
 function authCacheEntries(user) {
   const payload = JSON.stringify({ user, cachedAt: Date.now() })
-  const entries = [[`auth:user:sub:${String(user.google_sub || '').trim()}`, payload]]
-  if (user.email) entries.push([`auth:user:email:${String(user.email).trim().toLowerCase()}`, payload])
+  const entries = [[userKvKeyBySub(user.google_sub), payload]]
+  if (user.email) entries.push([userKvKeyByEmail(user.email), payload])
   return entries
 }
 
-async function cacheBootstrapOwner(env, user) {
+async function readCachedUser(env, { googleSub = '', email = '' } = {}) {
+  if (!env.APP_DATA_PACKS?.get) return null
+  const keys = []
+  if (googleSub) keys.push(userKvKeyBySub(googleSub))
+  if (email) keys.push(userKvKeyByEmail(email))
+  for (const key of keys) {
+    try {
+      const stored = await env.APP_DATA_PACKS.get(key, 'json')
+      if (!stored?.user) continue
+      if (Date.now() - Number(stored.cachedAt || 0) > AUTH_CACHE_TTL_SECONDS * 1000) continue
+      return stored.user
+    } catch (error) {
+      console.error('Unable to read cached auth user', error)
+    }
+  }
+  return null
+}
+
+async function cacheUser(env, user) {
   rememberUser(user)
-  if (!env.APP_DATA_PACKS?.put) return
+  if (!env.APP_DATA_PACKS?.put) return user
   await Promise.all(authCacheEntries(user).map(([key, value]) => (
     env.APP_DATA_PACKS.put(key, value, { expirationTtl: AUTH_CACHE_TTL_SECONDS })
-  ))).catch((error) => console.error('Unable to cache bootstrap owner login', error))
+  ))).catch((error) => console.error('Unable to cache auth user', error))
+  return user
 }
 
 async function bootstrapOwnerLogin(credential, env, originalError) {
@@ -51,41 +79,73 @@ async function bootstrapOwnerLogin(credential, env, originalError) {
 
   const timestamp = new Date().toISOString()
   const googleSub = String(payload.sub || '').trim()
+  const cached = await readCachedUser(env, { googleSub, email })
   const user = {
-    id: `bootstrap-owner-${googleSub}`,
-    outlet_id: '',
-    outlet_ids: '',
-    created_date: timestamp,
-    created_by: email,
+    ...(cached || {}),
+    id: cached?.id || `bootstrap-owner-${googleSub}`,
+    outlet_id: cached?.outlet_id || '',
+    outlet_ids: cached?.outlet_ids || '',
+    created_date: cached?.created_date || timestamp,
+    created_by: cached?.created_by || email,
     updated_date: timestamp,
     updated_by: email,
     deleted_at: '',
-    version: 1,
+    version: Number(cached?.version || 1),
     google_sub: googleSub,
     email,
-    full_name: validateActualName(payload.name, email) || 'Milton',
-    avatar_url: String(payload.picture || ''),
+    full_name: validateActualName(cached?.full_name, email)
+      || validateActualName(payload.name, email)
+      || 'Milton',
+    avatar_url: String(payload.picture || cached?.avatar_url || ''),
     role: 'owner',
-    phone: '',
-    department: '',
+    phone: cached?.phone || '',
+    department: cached?.department || '',
     status: 'active',
     last_login_at: timestamp,
     name_confirmed: true,
-    name_confirmed_at: timestamp,
-    name_updated_at: timestamp,
+    name_confirmed_at: cached?.name_confirmed_at || timestamp,
+    name_updated_at: cached?.name_updated_at || timestamp,
   }
-  await cacheBootstrapOwner(env, user)
+  await cacheUser(env, user)
   const token = await createSession(user, env)
   return { user: userWithProfileSetup(user), token, directory_fallback: 'bootstrap_owner' }
 }
 
+async function cachedGoogleLogin(credential, env) {
+  const payload = await verifyGoogleCredential(credential, env)
+  const googleSub = String(payload.sub || '').trim()
+  const email = String(payload.email || '').trim().toLowerCase()
+  if (!email || payload.email_verified === false) return null
+
+  const cached = await readCachedUser(env, { googleSub, email })
+  if (!cached || String(cached.status || '').toLowerCase() !== 'active') return null
+  if (cached.email && String(cached.email).toLowerCase() !== email) return null
+
+  const timestamp = new Date().toISOString()
+  const user = {
+    ...cached,
+    google_sub: googleSub,
+    email,
+    full_name: validateActualName(cached.full_name, email)
+      || validateActualName(payload.name, email)
+      || '',
+    avatar_url: String(payload.picture || cached.avatar_url || ''),
+    last_login_at: timestamp,
+  }
+  await cacheUser(env, user)
+  const token = await createSession(user, env)
+  return { user: userWithProfileSetup(user), token, directory_fallback: 'cloudflare_cache' }
+}
+
 async function googleLogin(request, env) {
   const { credential } = await readJson(request)
-  let result
-  try {
-    result = await loginWithGoogle(credential, env)
-  } catch (error) {
-    result = await bootstrapOwnerLogin(credential, env, error)
+  let result = await cachedGoogleLogin(credential, env)
+  if (!result) {
+    try {
+      result = await loginWithGoogle(credential, env)
+    } catch (error) {
+      result = await bootstrapOwnerLogin(credential, env, error)
+    }
   }
 
   const response = { user: result.user }
@@ -94,6 +154,26 @@ async function googleLogin(request, env) {
   return json(request, env, response, 200, {
     'Set-Cookie': sessionCookie(result.token, request),
   })
+}
+
+async function currentUserFromCloudflare(request, env) {
+  const payload = await sessionPayload(request, env)
+  if (!payload?.sub) return null
+  const user = await readCachedUser(env, {
+    googleSub: String(payload.sub || ''),
+    email: String(payload.email || ''),
+  })
+  if (!user) return null
+  if (String(user.status || '').toLowerCase() !== 'active') {
+    const error = new Error(user.status === 'pending'
+      ? 'Your account is waiting for approval'
+      : 'User account is inactive')
+    error.status = 403
+    error.code = user.status === 'pending' ? 'user_pending' : 'user_inactive'
+    throw error
+  }
+  rememberUser(user)
+  return user
 }
 
 export async function handleCloudflareAuth(request, env, url) {
@@ -110,13 +190,15 @@ export async function handleCloudflareAuth(request, env, url) {
       })
     }
     if (path === '/api/auth/me' && request.method === 'GET') {
-      const user = await getCurrentUser(request, env)
+      const user = await currentUserFromCloudflare(request, env)
+        || await getCurrentUser(request, env)
+      await cacheUser(env, user)
       return json(request, env, userWithProfileSetup(user))
     }
     return null
   } catch (error) {
     if (temporaryDirectoryError(error) && !error.publicMessage) {
-      error.publicMessage = 'Account directory is temporarily unavailable. Approved users with a cached profile can continue; please retry shortly.'
+      error.publicMessage = 'Account directory is temporarily unavailable. Your signed-in session was kept; please retry shortly.'
       error.code = error.code || 'auth_directory_unavailable'
     }
     return errorResponse(request, env, error)
