@@ -31,11 +31,11 @@ export default function MobileSheet({
   if (!open) return null;
 
   return createPortal(
-    <div className="chefops-mobile-sheet fixed inset-0 z-[100]" data-no-swipe-back>
+    <div className="chefops-mobile-sheet fixed z-[900]" data-no-swipe-back>
       <button
         type="button"
         aria-label="Close drawer"
-        className="chefops-mobile-sheet-overlay absolute inset-0 bg-black/50 backdrop-blur-[1px]"
+        className="chefops-mobile-sheet-overlay absolute inset-0 z-0 bg-black/50 backdrop-blur-[1px]"
         onClick={() => !closeDisabled && onClose?.()}
       />
 
@@ -43,9 +43,10 @@ export default function MobileSheet({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`chefops-mobile-sheet-panel fixed bottom-0 left-1/2 z-[101] flex w-full max-w-[430px] -translate-x-1/2 flex-col overflow-hidden rounded-t-[24px] border border-border bg-background shadow-2xl ${compact ? "max-h-[88dvh]" : "max-h-[94dvh]"}`}
+        data-compact={compact ? "true" : "false"}
+        className="chefops-mobile-sheet-panel absolute bottom-0 left-1/2 z-[901] flex -translate-x-1/2 flex-col overflow-hidden rounded-t-[24px] border border-border bg-background shadow-2xl"
       >
-        <div className="chefops-mobile-sheet-handle flex justify-center pb-0.5 pt-2">
+        <div className="chefops-mobile-sheet-handle flex shrink-0 justify-center pb-0.5 pt-2">
           <span className="h-1 w-10 rounded-full bg-muted-foreground/25" />
         </div>
 

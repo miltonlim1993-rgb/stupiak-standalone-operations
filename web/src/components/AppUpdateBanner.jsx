@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Download, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
 import { opsClient } from '@/api/opsClient'
 
-const CURRENT_RELEASE = '4.5.17'
+const CURRENT_RELEASE = '4.5.18'
 const DEFAULT_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk'
 const DEFAULT_RELEASE_API = 'https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest'
 const CHECK_MS = 30_000
@@ -158,7 +158,7 @@ export default function AppUpdateBanner({ global = false } = {}) {
     const onControllerChange = () => {
       if (reloading) return
       reloading = true
-      localStorage.setItem('chefops.pending-shell-version', 'registered-native-camera-pwa-v32')
+      localStorage.setItem('chefops.pending-shell-version', 'event-autosave-responsive-viewport-v33')
       window.location.reload()
     }
     const onActive = () => {
@@ -249,8 +249,8 @@ export default function AppUpdateBanner({ global = false } = {}) {
 
   if (android && apkUpdate) {
     return (
-      <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
-        <section className="w-full max-w-md rounded-3xl border border-red-400/50 bg-background p-5 shadow-2xl sm:p-7">
+      <div className="chefops-viewport-overlay fixed z-[940] flex items-center justify-center bg-black/90 p-4 backdrop-blur-sm">
+        <section className="max-h-full w-full max-w-md overflow-y-auto rounded-3xl border border-red-400/50 bg-background p-5 shadow-2xl sm:p-7">
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-red-100 text-red-700"><ShieldAlert className="h-7 w-7" /></span>
           <p className="mt-5 text-xs font-bold uppercase tracking-[0.18em] text-red-600">Mandatory Android update</p>
           <h1 className="mt-2 text-2xl font-bold">必须更新 OPS 才能继续</h1>
@@ -278,13 +278,13 @@ export default function AppUpdateBanner({ global = false } = {}) {
   }
 
   if (android) {
-    return statusText ? <div className="fixed inset-x-3 top-16 z-[90] mx-auto max-w-md rounded-xl bg-emerald-50 px-3 py-2 text-center text-xs text-emerald-800 shadow">{statusText}</div> : null
+    return statusText ? <div className="chefops-top-notice fixed z-[920] mx-auto max-w-md rounded-xl bg-emerald-50 px-3 py-2 text-center text-xs text-emerald-800 shadow">{statusText}</div> : null
   }
 
   if (!registration) return null
   return (
-    <div className="fixed inset-0 z-[240] flex items-center justify-center bg-black/80 p-4">
-      <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+    <div className="chefops-viewport-overlay fixed z-[940] flex items-center justify-center bg-black/80 p-4">
+      <div className="max-h-full w-full max-w-md overflow-y-auto rounded-3xl bg-white p-6 shadow-2xl">
         <RefreshCw className="h-8 w-8 animate-spin text-amber-700" />
         <h2 className="mt-4 text-xl font-bold">正在强制更新 OPS</h2>
         <p className="mt-2 text-sm leading-6 text-slate-600">网站／PWA 已发现新 shell，正在清除旧缓存、接管页面并自动重新载入。</p>

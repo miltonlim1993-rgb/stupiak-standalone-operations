@@ -4,6 +4,7 @@ import App from '@/App.jsx'
 import '@/index.css'
 import '@/viewport.css'
 import '@/panels-v8.css'
+import '@/responsive-overlays-v33.css'
 import '@/direct-print-v10.css'
 import '@/guided-sop-media.css'
 import '@/guided-sop-mobile-readable.css'
@@ -14,8 +15,9 @@ import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 import { installRealtimeClientHeader } from '@/lib/client-id'
 import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
 import { installMediaUiRepair } from '@/lib/media-ui'
+import { installViewportGeometry } from '@/lib/viewport-geometry'
 
-const SHELL_VERSION = 'registered-native-camera-pwa-v32'
+const SHELL_VERSION = 'event-autosave-responsive-viewport-v33'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -89,10 +91,22 @@ function publishShellHealth() {
     if (!main || !nav) return
     const mainRect = main.getBoundingClientRect()
     const navRect = nav.getBoundingClientRect()
+    const viewport = window.__chefopsViewport || {
+      width: window.innerWidth,
+      height: window.innerHeight,
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      keyboardInset: 0,
+    }
     window.__chefopsShellHealth = {
       version: SHELL_VERSION,
-      viewportWidth: window.innerWidth,
-      viewportHeight: window.innerHeight,
+      viewportWidth: viewport.width,
+      viewportHeight: viewport.height,
+      viewportTop: viewport.top,
+      viewportBottom: viewport.bottom,
+      keyboardInset: viewport.keyboardInset,
       mainTop: Math.round(mainRect.top),
       mainBottom: Math.round(mainRect.bottom),
       mainHeight: Math.round(mainRect.height),
@@ -100,11 +114,13 @@ function publishShellHealth() {
       mainCanScroll: main.scrollHeight > main.clientHeight + 1,
       navTop: Math.round(navRect.top),
       navBottom: Math.round(navRect.bottom),
-      navVisible: navRect.top >= 0 && navRect.bottom <= window.innerHeight + 2,
+      navVisible: navRect.top >= viewport.top - 2
+        && navRect.bottom <= viewport.top + viewport.height + 2,
     }
   })
 }
 
+installViewportGeometry()
 markRuntime()
 installNativeSessionFetch()
 installRealtimeClientHeader()
@@ -113,6 +129,8 @@ installNativeLabelPrintBridge()
 installMediaUiRepair()
 applyTheme()
 configureNativeSystemBars()
+
+window.addEventListener('chefops:viewport-changed', publishShellHealth)
 
 if (isNativeAndroid()) {
   purgeNativeServiceWorkers()
@@ -133,7 +151,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) 
   })
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw-v32.js', { updateViaCache: 'none' }).then((registration) => {
+    navigator.serviceWorker.register('/sw-v33.js', { updateViaCache: 'none' }).then((registration) => {
       if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' })
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing

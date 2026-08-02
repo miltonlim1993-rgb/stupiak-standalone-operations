@@ -2,8 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import OperationalTasksV2 from '@/pages/OperationalTasksV2'
 
 const TASK_ENTITIES = new Set(['Task', 'TaskPhoto'])
-const AUTOSAVE_DELAY_MS = 900
-const SAVE_TIMEOUT_MS = 20_000
 
 function eventTouchesTasks(detail = {}) {
   const entities = Array.isArray(detail.entities)
@@ -48,17 +46,30 @@ function visibleTaskError() {
     .find(Boolean) || ''
 }
 
+function buttonBusy(button) {
+  const label = String(button?.textContent || '').toLowerCase()
+  return Boolean(
+    button?.disabled
+    || button?.getAttribute?.('aria-busy') === 'true'
+    || label.includes('saving')
+    || label.includes('保存中')
+  )
+}
+
 export default function OperationalTasksLive() {
   const [revision, setRevision] = useState(0)
   const [autosaveState, setAutosaveState] = useState('')
   const refreshTimer = useRef(null)
   const lastRefreshAt = useRef(0)
   const pendingRefresh = useRef(false)
-  const autosaveTimer = useRef(null)
-  const autosaveSettleTimer = useRef(null)
+  const scheduledSave = useRef(null)
+  const scheduledSaveType = useRef('')
+  const settleObserver = useRef(null)
   const changeRevision = useRef(0)
   const savedRevision = useRef(0)
   const saveInFlight = useRef(false)
+  const pendingCloseButton = useRef(null)
+  const bypassClose = useRef(false)
 
   useEffect(() => {
     const refresh = (delay = 80) => {
@@ -79,82 +90,176 @@ export default function OperationalTasksLive() {
       refresh(40)
     }
 
-    const saveDraft = ({ immediate = false } = {}) => {
-      window.clearTimeout(autosaveTimer.current)
-      const run = () => {
-        const drawer = activeTaskDrawer()
-        const saveButton = buttonWithText(drawer, '保存进度')
-        if (!drawer || !saveButton || saveButton.disabled) {
-          if (drawer && changeRevision.current > savedRevision.current) {
-            autosaveTimer.current = window.setTimeout(() => saveDraft(), 500)
-          }
-          return
-        }
-        if (saveInFlight.current || changeRevision.current <= savedRevision.current) return
-
-        const savingRevision = changeRevision.current
-        const startedAt = Date.now()
-        let sawBusy = false
-        saveInFlight.current = true
-        setAutosaveState('saving')
-        saveButton.click()
-
-        const inspect = () => {
-          const currentButton = buttonWithText(activeTaskDrawer(), '保存进度')
-          if (currentButton?.disabled) sawBusy = true
-          const timedOut = Date.now() - startedAt >= SAVE_TIMEOUT_MS
-          const completed = sawBusy && currentButton && !currentButton.disabled
-
-          if (!completed && !timedOut) {
-            autosaveSettleTimer.current = window.setTimeout(inspect, 150)
-            return
-          }
-
-          saveInFlight.current = false
-          const error = visibleTaskError()
-          if (completed && !error) {
-            savedRevision.current = Math.max(savedRevision.current, savingRevision)
-            setAutosaveState('saved')
-            window.setTimeout(() => setAutosaveState(''), 1600)
-          } else {
-            setAutosaveState('error')
-          }
-          if (changeRevision.current > savedRevision.current && !error) saveDraft()
-        }
-
-        window.clearTimeout(autosaveSettleTimer.current)
-        autosaveSettleTimer.current = window.setTimeout(inspect, 80)
+    const cancelScheduledSave = () => {
+      if (!scheduledSave.current) return
+      if (scheduledSaveType.current === 'idle' && window.cancelIdleCallback) {
+        window.cancelIdleCallback(scheduledSave.current)
+      } else {
+        window.cancelAnimationFrame(scheduledSave.current)
       }
-
-      if (immediate) run()
-      else autosaveTimer.current = window.setTimeout(run, AUTOSAVE_DELAY_MS)
+      scheduledSave.current = null
+      scheduledSaveType.current = ''
     }
 
-    const markDraftChanged = (event) => {
+    const closeAfterSave = () => {
+      const closeButton = pendingCloseButton.current
+      pendingCloseButton.current = null
+      if (!closeButton?.isConnected) return
+      bypassClose.current = true
+      closeButton.click()
+      window.requestAnimationFrame(() => {
+        bypassClose.current = false
+        completeDeferredRefresh()
+      })
+    }
+
+    const finishSave = ({ success, savingRevision }) => {
+      settleObserver.current?.disconnect()
+      settleObserver.current = null
+      saveInFlight.current = false
+
+      if (success) {
+        savedRevision.current = Math.max(savedRevision.current, savingRevision)
+        setAutosaveState('saved')
+        if (pendingCloseButton.current) closeAfterSave()
+      } else {
+        pendingCloseButton.current = null
+        setAutosaveState('error')
+      }
+
+      if (changeRevision.current > savedRevision.current) scheduleSave({ immediate: true })
+    }
+
+    const waitForAvailableSaveButton = (drawer) => {
+      settleObserver.current?.disconnect()
+      settleObserver.current = new MutationObserver(() => {
+        const currentButton = buttonWithText(activeTaskDrawer(), '保存进度')
+        if (!currentButton || buttonBusy(currentButton)) return
+        settleObserver.current?.disconnect()
+        settleObserver.current = null
+        scheduleSave({ immediate: true })
+      })
+      settleObserver.current.observe(drawer, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['disabled', 'aria-busy', 'class'],
+      })
+    }
+
+    const runSave = () => {
+      scheduledSave.current = null
+      scheduledSaveType.current = ''
+
+      const drawer = activeTaskDrawer()
+      const saveButton = buttonWithText(drawer, '保存进度')
+      if (!drawer || !saveButton) return
+      if (changeRevision.current <= savedRevision.current) {
+        if (pendingCloseButton.current) closeAfterSave()
+        return
+      }
+      if (saveInFlight.current) return
+      if (buttonBusy(saveButton)) {
+        waitForAvailableSaveButton(drawer)
+        return
+      }
+
+      const savingRevision = changeRevision.current
+      let sawBusy = false
+      let settled = false
+      saveInFlight.current = true
+      setAutosaveState('saving')
+
+      const inspect = () => {
+        if (settled) return
+        const currentDrawer = activeTaskDrawer()
+        const currentButton = buttonWithText(currentDrawer, '保存进度')
+        if (!currentDrawer || !currentButton) return
+        if (buttonBusy(currentButton)) {
+          sawBusy = true
+          return
+        }
+        if (!sawBusy) return
+        settled = true
+        finishSave({ success: !visibleTaskError(), savingRevision })
+      }
+
+      settleObserver.current?.disconnect()
+      settleObserver.current = new MutationObserver(inspect)
+      settleObserver.current.observe(drawer, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['disabled', 'aria-busy', 'class'],
+      })
+
+      saveButton.click()
+      queueMicrotask(inspect)
+      window.requestAnimationFrame(() => {
+        const currentButton = buttonWithText(activeTaskDrawer(), '保存进度')
+        if (buttonBusy(currentButton)) sawBusy = true
+        window.requestAnimationFrame(() => {
+          if (settled || sawBusy) {
+            inspect()
+            return
+          }
+          settled = true
+          finishSave({ success: !visibleTaskError(), savingRevision })
+        })
+      })
+    }
+
+    function scheduleSave({ immediate = false } = {}) {
+      cancelScheduledSave()
+      if (immediate) {
+        runSave()
+        return
+      }
+
+      if (typeof window.requestIdleCallback === 'function') {
+        scheduledSaveType.current = 'idle'
+        scheduledSave.current = window.requestIdleCallback(runSave)
+      } else {
+        scheduledSaveType.current = 'frame'
+        scheduledSave.current = window.requestAnimationFrame(runSave)
+      }
+    }
+
+    const markDraftChanged = (event, { immediate = false } = {}) => {
       if (!isTaskDraftInteraction(event.target)) return
       changeRevision.current += 1
-      setAutosaveState('pending')
-      saveDraft()
+      scheduleSave({ immediate })
+    }
+
+    const onDraftInput = (event) => markDraftChanged(event)
+    const onDraftChange = (event) => markDraftChanged(event, { immediate: true })
+    const onDraftFocusOut = (event) => {
+      if (!(event.target instanceof Element)) return
+      if (!event.target.closest('.chefops-drawer-content')) return
+      if (changeRevision.current > savedRevision.current) scheduleSave({ immediate: true })
     }
 
     const onDrawerClick = (event) => {
       const target = event.target
       if (!(target instanceof Element)) return
       const closeButton = target.closest('.chefops-drawer-header button[aria-label="Close"]')
-      if (closeButton && changeRevision.current > savedRevision.current) {
-        saveDraft({ immediate: true })
-        window.setTimeout(completeDeferredRefresh, 2200)
+      if (closeButton) {
+        if (bypassClose.current || changeRevision.current <= savedRevision.current) return
+        event.preventDefault()
+        event.stopPropagation()
+        event.stopImmediatePropagation()
+        pendingCloseButton.current = closeButton
+        scheduleSave({ immediate: true })
         return
       }
-      markDraftChanged(event)
+      markDraftChanged(event, { immediate: true })
     }
 
     const onTaskPageClick = (event) => {
       if (window.location.pathname !== '/tasks') return
       if (event.target instanceof Element && event.target.closest('.chefops-drawer-content')) return
-      // Opening a pending task changes it to in_progress. Trigger an immediate
-      // alarm resync on this device as well as the WebSocket broadcast sent to
-      // the rest of the outlet devices.
       window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent('chefops:task-state-changed', {
           detail: { entity: 'Task' },
@@ -166,7 +271,9 @@ export default function OperationalTasksLive() {
       if (!eventTouchesTasks(event.detail || {})) return
       if (activeTaskDrawer()) {
         pendingRefresh.current = true
-        if (changeRevision.current > savedRevision.current) saveDraft()
+        if (!saveInFlight.current && changeRevision.current > savedRevision.current) {
+          scheduleSave({ immediate: true })
+        }
         return
       }
       refresh(80)
@@ -175,43 +282,51 @@ export default function OperationalTasksLive() {
     const onActive = () => {
       if (document.visibilityState !== 'visible') return
       if (activeTaskDrawer()) {
-        if (changeRevision.current > savedRevision.current) saveDraft()
+        if (changeRevision.current > savedRevision.current) scheduleSave({ immediate: true })
         return
       }
       if (Date.now() - lastRefreshAt.current < 1000) return
       refresh(0)
     }
 
+    const flushDraft = () => {
+      if (changeRevision.current > savedRevision.current) scheduleSave({ immediate: true })
+    }
+
     const onVisibility = () => {
       if (document.visibilityState === 'hidden') {
-        if (changeRevision.current > savedRevision.current) saveDraft({ immediate: true })
+        flushDraft()
         return
       }
       onActive()
     }
 
-    document.addEventListener('input', markDraftChanged, true)
-    document.addEventListener('change', markDraftChanged, true)
+    document.addEventListener('input', onDraftInput, true)
+    document.addEventListener('change', onDraftChange, true)
+    document.addEventListener('focusout', onDraftFocusOut, true)
     document.addEventListener('click', onDrawerClick, true)
     document.addEventListener('click', onTaskPageClick, true)
     window.addEventListener('chefops:realtime', onRealtime)
     window.addEventListener('chefops:realtime-applied', onRealtime)
     window.addEventListener('pageshow', onActive)
+    window.addEventListener('pagehide', flushDraft)
     window.addEventListener('focus', onActive)
     window.addEventListener('online', onActive)
     document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
       window.clearTimeout(refreshTimer.current)
-      window.clearTimeout(autosaveTimer.current)
-      window.clearTimeout(autosaveSettleTimer.current)
-      document.removeEventListener('input', markDraftChanged, true)
-      document.removeEventListener('change', markDraftChanged, true)
+      cancelScheduledSave()
+      settleObserver.current?.disconnect()
+      document.removeEventListener('input', onDraftInput, true)
+      document.removeEventListener('change', onDraftChange, true)
+      document.removeEventListener('focusout', onDraftFocusOut, true)
       document.removeEventListener('click', onDrawerClick, true)
       document.removeEventListener('click', onTaskPageClick, true)
       window.removeEventListener('chefops:realtime', onRealtime)
       window.removeEventListener('chefops:realtime-applied', onRealtime)
       window.removeEventListener('pageshow', onActive)
+      window.removeEventListener('pagehide', flushDraft)
       window.removeEventListener('focus', onActive)
       window.removeEventListener('online', onActive)
       document.removeEventListener('visibilitychange', onVisibility)
@@ -222,14 +337,12 @@ export default function OperationalTasksLive() {
     <>
       <OperationalTasksV2 key={revision} />
       {autosaveState ? (
-        <div className={`pointer-events-none fixed bottom-[82px] left-1/2 z-[360] -translate-x-1/2 rounded-full px-3 py-1.5 text-[11px] font-bold text-white shadow-lg ${autosaveState === 'error' ? 'bg-rose-700' : 'bg-black/85'}`}>
-          {autosaveState === 'pending'
-            ? '草稿等待自动保存'
-            : autosaveState === 'saving'
-              ? '正在自动保存草稿…'
-              : autosaveState === 'saved'
-                ? '草稿已自动保存'
-                : '草稿自动保存失败，将在下次修改时重试'}
+        <div className={`chefops-autosave-toast pointer-events-none fixed left-1/2 z-[360] -translate-x-1/2 rounded-full px-3 py-1.5 text-[11px] font-bold text-white shadow-lg ${autosaveState === 'error' ? 'bg-rose-700' : 'bg-black/85'}`} role="status" aria-live="polite">
+          {autosaveState === 'saving'
+            ? '保存中…'
+            : autosaveState === 'saved'
+              ? '已保存'
+              : '保存失败，表单仍保持打开'}
         </div>
       ) : null}
     </>

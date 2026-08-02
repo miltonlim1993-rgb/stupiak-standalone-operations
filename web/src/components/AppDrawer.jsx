@@ -11,14 +11,17 @@ export default function AppDrawer({
   fullScreen = false,
 }) {
   const contentClass = fullScreen
-    ? 'h-[100dvh] max-h-none rounded-none border-0'
+    ? 'h-full max-h-none rounded-none border-0'
     : `rounded-t-[24px] border border-b-0 ${heightClass}`
 
   return (
     <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
       <DialogPrimitive.Portal>
-        <DialogPrimitive.Overlay className="chefops-drawer-overlay fixed inset-y-0 left-1/2 z-[300] w-full max-w-[430px] -translate-x-1/2 bg-black/45 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
-        <DialogPrimitive.Content className={`chefops-drawer-content fixed bottom-0 left-1/2 z-[301] flex w-full max-w-[430px] -translate-x-1/2 flex-col overflow-hidden bg-background shadow-2xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:slide-out-to-bottom-8 ${contentClass}`}>
+        <DialogPrimitive.Overlay className="chefops-drawer-overlay fixed z-[880] bg-black/45 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0" />
+        <DialogPrimitive.Content
+          data-fullscreen={fullScreen ? 'true' : 'false'}
+          className={`chefops-drawer-content fixed bottom-0 left-1/2 z-[881] flex -translate-x-1/2 flex-col overflow-hidden bg-background shadow-2xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:slide-out-to-bottom-8 ${contentClass}`}
+        >
           <div className="chefops-drawer-header shrink-0 border-b bg-background px-4 pb-3 pt-[calc(.5rem+env(safe-area-inset-top))]">
             {!fullScreen ? <div className="mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/25" /> : null}
             <div className="flex items-start justify-between gap-3">
