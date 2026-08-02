@@ -24,7 +24,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v13-stock-history-media-ui'
+const WORKER_REVISION = 'realtime-resilience-v14-complete-stock-history'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
