@@ -7,7 +7,6 @@ import { parseOutletIds } from "@/lib/outlets";
 import {
   AlertTriangle,
   ArrowRight,
-  CalendarClock,
   CheckCircle2,
   ClipboardCheck,
   Clock,
@@ -28,6 +27,7 @@ const OPERATIONAL_TEMPLATE_IDS = new Set([
   "tmpl-rr-toilet-checklist",
   "tmpl-rr-daily-standards",
 ]);
+const DEFAULT_OWNER_OUTLET = "RR-KCH";
 
 function localDateText(date = new Date()) {
   const year = date.getFullYear();
@@ -39,12 +39,6 @@ function localDateText(date = new Date()) {
 function addLocalDays(dateText, amount) {
   const [year, month, day] = dateText.split("-").map(Number);
   return localDateText(new Date(year, month - 1, day + amount));
-}
-
-function shortRosterDate(dateText) {
-  if (!dateText) return "";
-  const [year, month, day] = dateText.split("-").map(Number);
-  return new Intl.DateTimeFormat("en-MY", { day: "numeric", month: "short" }).format(new Date(year, month - 1, day));
 }
 
 function normalizePerson(value) {
@@ -65,18 +59,6 @@ function matchesCurrentUser(row, user) {
   );
 }
 
-function shiftName(row) {
-  const hour = Number(String(row?.clock_in || "").split(":")[0]);
-  if (!Number.isFinite(hour)) return "Shift";
-  return hour < 16 ? "Morning shift" : "Night shift";
-}
-
-function shiftDuty(row) {
-  const notes = String(row?.notes || "");
-  const match = notes.match(/planned duties:\s*(.*?)(?:\.\s*Scheduled|$)/i);
-  return (match?.[1] || row?.staff_role || "Scheduled duty").trim();
-}
-
 function isOperationalTask(task) {
   const notes = String(task?.notes || "");
   return notes.includes("operational-checklist-v1") || OPERATIONAL_TEMPLATE_IDS.has(String(task?.template_id || ""));
@@ -84,21 +66,6 @@ function isOperationalTask(task) {
 
 function normalizeIssue(issue) {
   return { ...issue, status: String(issue?.status || "open").trim().toLowerCase() || "open" };
-}
-
-function performanceFor(tasks, today) {
-  const rows = (tasks || []).filter(isOperationalTask);
-  const completed = rows.filter((task) => task.status === "done").length;
-  const missed = rows.filter((task) => task.status !== "done" && String(task.due_date || "") < today).length;
-  const due = completed + missed;
-  const rate = due ? Math.round((completed / due) * 100) : 0;
-  const recentDates = [...new Set(rows.map((task) => task.due_date).filter(Boolean))].sort().slice(-7);
-  const daily = recentDates.map((date) => {
-    const dayRows = rows.filter((task) => task.due_date === date);
-    const dayDone = dayRows.filter((task) => task.status === "done").length;
-    return { date, total: dayRows.length, done: dayDone, rate: dayRows.length ? Math.round((dayDone / dayRows.length) * 100) : 0 };
-  });
-  return { total: rows.length, completed, missed, rate, daily };
 }
 
 function stockAliases(record = {}) {
@@ -127,13 +94,19 @@ function lowStockFor(stockList, counts) {
   }).sort((a, b) => Number(a.actual_qty) - Number(b.actual_qty));
 }
 
+function dashboardOutlet(user) {
+  const assigned = parseOutletIds(user);
+  const remembered = String(localStorage.getItem("chefops.data-pack.outlet") || "").trim();
+  const ownerFallback = String(user?.role || "").toLowerCase() === "owner" ? DEFAULT_OWNER_OUTLET : "";
+  return String(user?.outlet_id || assigned[0] || remembered || ownerFallback).trim();
+}
+
 export default function Dashboard() {
   const { user, logout } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [urgentIssues, setUrgentIssues] = useState([]);
   const [rosterRows, setRosterRows] = useState([]);
   const [teamRows, setTeamRows] = useState([]);
-  const [teamDate, setTeamDate] = useState("");
   const [performanceTasks, setPerformanceTasks] = useState([]);
   const [taskTemplates, setTaskTemplates] = useState([]);
   const [performanceUsers, setPerformanceUsers] = useState([]);
@@ -143,37 +116,65 @@ export default function Dashboard() {
   const [stockCounts, setStockCounts] = useState([]);
   const [closeUps, setCloseUps] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadWarning, setLoadWarning] = useState("");
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [user?.email, user?.outlet_id, user?.outlet_ids, user?.role]);
 
   const loadData = async () => {
+    setLoading(true);
+    setLoadWarning("");
+    const failures = [];
+    const safe = async (label, promise, fallback = []) => {
+      try {
+        return await promise;
+      } catch (error) {
+        failures.push(`${label}: ${error?.message || "unavailable"}`);
+        console.error(`Dashboard ${label} load failed`, error);
+        return fallback;
+      }
+    };
+
     try {
       const today = localDateText();
       const year = Number(today.slice(0, 4));
       const startDate = addLocalDays(today, -30);
-      const primaryOutletId = user?.outlet_id || parseOutletIds(user)[0] || "";
+      const primaryOutletId = dashboardOutlet(user);
+      if (primaryOutletId) localStorage.setItem("chefops.data-pack.outlet", primaryOutletId);
+
+      const taskRequest = primaryOutletId
+        ? opsClient.tasks.operationalBootstrap({ outletId: primaryOutletId, date: today, refresh: false })
+            .then((response) => response?.tasks || [])
+            .catch(() => opsClient.entities.Task.filter({ outlet_id: primaryOutletId, due_date: today }, "-priority", 100, { year }))
+        : Promise.resolve([]);
+
       const [taskList, urgentList, history, stockList, countList, roster, closeUpRows, templates, users, outlets, positionRows] = await Promise.all([
-        opsClient.entities.Task.filter({ due_date: today }, "-priority", 100, { year }),
-        opsClient.entities.UrgentIssue.filter({}, "-created_date", 50, { year }),
-        opsClient.entities.Task.filter({ due_date: { $gte: startDate } }, "-due_date", 1000, { year }),
-        primaryOutletId
+        safe("today tasks", taskRequest),
+        safe("urgent issues", primaryOutletId
+          ? opsClient.entities.UrgentIssue.filter({ outlet_id: primaryOutletId }, "-created_date", 50, { year })
+          : Promise.resolve([])),
+        safe("task history", primaryOutletId
+          ? opsClient.entities.Task.filter({ outlet_id: primaryOutletId, due_date: { $gte: startDate } }, "-due_date", 1000, { year })
+          : Promise.resolve([])),
+        safe("stock list", primaryOutletId
           ? opsClient.entities.OutletStockList.filter({ outlet_id: primaryOutletId, enabled: true }, "section,display_order", 1000)
-          : Promise.resolve([]),
-        primaryOutletId
+          : Promise.resolve([])),
+        safe("stock counts", primaryOutletId
           ? opsClient.entities.StockCount.filter({ outlet_id: primaryOutletId, count_date: { $lte: today } }, "-count_date", 2500, { year })
-          : Promise.resolve([]),
-        primaryOutletId
+          : Promise.resolve([])),
+        safe("duty roster", primaryOutletId
           ? opsClient.entities.Attendance.filter({ outlet_id: primaryOutletId, date: { $gte: today } }, "date,clock_in,staff_role,staff_name", 500, { year })
-          : Promise.resolve([]),
-        primaryOutletId
-          ? opsClient.entities.CloseUp.filter({ outlet_id: primaryOutletId, business_date: today }, "-submitted_at", 20, { year }).catch(() => [])
-          : Promise.resolve([]),
-        opsClient.entities.TaskTemplate.list("display_order,title", 3000).catch(() => []),
-        ["manager", "owner"].includes(String(user?.role || "")) ? opsClient.entities.User.list("full_name", 1000).catch(() => [user]) : Promise.resolve([user]),
-        opsClient.entities.Outlet.list("name", 200).catch(() => []),
-        opsClient.entities.PositionMaster.list("display_order,name", 100).catch(() => []),
+          : Promise.resolve([])),
+        safe("close up", primaryOutletId
+          ? opsClient.entities.CloseUp.filter({ outlet_id: primaryOutletId, business_date: today }, "-submitted_at", 20, { year })
+          : Promise.resolve([])),
+        safe("task templates", opsClient.entities.TaskTemplate.list("display_order,title", 3000)),
+        safe("users", ["manager", "owner"].includes(String(user?.role || ""))
+          ? opsClient.entities.User.list("full_name", 1000)
+          : Promise.resolve([user]), [user]),
+        safe("outlets", opsClient.entities.Outlet.list("name", 200)),
+        safe("positions", opsClient.entities.PositionMaster.list("display_order,name", 100)),
       ]);
 
       setTasks((taskList || []).filter(isOperationalTask));
@@ -187,12 +188,13 @@ export default function Dashboard() {
       setStockCounts(countList || []);
       setRosterRows(roster || []);
       setCloseUps(closeUpRows || []);
+      setTeamRows(upcomingTeam(roster || [], { now: new Date(), hours: 8 }));
 
-      const preview = upcomingTeam(roster || [], { now: new Date(), hours: 8 });
-      setTeamDate(today);
-      setTeamRows(preview);
-    } catch (error) {
-      console.error(error);
+      if (!primaryOutletId) {
+        setLoadWarning("No outlet scope was available for this account.");
+      } else if (failures.length) {
+        setLoadWarning(`Some dashboard sections are temporarily unavailable. Loaded outlet ${primaryOutletId}; ${failures.length} source${failures.length === 1 ? "" : "s"} will retry when reopened.`);
+      }
     } finally {
       setLoading(false);
     }
@@ -212,8 +214,9 @@ export default function Dashboard() {
   const rosterTitle = "Today’s team";
   const rosterDetail = activeTeamCount
     ? `${activeTeamCount} working now`
-    : "No one working now";
-
+    : personalShift
+      ? `Your ${String(personalShift.staff_role || "shift").toLowerCase()} is scheduled today`
+      : "No one working now";
 
   if (loading) {
     return (
@@ -235,6 +238,7 @@ export default function Dashboard() {
         </Button>
       </div>
 
+      {loadWarning ? <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800">{loadWarning}</div> : null}
       <PageNotifications page="/" showAllOnHome limit={3} />
 
       <div className="rounded-2xl border border-border bg-card p-3.5 sm:p-4">
@@ -356,9 +360,9 @@ function StatCard({ icon: Icon, label, value, hint = "", to, colorClass }) {
 }
 
 function ScoreMetric({ value, label, tone = "default", signed = false, negative = false }) {
-  const number = Number(value)
-  const display = value === "—" || !Number.isFinite(number) ? value : negative ? `-${Math.abs(number)}` : signed && number > 0 ? `+${number}` : String(number)
-  return <div className="chefops-score-metric"><p className={`text-xl font-bold tabular-nums ${tone === "red" ? "text-red-600" : tone === "green" ? "text-emerald-600" : ""}`}>{display}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>
+  const number = Number(value);
+  const display = value === "—" || !Number.isFinite(number) ? value : negative ? `-${Math.abs(number)}` : signed && number > 0 ? `+${number}` : String(number);
+  return <div className="chefops-score-metric"><p className={`text-xl font-bold tabular-nums ${tone === "red" ? "text-red-600" : tone === "green" ? "text-emerald-600" : ""}`}>{display}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>;
 }
 
 function Metric({ value, label, tone = "default" }) {
