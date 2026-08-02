@@ -12,6 +12,8 @@ This Worker serves both the React application and `/api/*`. A Cloudflare Pages p
 
 ## Architecture
 
+D1 is the canonical runtime database for migrated operational workflows.
+
 - `web/` — React + Vite application for desktop, tablet, mobile PWA, and the Android shell.
 - `worker/` — Cloudflare Worker API, D1 runtime, Queue consumer/producer, Durable Object realtime, and static asset host.
 - Cloudflare D1 (`stupiaks-ops-realtime`) — canonical runtime database for migrated operational workflows.
