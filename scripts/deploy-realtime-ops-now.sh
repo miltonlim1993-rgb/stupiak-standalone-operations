@@ -11,8 +11,8 @@ DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-EXPECTED_REVISION="realtime-resilience-v5-cloudflare-auth"
-EXPECTED_PWA_TOKEN="shared-task-claim-autosave-pwa-v27"
+EXPECTED_REVISION="realtime-resilience-v6-stable-session"
+EXPECTED_PWA_TOKEN="auth-session-stability-pwa-v28"
 
 json_database_id() {
   local database_name="$1"
@@ -122,7 +122,7 @@ npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.produc
 echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
-echo "==> Verifying production revision, D1 schema, Queue, WebSocket and PWA v27"
+echo "==> Verifying production revision, D1 schema, Queue, WebSocket and stable session PWA"
 headers=''
 body=''
 pwa_body=''
@@ -143,6 +143,8 @@ for attempt in $(seq 1 30); do
     echo "PWA_TASK_BOOTSTRAP_READY=true"
     echo "TASK_ACTIONS_D1_ONLY=true"
     echo "AUTH_LOGIN_SHEETS_GATE_REMOVED=true"
+    echo "AUTH_SESSION_STABLE=true"
+    echo "AUTH_RESPONSES_NOT_CACHED=true"
     echo "TASK_ALERT_CLAIM_READY=true"
     echo "TASK_DRAFT_AUTOSAVE_READY=true"
     echo "MULTI_DEVICE_TESTING_READY=true"
