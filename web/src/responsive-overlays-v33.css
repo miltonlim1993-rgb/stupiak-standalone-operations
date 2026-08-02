@@ -1,4 +1,8 @@
 /* Device-adaptive overlays for visual viewport shell v33. */
+:root {
+  --chefops-sheet-max-height: calc(var(--chefops-viewport-height) - var(--chefops-safe-top) - .5rem);
+}
+
 .chefops-viewport-overlay,
 .chefops-drawer-overlay {
   top: var(--chefops-viewport-top) !important;
@@ -17,6 +21,10 @@
   left: calc(var(--chefops-viewport-left) + .75rem) !important;
   right: auto !important;
   width: calc(var(--chefops-viewport-width) - 1.5rem) !important;
+}
+
+.chefops-mobile-sheet-panel {
+  max-height: calc(var(--chefops-viewport-height) - max(8px, var(--chefops-safe-top))) !important;
 }
 
 .chefops-drawer-content {
@@ -44,6 +52,17 @@
   scroll-padding-bottom: calc(5rem + var(--chefops-safe-bottom));
 }
 
+html[data-chefops-native='android'] .chefops-mobile-action,
+html[data-chefops-mode='mobile'] .chefops-mobile-action,
+.chefops-force-mobile .chefops-mobile-action {
+  bottom: calc(var(--chefops-viewport-bottom) + var(--chefops-bottom-height) + var(--chefops-safe-bottom)) !important;
+}
+
+html[data-chefops-keyboard='open'] .chefops-mobile-action {
+  visibility: hidden !important;
+  pointer-events: none !important;
+}
+
 @media (max-width: 379px) {
   .chefops-mobile-sheet-body form > section.grid,
   .chefops-drawer-body form > section.grid {
@@ -62,6 +81,7 @@
 }
 
 @media (min-width: 640px) {
+  .chefops-mobile-sheet-panel,
   .chefops-drawer-content {
     bottom: calc(var(--chefops-viewport-bottom) + 1rem) !important;
     width: min(720px, calc(var(--chefops-viewport-width) - 2rem)) !important;
@@ -84,6 +104,7 @@
 }
 
 @media (min-width: 1024px) {
+  .chefops-mobile-sheet-panel,
   .chefops-drawer-content {
     top: calc(var(--chefops-viewport-top) + (var(--chefops-viewport-height) / 2)) !important;
     bottom: auto !important;
