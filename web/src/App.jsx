@@ -13,6 +13,7 @@ import Layout from '@/components/Layout'
 import AppUpdateBanner from '@/components/AppUpdateBanner'
 import RealtimeBridge from '@/components/RealtimeBridge'
 import SubmissionLockOverlay from '@/components/SubmissionLockOverlay'
+import NativeMediaCaptureBridge from '@/components/NativeMediaCaptureBridge'
 import RosterTaskAssignmentManager from '@/components/RosterTaskAssignmentManager'
 import RosterGatedTaskAlarmManager from '@/components/RosterGatedTaskAlarmManager'
 import TaskBadgeManager from '@/components/TaskBadgeManager'
@@ -92,6 +93,7 @@ export default function App() {
   return (
     <AuthProvider>
       <AppUpdateBanner global />
+      <NativeMediaCaptureBridge />
       <RosterTaskAssignmentManager />
       <QueryClientProvider client={queryClientInstance}>
         <Router>

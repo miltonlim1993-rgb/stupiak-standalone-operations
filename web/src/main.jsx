@@ -15,7 +15,7 @@ import { installRealtimeClientHeader } from '@/lib/client-id'
 import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
 import { installMediaUiRepair } from '@/lib/media-ui'
 
-const SHELL_VERSION = 'label-d1-runtime-pwa-v30'
+const SHELL_VERSION = 'native-camera-pwa-v31'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -133,7 +133,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) 
   })
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw-v30.js', { updateViaCache: 'none' }).then((registration) => {
+    navigator.serviceWorker.register('/sw-v31.js', { updateViaCache: 'none' }).then((registration) => {
       if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' })
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing
