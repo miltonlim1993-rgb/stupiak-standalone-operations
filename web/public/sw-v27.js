@@ -1,7 +1,7 @@
 // Compatibility updater for installed PWA clients.
-// Authentication remains network-only and Google Drive media is rewritten
-// through the authenticated OPS file proxy before the main worker handles it.
+// Authentication remains network-only and known SOP posters are served from
+// bundled Cloudflare assets before any Google Drive fallback is attempted.
 importScripts(
-  '/sw-media-proxy.js?drive-media-proxy-v11',
+  '/sw-media-proxy.js?bundled-sop-media-v12',
   '/sw.js?auth-session-stability-pwa-v28',
 )
