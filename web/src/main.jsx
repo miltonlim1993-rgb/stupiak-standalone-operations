@@ -14,7 +14,7 @@ import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 import { installRealtimeClientHeader } from '@/lib/client-id'
 import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
 
-const SHELL_VERSION = 'realtime-resilience-v3-ios-live-task-v26'
+const SHELL_VERSION = 'shared-task-claim-autosave-pwa-v27'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -131,7 +131,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) 
   })
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw-v26.js', { updateViaCache: 'none' }).then((registration) => {
+    navigator.serviceWorker.register('/sw-v27.js', { updateViaCache: 'none' }).then((registration) => {
       if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' })
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing
