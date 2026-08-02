@@ -1,14 +1,14 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.15",
-  "minimum_apk_version": "4.5.15",
+  "apk_version": "4.5.16",
+  "minimum_apk_version": "4.5.16",
   "force_update": true,
-  "pwa_version": "label-d1-runtime-pwa-v30",
-  "minimum_pwa_version": "label-d1-runtime-pwa-v30",
+  "pwa_version": "native-camera-pwa-v31",
+  "minimum_pwa_version": "native-camera-pwa-v31",
   "pwa_force_update": true,
-  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.15",
+  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.16",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS 4.5.15 release. Food Labels now use D1 as the runtime source of truth for label rules, printer profiles, label creation, reprints and print logs. July Stock Count history is restored in D1. Website, installed PWA and Android clients automatically detect this release and block outdated clients until the latest package is installed.",
-  "release_trigger": "2026-08-02-label-d1-stock-history-forced-release"
+  "release_notes": "Mandatory OPS 4.5.16 camera fix. Task evidence and Urgent Issue capture now open the Android native camera through Capacitor instead of relying on a hidden file input click. Website and installed PWA clients use a direct picker fallback and show visible capture errors instead of failing silently.",
+  "release_trigger": "2026-08-02-task-issue-native-camera-fix"
 }
