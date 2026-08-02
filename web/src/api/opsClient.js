@@ -24,7 +24,7 @@ const REALTIME_ENTITIES = new Set([
 ])
 
 function getTtl(path) {
-  if (path === '/api/auth/me') return 15_000
+  if (path === '/api/auth/me') return 0
   if (path.startsWith('/api/notifications')) return 12_000
   if (path === '/api/app/v4/version') return 300_000
   if (path.startsWith('/api/app/v4/bootstrap')) return 30_000
@@ -63,6 +63,7 @@ async function request(path, options = {}) {
   const execute = async () => {
     const headers = new Headers(options.headers || {})
     const init = { method, credentials: 'include', headers }
+    if (path.startsWith('/api/auth/') || path.startsWith('/api/realtime/')) init.cache = 'no-store'
     if (options.body instanceof FormData) {
       init.body = options.body
     } else if (options.body !== undefined) {
@@ -158,53 +159,41 @@ function sortedRows(rows, sort = '') {
   })
 }
 
-async function realtimeRows(entity, outletId, limit = 500) {
+async function realtimeRows(entity, outletId, {
+  filter = {},
+  sort = '',
+  limit = 500,
+  year,
+  legacySeed = true,
+} = {}) {
   if (!REALTIME_ENTITIES.has(entity) || !outletId) return []
   const params = new URLSearchParams({
     entity,
     outlet_id: outletId,
     include_deleted: '1',
-    limit: String(Math.max(1, Math.min(Number(limit) || 500, 500))),
+    limit: String(Math.max(1, Math.min(Number(limit) || 500, 5000))),
+    filter: JSON.stringify(filter || {}),
+    sort: String(sort || ''),
+    legacy_seed: legacySeed ? '1' : '0',
     _: String(Date.now()),
   })
+  if (year) params.set('year', String(year))
   try {
     const result = await request(`/api/realtime/records?${params}`)
     return Array.isArray(result?.records) ? result.records : []
   } catch (error) {
-    // During phased rollout, an undeployed or temporarily unavailable D1 layer
-    // must not make existing read-only screens unusable.
-    if ([404, 503].includes(Number(error?.status || 0))) return []
-    throw error
+    if (Number(error?.status || 0) === 401 || Number(error?.status || 0) === 403) throw error
+    console.error(`Realtime ${entity} read unavailable`, error)
+    return []
   }
 }
 
-async function mergeRealtimeRows(entity, baseRows, {
-  outletId = '',
-  filter = {},
-  sort = '',
-  limit = 100,
-} = {}) {
-  const base = Array.isArray(baseRows) ? baseRows : []
-  const overlay = await realtimeRows(entity, outletId, Math.max(limit, 500))
-  if (!overlay.length) return base
-
-  const byId = new Map(base.map((row) => [recordId(row), row]).filter(([id]) => id))
-  const unkeyed = base.filter((row) => !recordId(row))
-  for (const row of overlay) {
-    const id = recordId(row)
-    if (!id) continue
+function visibleRealtimeRows(rows, { filter = {}, sort = '', limit = 100 } = {}) {
+  const visible = (rows || []).filter((row) => {
     const deleted = Boolean(row?.deleted_at || row?.__realtime?.deleted_at)
-    if (deleted || !matchesFilter(row, filter)) {
-      byId.delete(id)
-      continue
-    }
-    byId.set(id, {
-      ...(byId.get(id) || {}),
-      ...row,
-      __realtime: row.__realtime,
-    })
-  }
-  return sortedRows([...byId.values(), ...unkeyed], sort).slice(0, Math.max(1, Number(limit) || 100))
+    return !deleted && matchesFilter(row, filter)
+  })
+  return sortedRows(visible, sort).slice(0, Math.max(1, Number(limit) || 100))
 }
 
 async function legacyRecord(entity, id, options = {}) {
@@ -216,8 +205,12 @@ async function legacyRecord(entity, id, options = {}) {
   return Array.isArray(rows) ? rows.find((row) => recordId(row) === String(id)) || rows[0] || null : null
 }
 
-async function realtimeRecord(entity, outletId, id) {
-  const rows = await realtimeRows(entity, outletId, 500)
+async function realtimeRecord(entity, outletId, id, options = {}) {
+  const rows = await realtimeRows(entity, outletId, {
+    filter: { id: String(id) },
+    limit: 5000,
+    year: options?.year,
+  })
   return rows.find((row) => recordId(row) === String(id)) || null
 }
 
@@ -242,20 +235,39 @@ function entityClient(entity) {
     async list(sort = '', limit = 100, options = {}) {
       const outletId = packOutlet()
       const packed = await getPackedEntity(entity, { sort, limit, outletId })
+      if (packed) return packed
+      if (REALTIME_ENTITIES.has(entity) && outletId) {
+        const rows = await realtimeRows(entity, outletId, {
+          sort,
+          limit: Math.max(Number(limit) || 100, 500),
+          year: options?.year,
+          legacySeed: options?.legacySeed !== false,
+        })
+        return visibleRealtimeRows(rows, { sort, limit })
+      }
       const params = addYear(new URLSearchParams({ sort, limit: String(limit) }), options)
-      const base = packed || await request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
-      return mergeRealtimeRows(entity, base, { outletId, sort, limit })
+      return request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
     },
     async filter(filter = {}, sort = '', limit = 100, options = {}) {
       const outletId = packOutlet(filter)
       const packed = await getPackedEntity(entity, { filter, sort, limit, outletId })
+      if (packed) return packed
+      if (REALTIME_ENTITIES.has(entity) && outletId) {
+        const rows = await realtimeRows(entity, outletId, {
+          filter,
+          sort,
+          limit: Math.max(Number(limit) || 100, 500),
+          year: options?.year,
+          legacySeed: options?.legacySeed !== false,
+        })
+        return visibleRealtimeRows(rows, { filter, sort, limit })
+      }
       const params = addYear(new URLSearchParams({
         filter: JSON.stringify(filter || {}),
         sort,
         limit: String(limit),
       }), options)
-      const base = packed || await request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
-      return mergeRealtimeRows(entity, base, { outletId, filter, sort, limit })
+      return request(`/api/entities/${encodeURIComponent(entity)}?${params}`)
     },
     async create(data, options = {}) {
       const outletId = String(data?.outlet_id || packOutlet(data) || '').trim()
@@ -276,7 +288,7 @@ function entityClient(entity) {
       if (!REALTIME_ENTITIES.has(entity) || !outletId) return legacyUpdate(id, data, options)
 
       let current = null
-      try { current = await realtimeRecord(entity, outletId, id) } catch {}
+      try { current = await realtimeRecord(entity, outletId, id, options) } catch {}
       if (!current) {
         try { current = await legacyRecord(entity, id, options) } catch {}
       }
@@ -302,9 +314,7 @@ function entityClient(entity) {
       if (!REALTIME_ENTITIES.has(entity) || !outletId) return legacyDelete(id, options)
 
       let current = null
-      try { current = await realtimeRecord(entity, outletId, id) } catch {}
-      // Existing Sheet-only records remain on the legacy delete path until
-      // they have been seeded into D1 by a create or update mutation.
+      try { current = await realtimeRecord(entity, outletId, id, options) } catch {}
       if (!current?.__realtime) return legacyDelete(id, options)
       const result = await submitRealtimeMutation({
         entity,
@@ -367,15 +377,18 @@ export const opsClient = {
     status() {
       return request(`/api/realtime/data/status?_=${Date.now()}`)
     },
-    list({ entity, outletId, since = '', includeDeleted = false, limit = 100 }) {
+    list({ entity, outletId, since = '', includeDeleted = false, limit = 100, filter = {}, sort = '', year } = {}) {
       const params = new URLSearchParams({
         entity,
         outlet_id: outletId,
         limit: String(limit),
+        filter: JSON.stringify(filter || {}),
+        sort: String(sort || ''),
         _: String(Date.now()),
       })
       if (since) params.set('since', since)
       if (includeDeleted) params.set('include_deleted', '1')
+      if (year) params.set('year', String(year))
       return request(`/api/realtime/records?${params}`)
     },
     mutate(payload, options) {
