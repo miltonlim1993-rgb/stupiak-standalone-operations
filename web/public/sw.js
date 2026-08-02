@@ -1,5 +1,5 @@
-// Production release refresh: realtime resilience / PWA v25
-const VERSION = 'chefops-realtime-resilience-v2-pwa-v25'
+// Production release refresh: iPhone live Task sync / PWA v26
+const VERSION = 'chefops-realtime-resilience-v3-ios-live-task-v26'
 const SHELL_CACHE = `${VERSION}-shell`
 const DATA_CACHE = `${VERSION}-data`
 const OCR_CACHE = `${VERSION}-ocr`
