@@ -12,7 +12,7 @@ DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-EXPECTED_REVISION="realtime-resilience-v8-d1-primary"
+EXPECTED_REVISION="realtime-resilience-v9-media-roster-recovery"
 EXPECTED_PWA_TOKEN="auth-session-stability-pwa-v28"
 
 json_database_id() {
@@ -98,7 +98,7 @@ git pull --ff-only origin main
 echo "==> Installing exact dependencies"
 npm ci
 
-echo "==> Auditing the D1-primary workspace closure"
+echo "==> Auditing media, roster and D1-primary workspace closure"
 node scripts/audit-realtime-closure.mjs
 
 echo "==> Resolving D1 database: $DB_NAME"
@@ -136,7 +136,7 @@ npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.produc
 echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
-echo "==> Verifying D1-primary reads, submissions, auth, Queue and WebSocket"
+echo "==> Verifying media, roster, D1-primary reads, auth, Queue and WebSocket"
 headers=''
 body=''
 pwa_body=''
@@ -166,6 +166,9 @@ for attempt in $(seq 1 30); do
     echo "OWNER_OUTLET_SCOPE_RECOVERED=true"
     echo "LIVE_WORKSPACE_READS_D1_PRIMARY=true"
     echo "LEGACY_SHEET_READ_ERRORS_ISOLATED=true"
+    echo "DUTY_ROSTER_DIRECT_D1_HYDRATION=true"
+    echo "TASK_MEDIA_CLOUDFLARE_CACHE=true"
+    echo "GOOGLE_DRIVE_MEDIA_PROXY_NORMALIZED=true"
     echo "STOCK_SUBMISSIONS_PACKAGE_D1_ONLY=true"
     echo "CLOSEUP_SUBMISSIONS_D1_ONLY=true"
     echo "CLOSEUP_SHEET_SYNC_ASYNC=true"
@@ -179,7 +182,7 @@ for attempt in $(seq 1 30); do
   sleep 5
 done
 
-echo "Deployment command completed, but D1-primary workspace readiness was not observed in production." >&2
+echo "Deployment command completed, but media/roster/D1-primary readiness was not observed in production." >&2
 echo "Expected Worker revision: $EXPECTED_REVISION" >&2
 echo "Expected PWA token: $EXPECTED_PWA_TOKEN" >&2
 echo "Last health response: $body" >&2
