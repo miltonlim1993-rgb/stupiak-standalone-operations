@@ -1,7 +1,7 @@
+import { getAppPackModule, getPublishedAppPack } from './app-pack.js'
 import { getCurrentUser } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { assertAssignedOutletAccess, assignedOutletIds } from './permissions.js'
-import { listRecords } from './sheets.js'
 
 function now() {
   return new Date().toISOString()
@@ -13,10 +13,6 @@ function parseJson(value, fallback = null) {
 
 function truthy(value) {
   return value === true || String(value).toLowerCase() === 'true'
-}
-
-function recordId(record) {
-  return String(record?.id || record?.__realtime?.entity_id || '').trim()
 }
 
 function realtimeRecord(row) {
@@ -33,15 +29,6 @@ function realtimeRecord(row) {
       updated_at: row.updated_at || '',
     },
   }
-}
-
-function mergeRows(sheetRows, d1Rows) {
-  const byId = new Map((sheetRows || []).map((row) => [recordId(row), row]).filter(([id]) => id))
-  for (const row of d1Rows || []) {
-    const id = recordId(row)
-    if (id) byId.set(id, { ...(byId.get(id) || {}), ...row })
-  }
-  return [...byId.values()]
 }
 
 function aliases(record = {}) {
@@ -68,6 +55,26 @@ async function digest(value) {
   return [...new Uint8Array(hash)]
     .map((byte) => byte.toString(16).padStart(2, '0'))
     .join('')
+}
+
+async function publishedStockList(env, outletId) {
+  const manifest = await getPublishedAppPack(env, outletId)
+  const inventoryInfo = manifest?.modules?.inventory
+  if (!manifest || !inventoryInfo?.hash) {
+    const error = new Error('The published stock list package is not available for this outlet')
+    error.status = 503
+    error.code = 'published_stock_list_unavailable'
+    throw error
+  }
+  const module = await getAppPackModule(env, outletId, 'inventory', inventoryInfo.hash)
+  const rows = module?.data?.outlet_stock_list
+  if (!Array.isArray(rows)) {
+    const error = new Error('The published stock list package is incomplete')
+    error.status = 503
+    error.code = 'published_stock_list_incomplete'
+    throw error
+  }
+  return rows
 }
 
 async function replayResult(db, mutationId) {
@@ -341,19 +348,8 @@ async function saveAtomicBatch(request, env) {
   const replay = await replayResult(env.OPS_DB, baseMutationId)
   if (replay) return replay
 
-  const year = Number(countDate.slice(0, 4))
-  const [stockListRows, sheetCounts, d1Query] = await Promise.all([
-    listRecords(env, 'OutletStockList', {
-      filter: { outlet_id: outletId },
-      sort: 'section,display_order',
-      limit: 5000,
-    }),
-    listRecords(env, 'StockCount', {
-      filter: { outlet_id: outletId, count_date: { $lte: countDate } },
-      sort: '-count_date',
-      limit: 5000,
-      year,
-    }),
+  const [stockListRows, d1Query] = await Promise.all([
+    publishedStockList(env, outletId),
     env.OPS_DB.prepare(`
       SELECT * FROM ops_records
       WHERE entity = 'StockCount' AND outlet_id = ? AND deleted_at = ''
@@ -366,10 +362,7 @@ async function saveAtomicBatch(request, env) {
       .filter((record) => truthy(record.enabled))
       .map((record) => [String(record.stock_list_id || ''), record]),
   )
-  const allCounts = mergeRows(
-    sheetCounts,
-    (d1Query.results || []).map(realtimeRecord),
-  )
+  const allCounts = (d1Query.results || []).map(realtimeRecord)
   const sameDateByAlias = new Map()
   const previousByAlias = new Map()
 
@@ -476,7 +469,7 @@ async function saveAtomicBatch(request, env) {
   }
 
   if (!commits.length) {
-    const error = new Error('No valid stock quantities matched this outlet stock list')
+    const error = new Error('No valid stock quantities matched the published outlet stock list')
     error.status = 400
     error.code = 'empty_valid_stock_count'
     throw error
@@ -495,6 +488,7 @@ async function saveAtomicBatch(request, env) {
     records: commits.map((item) => item.summary),
     committed_at: timestamp,
     sync_status: 'pending',
+    source: 'cloudflare-package+d1',
   }
 
   const requestedAt = String(body.requested_at || timestamp)
