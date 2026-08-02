@@ -5,6 +5,7 @@ import { handleCloudflareAuth } from './cloudflare-auth.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
+import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
 import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
 import { handleD1OperationalTaskAction } from './realtime-task-action-d1.js'
@@ -20,7 +21,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v7-dashboard-recovery'
+const WORKER_REVISION = 'realtime-resilience-v8-d1-primary'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -192,6 +193,16 @@ export default {
           )
         : await handleD1OperationalTaskAction(workflowRequest, runEnv, url)
       if (d1TaskResponse) return withApiHeaders(request, env, d1TaskResponse)
+
+      const d1CloseUpResponse = url.pathname === '/api/close-up/upsert'
+        ? await withSubmissionLock(
+            workflowRequest,
+            runEnv,
+            url,
+            () => handleD1CloseUpUpsert(workflowRequest, runEnv, url),
+          )
+        : await handleD1CloseUpUpsert(workflowRequest, runEnv, url)
+      if (d1CloseUpResponse) return withApiHeaders(request, env, d1CloseUpResponse)
 
       const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
       if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
