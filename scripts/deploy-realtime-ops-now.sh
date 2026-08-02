@@ -12,7 +12,7 @@ DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-EXPECTED_REVISION="realtime-resilience-v9-media-roster-recovery"
+EXPECTED_REVISION="realtime-resilience-v10-public-drive-media-fallback"
 EXPECTED_PWA_TOKEN="auth-session-stability-pwa-v28"
 
 json_database_id() {
@@ -169,6 +169,7 @@ for attempt in $(seq 1 30); do
     echo "DUTY_ROSTER_DIRECT_D1_HYDRATION=true"
     echo "TASK_MEDIA_CLOUDFLARE_CACHE=true"
     echo "GOOGLE_DRIVE_MEDIA_PROXY_NORMALIZED=true"
+    echo "PUBLIC_DRIVE_MEDIA_FALLBACK=true"
     echo "STOCK_SUBMISSIONS_PACKAGE_D1_ONLY=true"
     echo "CLOSEUP_SUBMISSIONS_D1_ONLY=true"
     echo "CLOSEUP_SHEET_SYNC_ASYNC=true"
