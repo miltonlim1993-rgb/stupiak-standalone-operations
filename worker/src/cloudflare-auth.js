@@ -14,6 +14,7 @@ import { errorResponse, json, readJson } from './http.js'
 
 const AUTH_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 const DEFAULT_BOOTSTRAP_OWNER_EMAIL = 'miltonlim1993@gmail.com'
+const DEFAULT_BOOTSTRAP_OWNER_OUTLET_ID = 'RR-KCH'
 
 function isNativeAppRequest(request) {
   const origin = String(request.headers.get('Origin') || '').toLowerCase()
@@ -35,6 +36,20 @@ function userKvKeyByEmail(email) {
   return `auth:user:email:${String(email || '').trim().toLowerCase()}`
 }
 
+function normalizeUserScope(user, env) {
+  if (!user) return user
+  const email = String(user.email || '').trim().toLowerCase()
+  const bootstrapEmail = String(env.BOOTSTRAP_OWNER_EMAIL || DEFAULT_BOOTSTRAP_OWNER_EMAIL).trim().toLowerCase()
+  const outletId = String(user.outlet_id || '').trim()
+  const outletIds = String(user.outlet_ids || '').trim()
+  if (email !== bootstrapEmail || String(user.role || '').toLowerCase() !== 'owner' || outletId || outletIds) return user
+
+  const fallbackOutlet = String(env.BOOTSTRAP_OWNER_OUTLET_ID || DEFAULT_BOOTSTRAP_OWNER_OUTLET_ID).trim()
+  return fallbackOutlet
+    ? { ...user, outlet_id: fallbackOutlet, outlet_ids: fallbackOutlet }
+    : user
+}
+
 function authCacheEntries(user) {
   const payload = JSON.stringify({ user, cachedAt: Date.now() })
   const entries = [[userKvKeyBySub(user.google_sub), payload]]
@@ -52,7 +67,7 @@ async function readCachedUser(env, { googleSub = '', email = '' } = {}) {
       const stored = await env.APP_DATA_PACKS.get(key, 'json')
       if (!stored?.user) continue
       if (Date.now() - Number(stored.cachedAt || 0) > AUTH_CACHE_TTL_SECONDS * 1000) continue
-      return stored.user
+      return normalizeUserScope(stored.user, env)
     } catch (error) {
       console.error('Unable to read cached auth user', error)
     }
@@ -61,12 +76,13 @@ async function readCachedUser(env, { googleSub = '', email = '' } = {}) {
 }
 
 async function cacheUser(env, user) {
-  rememberUser(user)
-  if (!env.APP_DATA_PACKS?.put) return user
-  await Promise.all(authCacheEntries(user).map(([key, value]) => (
+  const scopedUser = normalizeUserScope(user, env)
+  rememberUser(scopedUser)
+  if (!env.APP_DATA_PACKS?.put) return scopedUser
+  await Promise.all(authCacheEntries(scopedUser).map(([key, value]) => (
     env.APP_DATA_PACKS.put(key, value, { expirationTtl: AUTH_CACHE_TTL_SECONDS })
   ))).catch((error) => console.error('Unable to cache auth user', error))
-  return user
+  return scopedUser
 }
 
 async function bootstrapOwnerLogin(credential, env, originalError) {
@@ -80,11 +96,12 @@ async function bootstrapOwnerLogin(credential, env, originalError) {
   const timestamp = new Date().toISOString()
   const googleSub = String(payload.sub || '').trim()
   const cached = await readCachedUser(env, { googleSub, email })
-  const user = {
+  const fallbackOutlet = String(env.BOOTSTRAP_OWNER_OUTLET_ID || DEFAULT_BOOTSTRAP_OWNER_OUTLET_ID).trim()
+  const user = normalizeUserScope({
     ...(cached || {}),
     id: cached?.id || `bootstrap-owner-${googleSub}`,
-    outlet_id: cached?.outlet_id || '',
-    outlet_ids: cached?.outlet_ids || '',
+    outlet_id: cached?.outlet_id || fallbackOutlet,
+    outlet_ids: cached?.outlet_ids || fallbackOutlet,
     created_date: cached?.created_date || timestamp,
     created_by: cached?.created_by || email,
     updated_date: timestamp,
@@ -105,10 +122,10 @@ async function bootstrapOwnerLogin(credential, env, originalError) {
     name_confirmed: true,
     name_confirmed_at: cached?.name_confirmed_at || timestamp,
     name_updated_at: cached?.name_updated_at || timestamp,
-  }
-  await cacheUser(env, user)
-  const token = await createSession(user, env)
-  return { user: userWithProfileSetup(user), token, directory_fallback: 'bootstrap_owner' }
+  }, env)
+  const scopedUser = await cacheUser(env, user)
+  const token = await createSession(scopedUser, env)
+  return { user: userWithProfileSetup(scopedUser), token, directory_fallback: 'bootstrap_owner' }
 }
 
 async function cachedGoogleLogin(credential, env) {
@@ -122,7 +139,7 @@ async function cachedGoogleLogin(credential, env) {
   if (cached.email && String(cached.email).toLowerCase() !== email) return null
 
   const timestamp = new Date().toISOString()
-  const user = {
+  const user = normalizeUserScope({
     ...cached,
     google_sub: googleSub,
     email,
@@ -131,10 +148,10 @@ async function cachedGoogleLogin(credential, env) {
       || '',
     avatar_url: String(payload.picture || cached.avatar_url || ''),
     last_login_at: timestamp,
-  }
-  await cacheUser(env, user)
-  const token = await createSession(user, env)
-  return { user: userWithProfileSetup(user), token, directory_fallback: 'cloudflare_cache' }
+  }, env)
+  const scopedUser = await cacheUser(env, user)
+  const token = await createSession(scopedUser, env)
+  return { user: userWithProfileSetup(scopedUser), token, directory_fallback: 'cloudflare_cache' }
 }
 
 async function googleLogin(request, env) {
@@ -148,7 +165,8 @@ async function googleLogin(request, env) {
     }
   }
 
-  const response = { user: result.user }
+  const scopedUser = await cacheUser(env, result.user)
+  const response = { user: userWithProfileSetup(scopedUser) }
   if (isNativeAppRequest(request)) response.session_token = result.token
   if (result.directory_fallback) response.directory_fallback = result.directory_fallback
   return json(request, env, response, 200, {
@@ -172,8 +190,8 @@ async function currentUserFromCloudflare(request, env) {
     error.code = user.status === 'pending' ? 'user_pending' : 'user_inactive'
     throw error
   }
-  rememberUser(user)
-  return user
+  const scopedUser = await cacheUser(env, user)
+  return scopedUser
 }
 
 export async function handleCloudflareAuth(request, env, url) {
@@ -192,8 +210,8 @@ export async function handleCloudflareAuth(request, env, url) {
     if (path === '/api/auth/me' && request.method === 'GET') {
       const user = await currentUserFromCloudflare(request, env)
         || await getCurrentUser(request, env)
-      await cacheUser(env, user)
-      return json(request, env, userWithProfileSetup(user))
+      const scopedUser = await cacheUser(env, user)
+      return json(request, env, userWithProfileSetup(scopedUser))
     }
     return null
   } catch (error) {
