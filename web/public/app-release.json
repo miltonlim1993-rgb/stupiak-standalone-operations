@@ -1,14 +1,14 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.17",
-  "minimum_apk_version": "4.5.17",
+  "apk_version": "4.5.18",
+  "minimum_apk_version": "4.5.18",
   "force_update": true,
-  "pwa_version": "registered-native-camera-pwa-v32",
-  "minimum_pwa_version": "registered-native-camera-pwa-v32",
+  "pwa_version": "event-autosave-responsive-viewport-v33",
+  "minimum_pwa_version": "event-autosave-responsive-viewport-v33",
   "pwa_force_update": true,
-  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.17",
+  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.18",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS 4.5.17 camera closure. Task evidence and Urgent Issue capture now explicitly register the installed Capacitor Camera native proxy before calling takePhoto, use the rear camera, return the captured File into the existing watermark and upload workflows, and show structured native errors instead of failing silently. Website and installed PWA clients retain the direct picker fallback.",
-  "release_trigger": "2026-08-02-register-task-issue-native-camera-proxy"
+  "release_notes": "Mandatory OPS 4.5.18 app-behaviour release. Task draft saving is now event-driven instead of using fixed autosave seconds: fields save during idle browser work, selections and blur save immediately, leaving or closing flushes the draft, and a dirty drawer only closes after a successful save. Phone, tablet, desktop, split-screen, browser navigation bars and software keyboards now use the real Visual Viewport. Sheets and notices stay above app navigation and inside the visible screen.",
+  "release_trigger": "2026-08-02-event-autosave-responsive-visual-viewport"
 }
