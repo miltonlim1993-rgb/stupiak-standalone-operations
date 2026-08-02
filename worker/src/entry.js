@@ -13,13 +13,14 @@ import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
 import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import { withSubmissionLock } from './submission-locks.js'
+import { augmentHealthResponse } from './realtime-health.js'
 import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'task-stock-submit-lock-v1'
+const WORKER_REVISION = 'realtime-resilience-v2'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -233,7 +234,10 @@ export default {
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
       const appResponse = await app.fetch(request, runEnv, ctx)
-      const response = await overlayOperationalBootstrapResponse(url, runEnv, appResponse)
+      let response = await overlayOperationalBootstrapResponse(url, runEnv, appResponse)
+      if (url.pathname === '/api/health' && request.method === 'GET') {
+        response = await augmentHealthResponse(response, runEnv)
+      }
       if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method) && response.status >= 200 && response.status < 300) {
         const broadcastResponse = response.clone()
         ctx.waitUntil(publishMutationEvent(request, runEnv, url.pathname, broadcastResponse).catch((error) => {
