@@ -11,7 +11,7 @@ DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-EXPECTED_REVISION="realtime-resilience-v4-d1-task-actions"
+EXPECTED_REVISION="realtime-resilience-v5-cloudflare-auth"
 EXPECTED_PWA_TOKEN="shared-task-claim-autosave-pwa-v27"
 
 json_database_id() {
@@ -142,6 +142,7 @@ for attempt in $(seq 1 30); do
     echo "SHEETS_FAILURE_ISOLATED_FROM_SUBMITS=true"
     echo "PWA_TASK_BOOTSTRAP_READY=true"
     echo "TASK_ACTIONS_D1_ONLY=true"
+    echo "AUTH_LOGIN_SHEETS_GATE_REMOVED=true"
     echo "TASK_ALERT_CLAIM_READY=true"
     echo "TASK_DRAFT_AUTOSAVE_READY=true"
     echo "MULTI_DEVICE_TESTING_READY=true"
