@@ -28,7 +28,7 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v6-stable-session'",
+  "const WORKER_REVISION = 'realtime-resilience-v7-dashboard-recovery'",
   'handleCloudflareAuth',
   'handleD1OperationalTaskAction',
   'handleRealtimeWorkflowApi',
@@ -46,7 +46,8 @@ requireText('worker/src/cloudflare-auth.js', [
   'currentUserFromCloudflare',
   'cachedGoogleLogin',
   'bootstrapOwnerLogin',
-  'directory_fallback',
+  'normalizeUserScope',
+  "const DEFAULT_BOOTSTRAP_OWNER_OUTLET_ID = 'RR-KCH'",
   'APP_DATA_PACKS.put',
 ])
 const cloudflareAuth = read('worker/src/cloudflare-auth.js')
@@ -112,6 +113,21 @@ requireText('web/src/lib/AuthContext.jsx', [
   'withTimeout',
   'if (status === 401 || status === 403)',
   'applyUser(fallbackUser)',
+  'if (nextOutlet)',
+  "localStorage.getItem('chefops.data-pack.outlet')",
+])
+requireText('web/src/pages/Dashboard.jsx', [
+  'DEFAULT_OWNER_OUTLET',
+  'dashboardOutlet(user)',
+  'opsClient.tasks.operationalBootstrap',
+  'const safe = async',
+  'setLoadWarning',
+  'Some dashboard sections are temporarily unavailable',
+])
+requireText('web/src/components/Layout.jsx', [
+  'parseOutletIds',
+  'headerOutlet',
+  "headerOutlet || 'No assigned outlet'",
 ])
 requireText('web/src/lib/task-alerts.js', [
   'taskWorkHasStarted',
@@ -160,4 +176,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('Stable Cloudflare sessions, network-only auth checks, D1-only Task actions, shared task alarm cancellation, draft autosave, iPhone resume sync, WebSocket broadcast and Queue mirroring are wired.')
+console.log('Owner outlet scope recovery, resilient dashboard loading, stable Cloudflare sessions, D1-only Task actions, draft autosave, WebSocket broadcast and Queue mirroring are wired.')
