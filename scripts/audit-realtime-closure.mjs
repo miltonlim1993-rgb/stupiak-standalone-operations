@@ -28,10 +28,10 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v7-dashboard-recovery'",
+  "const WORKER_REVISION = 'realtime-resilience-v8-d1-primary'",
   'handleCloudflareAuth',
   'handleD1OperationalTaskAction',
-  'handleRealtimeWorkflowApi',
+  'handleD1CloseUpUpsert',
   'handleJsonAtomicStockCountBatch',
   'handleRealtimeCloseUpSync',
   'handleRealtimeDataApi',
@@ -54,6 +54,7 @@ const cloudflareAuth = read('worker/src/cloudflare-auth.js')
 if (cloudflareAuth.includes('ensureEntitySheet')) {
   failures.push('worker/src/cloudflare-auth.js must not run a blocking Sheet preflight')
 }
+
 requireText('worker/src/realtime-task-action-d1.js', [
   'handleD1OperationalTaskAction',
   'getPublishedAppPack',
@@ -63,12 +64,34 @@ requireText('worker/src/realtime-task-action-d1.js', [
   "operation: 'update'",
 ])
 const d1TaskAction = read('worker/src/realtime-task-action-d1.js')
-if (d1TaskAction.includes("from './sheets.js'")) {
-  failures.push('worker/src/realtime-task-action-d1.js must not import Google Sheets')
-}
-if (d1TaskAction.includes('listRecords(') || d1TaskAction.includes('findRecord(')) {
+if (d1TaskAction.includes("from './sheets.js'") || d1TaskAction.includes('listRecords(') || d1TaskAction.includes('findRecord(')) {
   failures.push('worker/src/realtime-task-action-d1.js must not read Google Sheets')
 }
+
+requireText('worker/src/realtime-closeup-upsert-d1.js', [
+  'handleD1CloseUpUpsert',
+  "WHERE entity = 'CloseUp'",
+  "operation: existing?.__realtime ? 'update' : 'upsert'",
+  "sync_status: 'pending'",
+  'handleRealtimeDataApi',
+])
+const d1CloseUp = read('worker/src/realtime-closeup-upsert-d1.js')
+if (d1CloseUp.includes("from './sheets.js'") || d1CloseUp.includes('listRecords(') || d1CloseUp.includes('findRecord(')) {
+  failures.push('worker/src/realtime-closeup-upsert-d1.js must not read Google Sheets')
+}
+
+requireText('worker/src/realtime-stock-batch-json.js', [
+  'getPublishedAppPack',
+  'getAppPackModule',
+  'publishedStockList',
+  "WHERE entity = 'StockCount'",
+  "source: 'cloudflare-package+d1'",
+])
+const d1StockBatch = read('worker/src/realtime-stock-batch-json.js')
+if (d1StockBatch.includes("from './sheets.js'") || d1StockBatch.includes('listRecords(')) {
+  failures.push('worker/src/realtime-stock-batch-json.js must not read Google Sheets')
+}
+
 requireText('worker/src/realtime-task-bootstrap.js', [
   'CLOUDFLARE_PACKAGE_D1_FALLBACK',
   'createGeneratedTask',
@@ -83,10 +106,14 @@ requireText('worker/src/realtime-health.js', [
   "'ops_submission_locks'",
 ])
 requireText('worker/src/realtime-store.js', [
-  'INSERT INTO ops_records',
-  'INSERT INTO ops_mutations',
-  'INSERT INTO sheet_sync_outbox',
+  'const MAX_READ_LIMIT = 5000',
+  'seedLegacyRecords',
+  'persistLegacyRows',
+  "legacy_seed') !== '0'",
+  "source = records.length ? 'd1' : 'd1-empty'",
   'await mirrorToSheets(env, body)',
+  "body.entity === 'CloseUp'",
+  'syncCloseUpToSalesTemplate',
   'message.retry()',
 ])
 requireText('worker/wrangler.production.example.jsonc', [
@@ -95,6 +122,15 @@ requireText('worker/wrangler.production.example.jsonc', [
   '"consumers"',
   '"dead_letter_queue"',
   '"name": "OUTLET_REALTIME"',
+])
+
+requireText('web/src/api/opsClient.js', [
+  'async function realtimeRows',
+  "legacy_seed: legacySeed ? '1' : '0'",
+  'visibleRealtimeRows',
+  'if (REALTIME_ENTITIES.has(entity) && outletId)',
+  'return visibleRealtimeRows(rows, { filter, sort, limit })',
+  "if (path === '/api/auth/me') return 0",
 ])
 requireText('web/src/lib/realtime-mutations.js', [
   'savePending',
@@ -122,7 +158,6 @@ requireText('web/src/pages/Dashboard.jsx', [
   'opsClient.tasks.operationalBootstrap',
   'const safe = async',
   'setLoadWarning',
-  'Some dashboard sections are temporarily unavailable',
 ])
 requireText('web/src/components/Layout.jsx', [
   'parseOutletIds',
@@ -176,4 +211,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('Owner outlet scope recovery, resilient dashboard loading, stable Cloudflare sessions, D1-only Task actions, draft autosave, WebSocket broadcast and Queue mirroring are wired.')
+console.log('D1-primary live reads, package plus D1 stock submissions, D1-only Close Up submissions, isolated legacy hydration, stable sessions, draft autosave, WebSocket broadcast and Queue mirroring are wired.')
