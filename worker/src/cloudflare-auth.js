@@ -12,6 +12,7 @@ import {
 import { errorResponse, json, readJson } from './http.js'
 
 const AUTH_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
+const DEFAULT_BOOTSTRAP_OWNER_EMAIL = 'miltonlim1993@gmail.com'
 
 function isNativeAppRequest(request) {
   const origin = String(request.headers.get('Origin') || '').toLowerCase()
@@ -45,7 +46,7 @@ async function bootstrapOwnerLogin(credential, env, originalError) {
 
   const payload = await verifyGoogleCredential(credential, env)
   const email = String(payload.email || '').trim().toLowerCase()
-  const bootstrapEmail = String(env.BOOTSTRAP_OWNER_EMAIL || '').trim().toLowerCase()
+  const bootstrapEmail = String(env.BOOTSTRAP_OWNER_EMAIL || DEFAULT_BOOTSTRAP_OWNER_EMAIL).trim().toLowerCase()
   if (!email || email !== bootstrapEmail || payload.email_verified === false) throw originalError
 
   const timestamp = new Date().toISOString()
