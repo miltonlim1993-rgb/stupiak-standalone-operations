@@ -16,16 +16,12 @@ function file(relativePath) {
 
 function requireText(relativePath, needle, description = needle) {
   const content = file(relativePath)
-  if (!content.includes(needle)) {
-    failures.push(`${relativePath}: missing ${description}`)
-  }
+  if (!content.includes(needle)) failures.push(`${relativePath}: missing ${description}`)
 }
 
 function forbidText(relativePath, needle, description = needle) {
   const content = file(relativePath)
-  if (content.includes(needle)) {
-    failures.push(`${relativePath}: forbidden ${description}`)
-  }
+  if (content.includes(needle)) failures.push(`${relativePath}: forbidden ${description}`)
 }
 
 function requireBefore(relativePath, first, second, description) {
@@ -64,7 +60,7 @@ if (!String(manifest.apk_url || '').includes('/android-release-latest/stupiaks-o
 
 requireText('web/src/components/AppUpdateBanner.jsx', `const CURRENT_RELEASE = '${apkVersion}'`, 'CURRENT_RELEASE matching app-release.json')
 requireText('web/src/components/AppUpdateBanner.jsx', 'Number(asset.size || 0) < 1_000_000', 'minimum APK size verification')
-requireText('web/src/components/AppUpdateBanner.jsx', 'cache: \'no-store\'', 'no-store release manifest fetch')
+requireText('web/src/components/AppUpdateBanner.jsx', "cache: 'no-store'", 'no-store release manifest fetch')
 requireText('web/src/components/AppUpdateBanner.jsx', 'AUTO_OPEN_COOLDOWN_MS', 'mandatory update auto-open cooldown')
 requireText('web/src/main.jsx', `const SHELL_VERSION = '${pwaVersion}'`, 'PWA shell version matching app-release.json')
 
@@ -81,14 +77,18 @@ if (!serviceWorkerMatch) {
   requireText(serviceWorkerFile, 'self.clients.claim()', 'client takeover')
 }
 
+const entrySource = file('worker/src/entry.js')
+const revisionMatch = entrySource.match(/const WORKER_REVISION = ['"]([^'"]+)['"]/) 
+const workerRevision = String(revisionMatch?.[1] || '').trim()
+if (!workerRevision) failures.push('worker/src/entry.js: WORKER_REVISION is required')
 requireText('worker/src/entry.js', "import { handleD1Labels } from './realtime-labels-d1.js'", 'D1 Label router import')
-requireText('worker/src/entry.js', "realtime-resilience-v17-label-d1-runtime", 'v17 Label D1 Worker revision')
 requireBefore(
   'worker/src/entry.js',
   'const d1LabelsResponse = await handleD1Labels',
-  'return app.fetch',
+  'const appResponse = await app.fetch',
   'D1 Label router must run before legacy app.fetch fallback',
 )
+requireText('worker/src/entry.js', "runtimeUrl.searchParams.set('legacy_seed', '0')", 'legacy Sheet hydration disabled for realtime data reads')
 
 requireText('worker/src/label-d1-store.js', "const LABEL_MUTATION_ENTITIES = new Set(['PrinterProfile', 'FoodLabel', 'LabelPrintLog'])", 'approved Label mutation entity allow-list')
 requireText('worker/src/label-d1-store.js', 'INSERT INTO ops_records', 'canonical record mutation')
@@ -97,7 +97,6 @@ requireText('worker/src/label-d1-store.js', 'INSERT INTO sheet_sync_outbox', 'du
 requireText('worker/src/label-d1-store.js', 'await db.batch(statements)', 'atomic D1 batch')
 requireText('worker/src/label-d1-store.js', "listD1Rows(env, 'LabelProduct'", 'D1 LabelProduct catalog read')
 requireText('worker/src/label-d1-store.js', "listD1Rows(env, 'LabelRule'", 'D1 LabelRule catalog read')
-
 requireText('worker/src/label-d1-operations.js', "entity: 'FoodLabel'", 'FoodLabel D1 mutation')
 requireText('worker/src/label-d1-operations.js', "entity: 'LabelPrintLog'", 'LabelPrintLog D1 mutation')
 requireText('worker/src/label-d1-printer.js', "entity: 'PrinterProfile'", 'PrinterProfile D1 mutation')
@@ -111,6 +110,21 @@ forbidText(deployScript, 'legacy_seed=1', 'legacy Sheet hydration in normal depl
 requireText(deployScript, 'D1_MIGRATION_RUN=false', 'explicit no-migration result marker')
 requireText(deployScript, 'D1_COUNTS_UNCHANGED=true', 'protected D1 count verification marker')
 requireText(deployScript, 'FIXED_APK_MATCH=true', 'fixed APK SHA verification marker')
+requireText(deployScript, 'npm run ops:audit:contract', 'architecture audit before deployment')
+requireText(deployScript, 'verify-production-release.mjs', 'production Worker/PWA/APK verifier')
+
+requireText('scripts/ops/d1-readonly-audit.sh', 'assert_select_only', 'SELECT-only query guard')
+requireText('scripts/ops/d1-readonly-audit.sh', 'assert_zero_writes', 'zero-write metadata guard')
+requireText('scripts/ops/build-safe-backfill.mjs', 'ON CONFLICT(entity, entity_id) DO NOTHING', 'insert-only conflict protection')
+requireText('scripts/ops/build-safe-backfill.mjs', 'connects_to_d1: false', 'offline SQL generation contract')
+requireText('scripts/ops/run-approved-backfill.sh', 'APPROVE_D1_BACKFILL', 'explicit backfill approval')
+requireText('scripts/ops/run-approved-backfill.sh', 'ROLLBACK-NOT-AUTOMATIC', 'no automatic broad rollback')
+
+requireText('.github/workflows/android-apk.yml', 'Resolve manifest release contract', 'manifest-derived Android version contract')
+requireText('.github/workflows/android-apk.yml', 'Audit canonical OPS architecture contract', 'Android release architecture gate')
+forbidText('.github/workflows/android-apk.yml', 'ANDROID_VERSION_NAME: 4.5.15', 'stale hard-coded Android release version')
+requireText('.github/workflows/deploy-cloudflare.yml', "if: github.event_name == 'workflow_dispatch'", 'explicit manual production deployment gate')
+forbidText('.github/workflows/deploy-cloudflare.yml', 'd1 migrations apply', 'D1 migration in Cloudflare workflow')
 
 requireText('README.md', 'D1 is the canonical runtime database', 'canonical D1 architecture statement')
 forbidText('README.md', 'Google Sheets — owner-controlled operational source data', 'outdated Sheet source-of-truth statement')
@@ -125,9 +139,11 @@ if (failures.length) {
 }
 
 console.log('OPS_ARCHITECTURE_CONTRACT_OK=true')
+console.log(`WORKER_REVISION=${workerRevision}`)
 console.log(`APK_VERSION=${apkVersion}`)
 console.log(`PWA_VERSION=${pwaVersion}`)
 console.log('D1_LABEL_ROUTING_BEFORE_LEGACY=true')
 console.log('LABEL_MUTATIONS_ATOMIC=true')
 console.log('NORMAL_DEPLOYMENT_RUNS_MIGRATION=false')
+console.log('SAFE_BACKFILL_GUARDS_PRESENT=true')
 console.log('FIXED_APK_VERIFICATION_REQUIRED=true')
