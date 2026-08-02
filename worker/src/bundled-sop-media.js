@@ -1,4 +1,5 @@
 import { getCurrentUser } from './auth.js'
+import { errorResponse } from './http.js'
 
 const BUNDLED_SOP_MEDIA = {
   '1AEjqI2ObYFy1BMZxnNpM1f6NyQ5vwGIO': '/sop-media/opening-preparation.webp',
@@ -18,25 +19,29 @@ export async function handleBundledSopMedia(request, env, url) {
   const assetPath = BUNDLED_SOP_MEDIA[match[1]]
   if (!assetPath) return null
 
-  await getCurrentUser(request, env)
+  try {
+    await getCurrentUser(request, env)
 
-  const assetUrl = new URL(assetPath, url.origin)
-  const assetResponse = await env.ASSETS.fetch(new Request(assetUrl, {
-    method: 'GET',
-    headers: {
-      Accept: request.headers.get('Accept') || 'image/webp,image/*,*/*;q=0.8',
-    },
-  }))
-  if (!assetResponse.ok) return null
+    const assetUrl = new URL(assetPath, url.origin)
+    const assetResponse = await env.ASSETS.fetch(new Request(assetUrl, {
+      method: 'GET',
+      headers: {
+        Accept: request.headers.get('Accept') || 'image/webp,image/*,*/*;q=0.8',
+      },
+    }))
+    if (!assetResponse.ok) return null
 
-  const headers = new Headers(assetResponse.headers)
-  headers.set('Content-Type', 'image/webp')
-  headers.set('Content-Disposition', 'inline')
-  headers.set('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800')
-  headers.set('X-ChefOps-Media-Source', 'cloudflare-bundled-sop')
-  return new Response(assetResponse.body, {
-    status: assetResponse.status,
-    statusText: assetResponse.statusText,
-    headers,
-  })
+    const headers = new Headers(assetResponse.headers)
+    headers.set('Content-Type', 'image/webp')
+    headers.set('Content-Disposition', 'inline')
+    headers.set('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800')
+    headers.set('X-ChefOps-Media-Source', 'cloudflare-bundled-sop')
+    return new Response(assetResponse.body, {
+      status: assetResponse.status,
+      statusText: assetResponse.statusText,
+      headers,
+    })
+  } catch (error) {
+    return errorResponse(request, env, error)
+  }
 }
