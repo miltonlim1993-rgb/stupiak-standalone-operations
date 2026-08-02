@@ -69,21 +69,37 @@ requireText('web/src/lib/realtime-mutations.js', [
   'flushRealtimeMutationQueue',
   'queued_offline',
 ])
+requireText('web/src/lib/realtime-client.js', [
+  "window.addEventListener('pageshow', reconnectAll)",
+  "document.addEventListener('visibilitychange', onVisible)",
+  'Heartbeat timeout',
+])
+requireText('web/src/pages/OperationalTasksLive.jsx', [
+  "window.addEventListener('chefops:realtime', onRealtime)",
+  "window.addEventListener('pageshow', onActive)",
+  'OperationalTasksV2 key={revision}',
+])
+requireText('web/src/App.jsx', [
+  "const Tasks = lazy(() => import('@/pages/OperationalTasksLive'))",
+])
 requireText('web/src/lib/app-pack.js', [
   '/api/app/v4/pack/manifest?',
 ])
 requireText('web/src/main.jsx', [
-  "const SHELL_VERSION = 'realtime-resilience-v2-pwa-v25'",
-  "register('/sw-v25.js'",
+  "const SHELL_VERSION = 'realtime-resilience-v3-ios-live-task-v26'",
+  "register('/sw-v26.js'",
 ])
 requireText('web/public/sw.js', [
-  "const VERSION = 'chefops-realtime-resilience-v2-pwa-v25'",
+  "const VERSION = 'chefops-realtime-resilience-v3-ios-live-task-v26'",
 ])
 requireText('web/public/sw-v24.js', [
-  'realtime-resilience-v2-pwa-v25',
+  'realtime-resilience-v3-ios-live-task-v26',
 ])
 requireText('web/public/sw-v25.js', [
-  'realtime-resilience-v2-pwa-v25',
+  'realtime-resilience-v3-ios-live-task-v26',
+])
+requireText('web/public/sw-v26.js', [
+  'realtime-resilience-v3-ios-live-task-v26',
 ])
 
 if (failures.length) {
@@ -93,4 +109,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('D1-first submissions, PWA Task bootstrap fallback, idempotency, WebSocket broadcast, Queue mirroring and last-known-good packages are wired.')
+console.log('D1-first submissions, iPhone PWA resume sync, Task bootstrap fallback, idempotency, WebSocket broadcast, Queue mirroring and last-known-good packages are wired.')
