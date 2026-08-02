@@ -10,7 +10,7 @@ DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-EXPECTED_REVISION="task-stock-submit-lock-v1"
+EXPECTED_REVISION="realtime-resilience-v2"
 
 json_database_id() {
   local database_name="$1"
@@ -32,6 +32,21 @@ json_database_id() {
     if (!id) process.exit(4);
     process.stdout.write(String(id));
   ' "$database_name"
+}
+
+health_realtime_ready() {
+  node -e '
+    const fs = require("node:fs");
+    const input = fs.readFileSync(0, "utf8").trim();
+    if (!input) process.exit(2);
+    const payload = JSON.parse(input);
+    const realtime = payload && payload.realtime;
+    if (!realtime || realtime.ready !== true) process.exit(3);
+    if (realtime.database_bound !== true) process.exit(4);
+    if (realtime.queue_bound !== true) process.exit(5);
+    if (realtime.websocket_bound !== true) process.exit(6);
+    if (Array.isArray(realtime.missing_tables) && realtime.missing_tables.length) process.exit(7);
+  '
 }
 
 ensure_queue() {
@@ -102,19 +117,21 @@ npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.produc
 echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
-echo "==> Verifying production Worker revision"
+echo "==> Verifying production revision, D1 schema, Queue and WebSocket"
 headers=''
 body=''
 for attempt in $(seq 1 30); do
   headers="$(mktemp)"
   body="$(curl -fsS --max-time 20 -D "$headers" "$HEALTH_URL" || true)"
-  if grep -Fqi "X-ChefOps-Worker-Revision: $EXPECTED_REVISION" "$headers"; then
+  if grep -Fqi "X-ChefOps-Worker-Revision: $EXPECTED_REVISION" "$headers" \
+    && printf '%s' "$body" | health_realtime_ready; then
     rm -f "$headers"
     printf '%s\n' "$body"
     echo "REALTIME_DEPLOYMENT_VERIFIED=true"
     echo "D1_MIGRATIONS_APPLIED=true"
     echo "OUTLET_WEBSOCKET_CONFIGURED=true"
     echo "SHEET_SYNC_QUEUE_CONFIGURED=true"
+    echo "SHEETS_FAILURE_ISOLATED_FROM_SUBMITS=true"
     echo "MULTI_DEVICE_TESTING_READY=true"
     exit 0
   fi
@@ -122,6 +139,7 @@ for attempt in $(seq 1 30); do
   sleep 5
 done
 
-echo "Deployment command completed, but the realtime revision was not observed in production." >&2
+echo "Deployment command completed, but realtime readiness was not observed in production." >&2
+echo "Expected Worker revision: $EXPECTED_REVISION" >&2
 echo "Last health response: $body" >&2
 exit 1
