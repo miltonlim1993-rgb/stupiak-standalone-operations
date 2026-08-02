@@ -1,4 +1,4 @@
-// Stupiak's Ops iPhone live Task shell v26.
-// The versioned URL replaces cached PWA shells and installs the realtime Task
-// refresh and resume-reconnect client on Add-to-Home-Screen devices.
-importScripts('/sw.js?realtime-resilience-v3-ios-live-task-v26')
+// Compatibility updater for existing v26 PWA installations.
+// Installed iPhone and desktop PWAs are moved to the shared task claim and
+// draft autosave shell before the app registers sw-v27.js.
+importScripts('/sw.js?shared-task-claim-autosave-pwa-v27')
