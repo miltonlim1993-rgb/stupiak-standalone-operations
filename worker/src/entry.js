@@ -19,13 +19,14 @@ import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import { withSubmissionLock } from './submission-locks.js'
 import { augmentHealthResponse } from './realtime-health.js'
 import { handleBundledSopMedia } from './bundled-sop-media.js'
+import { handleD1Labels } from './realtime-labels-d1.js'
 import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v16-explicit-directory-bootstrap'
+const WORKER_REVISION = 'realtime-resilience-v17-label-d1-runtime'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -179,6 +180,9 @@ export default {
 
       const bundledSopMediaResponse = await handleBundledSopMedia(request, runEnv, url)
       if (bundledSopMediaResponse) return withApiHeaders(request, env, bundledSopMediaResponse)
+
+      const d1LabelsResponse = await handleD1Labels(request, runEnv, url)
+      if (d1LabelsResponse) return withApiHeaders(request, env, d1LabelsResponse)
 
       const atomicStockResponse = url.pathname === '/api/stock-counts/batch'
         ? await withSubmissionLock(
