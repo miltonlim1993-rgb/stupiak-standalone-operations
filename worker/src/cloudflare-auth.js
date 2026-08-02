@@ -23,8 +23,8 @@ function isNativeAppRequest(request) {
 }
 
 function temporaryDirectoryError(error) {
-  return error?.code === 'sheets_rate_limited'
-    || error?.code === 'google_api_error'
+  return error?.code === 'ops_database_unavailable'
+    || error?.code === 'realtime_database_unavailable'
     || Number(error?.status || 0) >= 500
 }
 
@@ -46,13 +46,14 @@ function normalizeUserScope(user, env) {
 
   const fallbackOutlet = String(env.BOOTSTRAP_OWNER_OUTLET_ID || DEFAULT_BOOTSTRAP_OWNER_OUTLET_ID).trim()
   return fallbackOutlet
-    ? { ...user, outlet_id: fallbackOutlet, outlet_ids: fallbackOutlet }
+    ? { ...user, outlet_id: fallbackOutlet, outlet_ids: JSON.stringify([fallbackOutlet]) }
     : user
 }
 
 function authCacheEntries(user) {
   const payload = JSON.stringify({ user, cachedAt: Date.now() })
-  const entries = [[userKvKeyBySub(user.google_sub), payload]]
+  const entries = []
+  if (user.google_sub) entries.push([userKvKeyBySub(user.google_sub), payload])
   if (user.email) entries.push([userKvKeyByEmail(user.email), payload])
   return entries
 }
@@ -101,7 +102,7 @@ async function bootstrapOwnerLogin(credential, env, originalError) {
     ...(cached || {}),
     id: cached?.id || `bootstrap-owner-${googleSub}`,
     outlet_id: cached?.outlet_id || fallbackOutlet,
-    outlet_ids: cached?.outlet_ids || fallbackOutlet,
+    outlet_ids: cached?.outlet_ids || JSON.stringify([fallbackOutlet]),
     created_date: cached?.created_date || timestamp,
     created_by: cached?.created_by || email,
     updated_date: timestamp,
@@ -125,7 +126,7 @@ async function bootstrapOwnerLogin(credential, env, originalError) {
   }, env)
   const scopedUser = await cacheUser(env, user)
   const token = await createSession(scopedUser, env)
-  return { user: userWithProfileSetup(scopedUser), token, directory_fallback: 'bootstrap_owner' }
+  return { user: userWithProfileSetup(scopedUser), token, directory_fallback: 'bootstrap_owner_cache' }
 }
 
 async function cachedGoogleLogin(credential, env) {
@@ -151,18 +152,18 @@ async function cachedGoogleLogin(credential, env) {
   }, env)
   const scopedUser = await cacheUser(env, user)
   const token = await createSession(scopedUser, env)
-  return { user: userWithProfileSetup(scopedUser), token, directory_fallback: 'cloudflare_cache' }
+  return { user: userWithProfileSetup(scopedUser), token, directory_fallback: 'last_known_good_cache' }
 }
 
 async function googleLogin(request, env) {
   const { credential } = await readJson(request)
-  let result = await cachedGoogleLogin(credential, env)
-  if (!result) {
-    try {
-      result = await loginWithGoogle(credential, env)
-    } catch (error) {
-      result = await bootstrapOwnerLogin(credential, env, error)
-    }
+  let result
+  try {
+    result = await loginWithGoogle(credential, env)
+  } catch (error) {
+    if (!temporaryDirectoryError(error)) throw error
+    result = await cachedGoogleLogin(credential, env)
+      || await bootstrapOwnerLogin(credential, env, error)
   }
 
   const scopedUser = await cacheUser(env, result.user)
@@ -174,7 +175,7 @@ async function googleLogin(request, env) {
   })
 }
 
-async function currentUserFromCloudflare(request, env) {
+async function cachedCurrentUser(request, env) {
   const payload = await sessionPayload(request, env)
   if (!payload?.sub) return null
   const user = await readCachedUser(env, {
@@ -190,8 +191,7 @@ async function currentUserFromCloudflare(request, env) {
     error.code = user.status === 'pending' ? 'user_pending' : 'user_inactive'
     throw error
   }
-  const scopedUser = await cacheUser(env, user)
-  return scopedUser
+  return cacheUser(env, user)
 }
 
 export async function handleCloudflareAuth(request, env, url) {
@@ -208,16 +208,22 @@ export async function handleCloudflareAuth(request, env, url) {
       })
     }
     if (path === '/api/auth/me' && request.method === 'GET') {
-      const user = await currentUserFromCloudflare(request, env)
-        || await getCurrentUser(request, env)
+      let user
+      try {
+        user = await getCurrentUser(request, env)
+      } catch (error) {
+        if (!temporaryDirectoryError(error)) throw error
+        user = await cachedCurrentUser(request, env)
+        if (!user) throw error
+      }
       const scopedUser = await cacheUser(env, user)
       return json(request, env, userWithProfileSetup(scopedUser))
     }
     return null
   } catch (error) {
     if (temporaryDirectoryError(error) && !error.publicMessage) {
-      error.publicMessage = 'Account directory is temporarily unavailable. Your signed-in session was kept; please retry shortly.'
-      error.code = error.code || 'auth_directory_unavailable'
+      error.publicMessage = 'OPS database is temporarily unavailable. Your last valid session was preserved.'
+      error.code = error.code || 'ops_database_unavailable'
     }
     return errorResponse(request, env, error)
   }
