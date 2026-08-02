@@ -1,4 +1,4 @@
 // Compatibility updater for existing v25 PWA installations.
-// Updating this file wakes already-installed iPhone PWAs and moves them to the
-// realtime Task refresh and resume-reconnect shell.
-importScripts('/sw.js?realtime-resilience-v3-ios-live-task-v26')
+// Existing iPhone PWAs are moved to the shared task claim and draft autosave
+// shell before the app registers sw-v27.js.
+importScripts('/sw.js?shared-task-claim-autosave-pwa-v27')
