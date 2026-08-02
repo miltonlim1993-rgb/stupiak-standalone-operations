@@ -82,6 +82,9 @@ git pull --ff-only origin main
 echo "==> Installing exact dependencies"
 npm ci
 
+echo "==> Auditing the no-Sheets submission closure"
+node scripts/audit-realtime-closure.mjs
+
 echo "==> Resolving D1 database: $DB_NAME"
 databases_json="$(npx wrangler d1 list --json)"
 OPS_DB_ID="$(printf '%s' "$databases_json" | json_database_id "$DB_NAME" || true)"
