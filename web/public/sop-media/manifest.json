@@ -1,0 +1,14 @@
+{
+  "release": "bundled-sop-media-v12",
+  "files": [
+    "closing-front.webp",
+    "closing-kitchen.webp",
+    "freezer-deep-clean.webp",
+    "garbage-bin-wash.webp",
+    "non-busy-cleaning.webp",
+    "opening-area.webp",
+    "opening-preparation.webp",
+    "toilet-closing.webp"
+  ],
+  "purpose": "Cloudflare static fallback for OPS guided SOP posters"
+}
