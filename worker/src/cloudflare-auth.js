@@ -10,6 +10,7 @@ import {
   validateActualName,
   verifyGoogleCredential,
 } from './auth.js'
+import { saveDirectoryRecord } from './d1-directory-store.js'
 import { errorResponse, json, readJson } from './http.js'
 
 const AUTH_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -194,6 +195,37 @@ async function cachedCurrentUser(request, env) {
   return cacheUser(env, user)
 }
 
+async function updateCurrentProfile(request, env) {
+  const current = await getCurrentUser(request, env)
+  const body = await readJson(request)
+  const timestamp = new Date().toISOString()
+  const requestedName = body.full_name === undefined
+    ? String(current.full_name || '')
+    : validateActualName(body.full_name, current.email)
+  if (!requestedName) {
+    const error = new Error('Enter your actual name')
+    error.status = 400
+    error.code = 'invalid_actual_name'
+    throw error
+  }
+
+  const updated = await saveDirectoryRecord(env, 'User', current.id, {
+    ...current,
+    __realtime: undefined,
+    full_name: requestedName,
+    phone: body.phone === undefined ? current.phone : String(body.phone || ''),
+    department: body.department === undefined ? current.department : String(body.department || ''),
+    name_confirmed: true,
+    name_confirmed_at: current.name_confirmed_at || timestamp,
+    name_updated_at: timestamp,
+  }, {
+    actorEmail: current.email,
+    operation: 'update',
+  })
+  const scoped = await cacheUser(env, updated)
+  return json(request, env, userWithProfileSetup(scoped))
+}
+
 export async function handleCloudflareAuth(request, env, url) {
   const path = url.pathname
   if (!path.startsWith('/api/auth/')) return null
@@ -206,6 +238,9 @@ export async function handleCloudflareAuth(request, env, url) {
       return json(request, env, { ok: true }, 200, {
         'Set-Cookie': expiredSessionCookie(request),
       })
+    }
+    if (path === '/api/auth/me' && request.method === 'PATCH') {
+      return await updateCurrentProfile(request, env)
     }
     if (path === '/api/auth/me' && request.method === 'GET') {
       let user
