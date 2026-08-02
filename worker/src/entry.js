@@ -1,8 +1,7 @@
 import app from './index.js'
-import { loginWithGoogle, sessionCookie } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
-import { ensureEntitySheet } from './sheets.js'
 import { markAppPackDirty } from './app-pack.js'
+import { handleCloudflareAuth } from './cloudflare-auth.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
@@ -21,7 +20,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v4-d1-task-actions'
+const WORKER_REVISION = 'realtime-resilience-v5-cloudflare-auth'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -47,12 +46,6 @@ const ENTITY_MODULE = {
 
 function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/')
-}
-
-function isNativeAppRequest(request) {
-  const origin = String(request.headers.get('Origin') || '').toLowerCase()
-  const marker = String(request.headers.get('X-ChefOps-Native') || '').toLowerCase()
-  return marker === 'android' || origin === 'https://localhost' || origin === 'capacitor://localhost'
 }
 
 function runtimeEnv(env, ctx) {
@@ -119,28 +112,6 @@ function withApiHeaders(request, env, response) {
   })
 }
 
-async function handleNativeGoogleLogin(request, env, pathname) {
-  if (
-    pathname !== '/api/auth/google'
-    || request.method !== 'POST'
-    || !isNativeAppRequest(request)
-  ) return null
-
-  try {
-    await ensureEntitySheet(env, 'User')
-    const { credential } = await readJson(request)
-    const { user, token } = await loginWithGoogle(credential, env)
-    return json(request, env, {
-      user,
-      session_token: token,
-    }, 200, {
-      'Set-Cookie': sessionCookie(token, request),
-    })
-  } catch (error) {
-    return errorResponse(request, env, error)
-  }
-}
-
 async function handleDataPackDirtyWebhook(request, env, pathname) {
   if (pathname !== '/api/internal/data-pack/dirty') return null
   if (request.method !== 'POST') {
@@ -192,6 +163,9 @@ export default {
         })
       }
 
+      const authResponse = await handleCloudflareAuth(request, runEnv, url)
+      if (authResponse) return withApiHeaders(request, env, authResponse)
+
       const atomicStockResponse = url.pathname === '/api/stock-counts/batch'
         ? await withSubmissionLock(
             request,
@@ -233,9 +207,6 @@ export default {
 
       const webhookResponse = await handleDataPackDirtyWebhook(request, runEnv, url.pathname)
       if (webhookResponse) return withApiHeaders(request, env, webhookResponse)
-
-      const nativeLoginResponse = await handleNativeGoogleLogin(request, runEnv, url.pathname)
-      if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
       const bootstrapRequest = url.pathname === '/api/tasks/operational/bootstrap' && request.method === 'POST'
         ? request.clone()
