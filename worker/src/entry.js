@@ -7,6 +7,7 @@ import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
+import { handleRealtimeStockRead } from './realtime-stock-read.js'
 import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
 import { handleD1OperationalTaskAction } from './realtime-task-action-d1.js'
 import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
@@ -23,7 +24,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v12-bundled-sop-roster-repair'
+const WORKER_REVISION = 'realtime-resilience-v13-stock-history-media-ui'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -217,6 +218,9 @@ export default {
 
       const attendanceReadResponse = await handleRealtimeAttendanceRead(request, runEnv, url)
       if (attendanceReadResponse) return withApiHeaders(request, env, attendanceReadResponse)
+
+      const stockReadResponse = await handleRealtimeStockRead(request, runEnv, url)
+      if (stockReadResponse) return withApiHeaders(request, env, stockReadResponse)
 
       const realtimeDataResponse = await handleRealtimeDataApi(request, runEnv, url)
       if (realtimeDataResponse) return withApiHeaders(request, env, realtimeDataResponse)
