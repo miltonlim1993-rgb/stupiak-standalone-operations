@@ -20,7 +20,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v2'
+const WORKER_REVISION = 'realtime-resilience-v3-pwa-task-bootstrap'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -233,8 +233,13 @@ export default {
       const nativeLoginResponse = await handleNativeGoogleLogin(request, runEnv, url.pathname)
       if (nativeLoginResponse) return withApiHeaders(request, env, nativeLoginResponse)
 
+      const bootstrapRequest = url.pathname === '/api/tasks/operational/bootstrap' && request.method === 'POST'
+        ? request.clone()
+        : null
       const appResponse = await app.fetch(request, runEnv, ctx)
-      let response = await overlayOperationalBootstrapResponse(url, runEnv, appResponse)
+      let response = bootstrapRequest
+        ? await overlayOperationalBootstrapResponse(bootstrapRequest, url, runEnv, appResponse)
+        : appResponse
       if (url.pathname === '/api/health' && request.method === 'GET') {
         response = await augmentHealthResponse(response, runEnv)
       }
