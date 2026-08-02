@@ -68,7 +68,6 @@ export default function OperationalTasksLive() {
   const changeRevision = useRef(0)
   const savedRevision = useRef(0)
   const saveInFlight = useRef(false)
-  const rerunAfterSave = useRef(false)
   const pendingCloseButton = useRef(null)
   const bypassClose = useRef(false)
 
@@ -128,10 +127,25 @@ export default function OperationalTasksLive() {
         setAutosaveState('error')
       }
 
-      if (changeRevision.current > savedRevision.current) {
-        rerunAfterSave.current = false
+      if (changeRevision.current > savedRevision.current) scheduleSave({ immediate: true })
+    }
+
+    const waitForAvailableSaveButton = (drawer) => {
+      settleObserver.current?.disconnect()
+      settleObserver.current = new MutationObserver(() => {
+        const currentButton = buttonWithText(activeTaskDrawer(), '保存进度')
+        if (!currentButton || buttonBusy(currentButton)) return
+        settleObserver.current?.disconnect()
+        settleObserver.current = null
         scheduleSave({ immediate: true })
-      }
+      })
+      settleObserver.current.observe(drawer, {
+        subtree: true,
+        childList: true,
+        characterData: true,
+        attributes: true,
+        attributeFilter: ['disabled', 'aria-busy', 'class'],
+      })
     }
 
     const runSave = () => {
@@ -145,8 +159,9 @@ export default function OperationalTasksLive() {
         if (pendingCloseButton.current) closeAfterSave()
         return
       }
-      if (saveInFlight.current || buttonBusy(saveButton)) {
-        rerunAfterSave.current = true
+      if (saveInFlight.current) return
+      if (buttonBusy(saveButton)) {
+        waitForAvailableSaveButton(drawer)
         return
       }
 
@@ -256,13 +271,7 @@ export default function OperationalTasksLive() {
       if (!eventTouchesTasks(event.detail || {})) return
       if (activeTaskDrawer()) {
         pendingRefresh.current = true
-        if (saveInFlight.current) {
-          const currentButton = buttonWithText(activeTaskDrawer(), '保存进度')
-          if (!buttonBusy(currentButton)) {
-            const savingRevision = Math.min(changeRevision.current, Math.max(savedRevision.current + 1, changeRevision.current))
-            finishSave({ success: !visibleTaskError(), savingRevision })
-          }
-        } else if (changeRevision.current > savedRevision.current) {
+        if (!saveInFlight.current && changeRevision.current > savedRevision.current) {
           scheduleSave({ immediate: true })
         }
         return
