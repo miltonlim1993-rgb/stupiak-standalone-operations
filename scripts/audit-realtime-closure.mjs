@@ -28,7 +28,8 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v4-d1-task-actions'",
+  "const WORKER_REVISION = 'realtime-resilience-v5-cloudflare-auth'",
+  'handleCloudflareAuth',
   'handleD1OperationalTaskAction',
   'handleRealtimeWorkflowApi',
   'handleJsonAtomicStockCountBatch',
@@ -38,6 +39,18 @@ requireText('worker/src/entry.js', [
   'augmentHealthResponse',
   'overlayOperationalBootstrapResponse(bootstrapRequest',
 ])
+requireText('worker/src/cloudflare-auth.js', [
+  'handleCloudflareAuth',
+  "path === '/api/auth/google'",
+  "path === '/api/auth/me'",
+  'bootstrapOwnerLogin',
+  'directory_fallback',
+  'APP_DATA_PACKS.put',
+])
+const cloudflareAuth = read('worker/src/cloudflare-auth.js')
+if (cloudflareAuth.includes('ensureEntitySheet')) {
+  failures.push('worker/src/cloudflare-auth.js must not run a blocking Sheet preflight')
+}
 requireText('worker/src/realtime-task-action-d1.js', [
   'handleD1OperationalTaskAction',
   'getPublishedAppPack',
@@ -143,4 +156,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('D1-only Task actions, shared task alarm cancellation, draft autosave, iPhone resume sync, Task bootstrap fallback, WebSocket broadcast and Queue mirroring are wired.')
+console.log('Cloudflare-first auth, D1-only Task actions, shared task alarm cancellation, draft autosave, iPhone resume sync, Task bootstrap fallback, WebSocket broadcast and Queue mirroring are wired.')
