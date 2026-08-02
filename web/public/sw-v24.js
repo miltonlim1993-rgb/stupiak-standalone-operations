@@ -1,4 +1,4 @@
-// Stupiak's Ops exact on-shift shell update v24.
-// A versioned worker URL forces website and Add-to-Home PWA clients to install
-// the alert-window fix, then the app activates it and reloads automatically.
-importScripts('/sw.js?exact-on-shift-v24')
+// Compatibility updater for existing v24 PWA installations.
+// Keeping this file updated lets already-installed iPhone and desktop PWAs
+// discover the realtime task shell before the new app registers sw-v25.js.
+importScripts('/sw.js?realtime-resilience-v2-pwa-v25')
