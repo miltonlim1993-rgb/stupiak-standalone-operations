@@ -1,0 +1,76 @@
+name: OPS architecture contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'docs/OPS-D1-PRODUCTION-RUNBOOK.md'
+      - 'docs/releases/**'
+      - 'deploy/**'
+      - 'scripts/ops/**'
+      - 'scripts/deploy-realtime-ops-now.sh'
+      - 'worker/src/entry.js'
+      - 'worker/src/label-d1-*.js'
+      - 'worker/src/realtime-labels-d1.js'
+      - 'web/public/app-release.json'
+      - 'web/public/sw-v*.js'
+      - 'web/src/components/AppUpdateBanner.jsx'
+      - 'web/src/main.jsx'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ops-architecture-contract.yml'
+      - '.github/workflows/android-apk.yml'
+      - '.github/workflows/deploy-cloudflare.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'docs/OPS-D1-PRODUCTION-RUNBOOK.md'
+      - 'docs/releases/**'
+      - 'deploy/**'
+      - 'scripts/ops/**'
+      - 'scripts/deploy-realtime-ops-now.sh'
+      - 'worker/src/entry.js'
+      - 'worker/src/label-d1-*.js'
+      - 'worker/src/realtime-labels-d1.js'
+      - 'web/public/app-release.json'
+      - 'web/public/sw-v*.js'
+      - 'web/src/components/AppUpdateBanner.jsx'
+      - 'web/src/main.jsx'
+      - 'package.json'
+      - 'package-lock.json'
+      - '.github/workflows/ops-architecture-contract.yml'
+      - '.github/workflows/android-apk.yml'
+      - '.github/workflows/deploy-cloudflare.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ops-architecture-contract-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Validate helper syntax
+        run: |
+          bash -n scripts/ops/d1-readonly-audit.sh
+          bash -n scripts/deploy-realtime-ops-now.sh
+          node --check scripts/ops/audit-architecture-contract.mjs
+          node --check scripts/ops/verify-production-release.mjs
+      - name: Audit architecture contract
+        run: npm run ops:audit:contract
+      - name: Build Web and Worker dry-run
+        run: npm run build
