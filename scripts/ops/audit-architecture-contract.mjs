@@ -28,9 +28,7 @@ function requireBefore(relativePath, first, second, description) {
   const content = file(relativePath)
   const firstIndex = content.indexOf(first)
   const secondIndex = content.indexOf(second)
-  if (firstIndex < 0 || secondIndex < 0 || firstIndex >= secondIndex) {
-    failures.push(`${relativePath}: ${description}`)
-  }
+  if (firstIndex < 0 || secondIndex < 0 || firstIndex >= secondIndex) failures.push(`${relativePath}: ${description}`)
 }
 
 const manifestPath = 'web/public/app-release.json'
@@ -54,9 +52,7 @@ if (!pwaVersion) failures.push(`${manifestPath}: pwa_version is required`)
 if (pwaVersion !== minimumPwaVersion) failures.push(`${manifestPath}: pwa_version and minimum_pwa_version must match`)
 if (manifest.pwa_force_update !== true) failures.push(`${manifestPath}: pwa_force_update must be true`)
 if (apkAssetName !== 'stupiaks-ops-task-sop-alarm.apk') failures.push(`${manifestPath}: canonical APK asset name changed unexpectedly`)
-if (!String(manifest.apk_url || '').includes('/android-release-latest/stupiaks-ops-task-sop-alarm.apk')) {
-  failures.push(`${manifestPath}: apk_url is not the fixed canonical release URL`)
-}
+if (!String(manifest.apk_url || '').includes('/android-release-latest/stupiaks-ops-task-sop-alarm.apk')) failures.push(`${manifestPath}: apk_url is not the fixed canonical release URL`)
 
 requireText('web/src/components/AppUpdateBanner.jsx', `const CURRENT_RELEASE = '${apkVersion}'`, 'CURRENT_RELEASE matching app-release.json')
 requireText('web/src/components/AppUpdateBanner.jsx', 'Number(asset.size || 0) < 1_000_000', 'minimum APK size verification')
@@ -80,8 +76,10 @@ if (!serviceWorkerMatch) {
 requireText('scripts/setup-android.mjs', '@capacitor/camera@^8', 'Capacitor Camera plugin installation')
 requireText('web/src/App.jsx', "import NativeMediaCaptureBridge from '@/components/NativeMediaCaptureBridge'", 'native media capture bridge import')
 requireText('web/src/App.jsx', '<NativeMediaCaptureBridge />', 'native media capture bridge mount')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'window.Capacitor?.Plugins?.Camera', 'native Camera plugin lookup')
+requireText('web/src/components/NativeMediaCaptureBridge.jsx', "capacitor.isPluginAvailable?.('Camera')", 'native Camera availability check')
+requireText('web/src/components/NativeMediaCaptureBridge.jsx', "capacitor.registerPlugin?.('Camera')", 'explicit native Camera proxy registration')
 requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'camera.takePhoto', 'native camera invocation')
+requireText('web/src/components/NativeMediaCaptureBridge.jsx', "cameraDirection: 'REAR'", 'official rear-camera enum value')
 requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'new DataTransfer()', 'captured file delivery to existing workflows')
 requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'input.showPicker()', 'direct Web/PWA picker fallback')
 requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'event.stopImmediatePropagation()', 'hidden input click suppression')
@@ -91,12 +89,7 @@ const revisionMatch = entrySource.match(/const WORKER_REVISION = ['"]([^'"]+)['"
 const workerRevision = String(revisionMatch?.[1] || '').trim()
 if (!workerRevision) failures.push('worker/src/entry.js: WORKER_REVISION is required')
 requireText('worker/src/entry.js', "import { handleD1Labels } from './realtime-labels-d1.js'", 'D1 Label router import')
-requireBefore(
-  'worker/src/entry.js',
-  'const d1LabelsResponse = await handleD1Labels',
-  'const appResponse = await app.fetch',
-  'D1 Label router must run before legacy app.fetch fallback',
-)
+requireBefore('worker/src/entry.js', 'const d1LabelsResponse = await handleD1Labels', 'const appResponse = await app.fetch', 'D1 Label router must run before legacy app.fetch fallback')
 requireText('worker/src/entry.js', "runtimeUrl.searchParams.set('legacy_seed', '0')", 'legacy Sheet hydration disabled for realtime data reads')
 
 requireText('worker/src/label-d1-store.js', "const LABEL_MUTATION_ENTITIES = new Set(['PrinterProfile', 'FoodLabel', 'LabelPrintLog'])", 'approved Label mutation entity allow-list')
@@ -154,6 +147,7 @@ console.log(`PWA_VERSION=${pwaVersion}`)
 console.log('D1_LABEL_ROUTING_BEFORE_LEGACY=true')
 console.log('LABEL_MUTATIONS_ATOMIC=true')
 console.log('NATIVE_CAMERA_CAPTURE_BRIDGE=true')
+console.log('REGISTERED_NATIVE_CAMERA_PROXY=true')
 console.log('WEB_CAMERA_PICKER_FALLBACK=true')
 console.log('NORMAL_DEPLOYMENT_RUNS_MIGRATION=false')
 console.log('SAFE_BACKFILL_GUARDS_PRESENT=true')
