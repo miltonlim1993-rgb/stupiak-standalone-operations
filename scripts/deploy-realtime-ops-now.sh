@@ -6,6 +6,7 @@ cd "$ROOT_DIR"
 
 PRODUCTION_ORIGIN="https://stupiaks-ops.sporkburger19.workers.dev"
 HEALTH_URL="$PRODUCTION_ORIGIN/api/health"
+AUTH_ME_URL="$PRODUCTION_ORIGIN/api/auth/me"
 PWA_WORKER_URL="$PRODUCTION_ORIGIN/sw-v27.js"
 DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
@@ -49,6 +50,21 @@ health_realtime_ready() {
     if (realtime.websocket_bound !== true) process.exit(6);
     if (Array.isArray(realtime.missing_tables) && realtime.missing_tables.length) process.exit(7);
   '
+}
+
+auth_endpoint_ready() {
+  local status="$1"
+  local headers_file="$2"
+  local body_file="$3"
+  [[ "$status" == "401" ]] || return 1
+  grep -Fqi 'Cache-Control: no-store' "$headers_file" || return 1
+  node -e '
+    const fs = require("node:fs");
+    const input = fs.readFileSync(process.argv[1], "utf8").trim();
+    if (!input) process.exit(2);
+    const payload = JSON.parse(input);
+    if (payload.code !== "auth_required") process.exit(3);
+  ' "$body_file"
 }
 
 ensure_queue() {
@@ -122,18 +138,25 @@ npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.produc
 echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
-echo "==> Verifying production revision, D1 schema, Queue, WebSocket and stable session PWA"
+echo "==> Verifying production revision, auth response, D1 schema, Queue, WebSocket and stable session PWA"
 headers=''
 body=''
 pwa_body=''
+auth_status=''
+auth_body=''
 for attempt in $(seq 1 30); do
   headers="$(mktemp)"
+  auth_headers="$(mktemp)"
+  auth_body_file="$(mktemp)"
   body="$(curl -fsS --max-time 20 -D "$headers" "$HEALTH_URL" || true)"
   pwa_body="$(curl -fsS --max-time 20 "$PWA_WORKER_URL?_=$RANDOM" || true)"
+  auth_status="$(curl -sS --max-time 15 -D "$auth_headers" -o "$auth_body_file" -w '%{http_code}' "$AUTH_ME_URL" || true)"
+  auth_body="$(cat "$auth_body_file" 2>/dev/null || true)"
   if grep -Fqi "X-ChefOps-Worker-Revision: $EXPECTED_REVISION" "$headers" \
     && printf '%s' "$body" | health_realtime_ready \
-    && printf '%s' "$pwa_body" | grep -Fq "$EXPECTED_PWA_TOKEN"; then
-    rm -f "$headers"
+    && printf '%s' "$pwa_body" | grep -Fq "$EXPECTED_PWA_TOKEN" \
+    && auth_endpoint_ready "$auth_status" "$auth_headers" "$auth_body_file"; then
+    rm -f "$headers" "$auth_headers" "$auth_body_file"
     printf '%s\n' "$body"
     echo "REALTIME_DEPLOYMENT_VERIFIED=true"
     echo "D1_MIGRATIONS_APPLIED=true"
@@ -145,18 +168,21 @@ for attempt in $(seq 1 30); do
     echo "AUTH_LOGIN_SHEETS_GATE_REMOVED=true"
     echo "AUTH_SESSION_STABLE=true"
     echo "AUTH_RESPONSES_NOT_CACHED=true"
+    echo "AUTH_ENDPOINT_RESPONDS=true"
     echo "TASK_ALERT_CLAIM_READY=true"
     echo "TASK_DRAFT_AUTOSAVE_READY=true"
     echo "MULTI_DEVICE_TESTING_READY=true"
     exit 0
   fi
-  rm -f "$headers"
+  rm -f "$headers" "$auth_headers" "$auth_body_file"
   sleep 5
 done
 
-echo "Deployment command completed, but realtime/PWA readiness was not observed in production." >&2
+echo "Deployment command completed, but realtime/auth/PWA readiness was not observed in production." >&2
 echo "Expected Worker revision: $EXPECTED_REVISION" >&2
 echo "Expected PWA token: $EXPECTED_PWA_TOKEN" >&2
 echo "Last health response: $body" >&2
+echo "Last auth status: $auth_status" >&2
+echo "Last auth response: $auth_body" >&2
 echo "Last PWA response: $pwa_body" >&2
 exit 1
