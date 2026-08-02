@@ -3,6 +3,7 @@ import { errorResponse, json, readJson } from './http.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleCloudflareAuth } from './cloudflare-auth.js'
 import { handleD1DirectoryApi } from './d1-directory-api.js'
+import { processDirectoryMirrorQueue } from './d1-directory-mirror.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
@@ -259,7 +260,10 @@ export default {
   },
 
   async queue(batch, env, ctx) {
-    return processSheetMirrorQueue(batch, runtimeEnv(env, ctx), ctx)
+    const runEnv = runtimeEnv(env, ctx)
+    const remaining = await processDirectoryMirrorQueue(batch, runEnv)
+    if (!remaining.length) return
+    return processSheetMirrorQueue({ messages: remaining }, runEnv, ctx)
   },
 }
 
