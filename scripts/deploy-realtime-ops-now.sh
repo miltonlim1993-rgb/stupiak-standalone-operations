@@ -12,7 +12,7 @@ DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-EXPECTED_REVISION="realtime-resilience-v6-stable-session"
+EXPECTED_REVISION="realtime-resilience-v7-dashboard-recovery"
 EXPECTED_PWA_TOKEN="auth-session-stability-pwa-v28"
 
 json_database_id() {
@@ -27,9 +27,7 @@ json_database_id() {
       ? parsed
       : (Array.isArray(parsed.result) ? parsed.result
         : (Array.isArray(parsed.databases) ? parsed.databases : []));
-    const found = rows.find((row) =>
-      String(row.name || row.database_name || "") === name
-    );
+    const found = rows.find((row) => String(row.name || row.database_name || "") === name);
     if (!found) process.exit(3);
     const id = found.uuid || found.database_id || found.id;
     if (!id) process.exit(4);
@@ -138,7 +136,7 @@ npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.produc
 echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
-echo "==> Verifying production revision, auth response, D1 schema, Queue, WebSocket and stable session PWA"
+echo "==> Verifying production revision, auth response, D1 schema, Queue, WebSocket and dashboard recovery"
 headers=''
 body=''
 pwa_body=''
@@ -169,6 +167,8 @@ for attempt in $(seq 1 30); do
     echo "AUTH_SESSION_STABLE=true"
     echo "AUTH_RESPONSES_NOT_CACHED=true"
     echo "AUTH_ENDPOINT_RESPONDS=true"
+    echo "OWNER_OUTLET_SCOPE_RECOVERED=true"
+    echo "DASHBOARD_PARTIAL_FAILURE_ISOLATED=true"
     echo "TASK_ALERT_CLAIM_READY=true"
     echo "TASK_DRAFT_AUTOSAVE_READY=true"
     echo "MULTI_DEVICE_TESTING_READY=true"
@@ -178,7 +178,7 @@ for attempt in $(seq 1 30); do
   sleep 5
 done
 
-echo "Deployment command completed, but realtime/auth/PWA readiness was not observed in production." >&2
+echo "Deployment command completed, but realtime/auth/dashboard readiness was not observed in production." >&2
 echo "Expected Worker revision: $EXPECTED_REVISION" >&2
 echo "Expected PWA token: $EXPECTED_PWA_TOKEN" >&2
 echo "Last health response: $body" >&2
