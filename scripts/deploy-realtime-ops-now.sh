@@ -6,11 +6,13 @@ cd "$ROOT_DIR"
 
 PRODUCTION_ORIGIN="https://stupiaks-ops.sporkburger19.workers.dev"
 HEALTH_URL="$PRODUCTION_ORIGIN/api/health"
+PWA_WORKER_URL="$PRODUCTION_ORIGIN/sw-v27.js"
 DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
 EXPECTED_REVISION="realtime-resilience-v3-pwa-task-bootstrap"
+EXPECTED_PWA_TOKEN="shared-task-claim-autosave-pwa-v27"
 
 json_database_id() {
   local database_name="$1"
@@ -120,14 +122,17 @@ npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.produc
 echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
-echo "==> Verifying production revision, D1 schema, Queue and WebSocket"
+echo "==> Verifying production revision, D1 schema, Queue, WebSocket and PWA v27"
 headers=''
 body=''
+pwa_body=''
 for attempt in $(seq 1 30); do
   headers="$(mktemp)"
   body="$(curl -fsS --max-time 20 -D "$headers" "$HEALTH_URL" || true)"
+  pwa_body="$(curl -fsS --max-time 20 "$PWA_WORKER_URL?_=$RANDOM" || true)"
   if grep -Fqi "X-ChefOps-Worker-Revision: $EXPECTED_REVISION" "$headers" \
-    && printf '%s' "$body" | health_realtime_ready; then
+    && printf '%s' "$body" | health_realtime_ready \
+    && printf '%s' "$pwa_body" | grep -Fq "$EXPECTED_PWA_TOKEN"; then
     rm -f "$headers"
     printf '%s\n' "$body"
     echo "REALTIME_DEPLOYMENT_VERIFIED=true"
@@ -136,6 +141,8 @@ for attempt in $(seq 1 30); do
     echo "SHEET_SYNC_QUEUE_CONFIGURED=true"
     echo "SHEETS_FAILURE_ISOLATED_FROM_SUBMITS=true"
     echo "PWA_TASK_BOOTSTRAP_READY=true"
+    echo "TASK_ALERT_CLAIM_READY=true"
+    echo "TASK_DRAFT_AUTOSAVE_READY=true"
     echo "MULTI_DEVICE_TESTING_READY=true"
     exit 0
   fi
@@ -143,7 +150,9 @@ for attempt in $(seq 1 30); do
   sleep 5
 done
 
-echo "Deployment command completed, but realtime readiness was not observed in production." >&2
+echo "Deployment command completed, but realtime/PWA readiness was not observed in production." >&2
 echo "Expected Worker revision: $EXPECTED_REVISION" >&2
+echo "Expected PWA token: $EXPECTED_PWA_TOKEN" >&2
 echo "Last health response: $body" >&2
+echo "Last PWA response: $pwa_body" >&2
 exit 1
