@@ -22,7 +22,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v9-media-roster-recovery'
+const WORKER_REVISION = 'realtime-resilience-v10-public-drive-media-fallback'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
