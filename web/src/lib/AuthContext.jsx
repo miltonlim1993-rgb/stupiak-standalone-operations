@@ -12,7 +12,12 @@ function primaryOutlet(user) {
 }
 
 function rememberOutlet(user) {
-  localStorage.setItem('chefops.data-pack.outlet', primaryOutlet(user))
+  const nextOutlet = primaryOutlet(user)
+  if (nextOutlet) {
+    localStorage.setItem('chefops.data-pack.outlet', nextOutlet)
+    return nextOutlet
+  }
+  return String(localStorage.getItem('chefops.data-pack.outlet') || '').trim()
 }
 
 function readCachedUser() {
