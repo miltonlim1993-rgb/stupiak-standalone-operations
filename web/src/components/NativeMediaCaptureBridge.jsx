@@ -16,7 +16,8 @@ function nativeAndroid() {
 
 function nativeCameraPlugin() {
   const capacitor = window.Capacitor
-  if (!nativeAndroid() || !capacitor?.isPluginAvailable?.('Camera')) return null
+  if (!nativeAndroid() || !capacitor) return null
+  if (!capacitor.isPluginAvailable?.('Camera')) return null
   if (!cameraProxy) {
     cameraProxy = capacitor.Plugins?.Camera || capacitor.registerPlugin?.('Camera') || null
   }
