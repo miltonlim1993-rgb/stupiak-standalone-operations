@@ -12,7 +12,7 @@ DB_NAME="${CLOUDFLARE_OPS_DB_NAME:-stupiaks-ops-realtime}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-EXPECTED_REVISION="realtime-resilience-v7-dashboard-recovery"
+EXPECTED_REVISION="realtime-resilience-v8-d1-primary"
 EXPECTED_PWA_TOKEN="auth-session-stability-pwa-v28"
 
 json_database_id() {
@@ -98,7 +98,7 @@ git pull --ff-only origin main
 echo "==> Installing exact dependencies"
 npm ci
 
-echo "==> Auditing the no-Sheets submission closure"
+echo "==> Auditing the D1-primary workspace closure"
 node scripts/audit-realtime-closure.mjs
 
 echo "==> Resolving D1 database: $DB_NAME"
@@ -136,7 +136,7 @@ npx wrangler d1 migrations apply OPS_DB --remote --config worker/wrangler.produc
 echo "==> Deploying Worker with D1, Durable Object and Queue bindings"
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
-echo "==> Verifying production revision, auth response, D1 schema, Queue, WebSocket and dashboard recovery"
+echo "==> Verifying D1-primary reads, submissions, auth, Queue and WebSocket"
 headers=''
 body=''
 pwa_body=''
@@ -160,15 +160,16 @@ for attempt in $(seq 1 30); do
     echo "D1_MIGRATIONS_APPLIED=true"
     echo "OUTLET_WEBSOCKET_CONFIGURED=true"
     echo "SHEET_SYNC_QUEUE_CONFIGURED=true"
-    echo "SHEETS_FAILURE_ISOLATED_FROM_SUBMITS=true"
-    echo "PWA_TASK_BOOTSTRAP_READY=true"
-    echo "TASK_ACTIONS_D1_ONLY=true"
-    echo "AUTH_LOGIN_SHEETS_GATE_REMOVED=true"
     echo "AUTH_SESSION_STABLE=true"
     echo "AUTH_RESPONSES_NOT_CACHED=true"
     echo "AUTH_ENDPOINT_RESPONDS=true"
     echo "OWNER_OUTLET_SCOPE_RECOVERED=true"
-    echo "DASHBOARD_PARTIAL_FAILURE_ISOLATED=true"
+    echo "LIVE_WORKSPACE_READS_D1_PRIMARY=true"
+    echo "LEGACY_SHEET_READ_ERRORS_ISOLATED=true"
+    echo "STOCK_SUBMISSIONS_PACKAGE_D1_ONLY=true"
+    echo "CLOSEUP_SUBMISSIONS_D1_ONLY=true"
+    echo "CLOSEUP_SHEET_SYNC_ASYNC=true"
+    echo "TASK_ACTIONS_D1_ONLY=true"
     echo "TASK_ALERT_CLAIM_READY=true"
     echo "TASK_DRAFT_AUTOSAVE_READY=true"
     echo "MULTI_DEVICE_TESTING_READY=true"
@@ -178,7 +179,7 @@ for attempt in $(seq 1 30); do
   sleep 5
 done
 
-echo "Deployment command completed, but realtime/auth/dashboard readiness was not observed in production." >&2
+echo "Deployment command completed, but D1-primary workspace readiness was not observed in production." >&2
 echo "Expected Worker revision: $EXPECTED_REVISION" >&2
 echo "Expected PWA token: $EXPECTED_PWA_TOKEN" >&2
 echo "Last health response: $body" >&2
