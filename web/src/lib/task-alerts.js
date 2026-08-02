@@ -20,9 +20,26 @@ function courseTitle(course) {
   return safeText(course?.title_cn || course?.title || 'SOP / Training')
 }
 
+function parsedTaskState(task) {
+  try {
+    const value = JSON.parse(String(task?.notes || ''))
+    return value && typeof value === 'object' ? value : {}
+  } catch {
+    return {}
+  }
+}
+
 function isDone(task) {
   return String(task?.status || '').toLowerCase() === 'done'
     || String(task?.access_state || '').toUpperCase() === 'DONE'
+}
+
+export function taskWorkHasStarted(task) {
+  const status = String(task?.status || '').toLowerCase()
+  const state = parsedTaskState(task)
+  return status === 'in_progress'
+    || Boolean(task?.started_at)
+    || Boolean(state?.started_at)
 }
 
 export function isNativeAndroid() {
@@ -120,6 +137,19 @@ export async function stopNativeTaskAlarm(alertId = '') {
   }
 }
 
+export async function cancelTaskAlertsForTask(taskId = '') {
+  const id = safeText(taskId)
+  if (!id) return
+  await postServiceWorker({ type: 'CANCEL_TASK_ALERTS', taskId: id }).catch(() => undefined)
+  try {
+    const registration = await navigator.serviceWorker?.getRegistration?.()
+    const notifications = await registration?.getNotifications?.()
+    for (const notification of notifications || []) {
+      if (safeText(notification?.data?.taskId) === id) notification.close()
+    }
+  } catch {}
+}
+
 export async function syncTaskAlertSchedule(alerts = []) {
   const normalized = (alerts || [])
     .filter((alert) => Number(alert?.triggerAt) > Date.now() - 30_000)
@@ -152,6 +182,8 @@ export async function showWebTaskNotification(alert) {
     message: safeText(alert?.message),
     target_page: safeText(alert?.targetPage, '/tasks'),
     kind: safeText(alert?.kind, 'task'),
+    taskId: safeText(alert?.taskId),
+    outletId: safeText(alert?.outletId),
   }
 
   if ('serviceWorker' in navigator) {
@@ -167,6 +199,7 @@ export async function showWebTaskNotification(alert) {
       tag: item.id || undefined,
       requireInteraction: true,
       silent: false,
+      data: { taskId: item.taskId, outletId: item.outletId },
     })
     notification.onclick = () => {
       window.focus()
@@ -182,7 +215,10 @@ export async function showWebTaskNotification(alert) {
 export function collectTaskAlerts(tasks = []) {
   const alerts = []
   for (const task of tasks || []) {
-    if (!task || isDone(task)) continue
+    // The first person who opens a pending task changes it to in_progress.
+    // From that moment the task is owned by active work and no open/due alarm
+    // should keep ringing on the rest of the outlet devices.
+    if (!task || isDone(task) || taskWorkHasStarted(task)) continue
     const config = task.config || {}
     const title = taskTitle(task)
     const sopId = safeText(task.sop_id || config.sop_id)
