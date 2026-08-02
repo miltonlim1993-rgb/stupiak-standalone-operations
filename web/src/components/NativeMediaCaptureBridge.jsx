@@ -3,6 +3,7 @@ import { AlertTriangle, Camera, Loader2, X } from 'lucide-react'
 
 const CAPTURE_LABEL = /(拍照|加拍照片|capture|take\s*photo|camera)/i
 const STATUS_CLEAR_MS = 6000
+let cameraProxy = null
 
 function nativeAndroid() {
   const capacitor = window.Capacitor
@@ -13,13 +14,21 @@ function nativeAndroid() {
   )
 }
 
+function nativeCameraPlugin() {
+  const capacitor = window.Capacitor
+  if (!nativeAndroid() || !capacitor?.isPluginAvailable?.('Camera')) return null
+  if (!cameraProxy) {
+    cameraProxy = capacitor.Plugins?.Camera || capacitor.registerPlugin?.('Camera') || null
+  }
+  return cameraProxy
+}
+
 function findCaptureInput(button) {
   let current = button?.parentElement || null
   while (current && current !== document.body) {
     const inputs = [...current.querySelectorAll('input[type="file"][capture]')]
       .filter((input) => !input.disabled)
-    if (inputs.length === 1) return inputs[0]
-    if (inputs.length > 1) return inputs[0]
+    if (inputs.length) return inputs[0]
     current = current.parentElement
   }
   return null
@@ -28,6 +37,7 @@ function findCaptureInput(button) {
 function cancellation(error) {
   const value = `${error?.code || ''} ${error?.message || error || ''}`.toLowerCase()
   return value.includes('cancel') || value.includes('canceled') || value.includes('cancelled')
+    || String(error?.code || '') === 'OS-PLUG-CAMR-0006'
 }
 
 function extensionFor(type, format) {
@@ -134,13 +144,18 @@ export default function NativeMediaCaptureBridge() {
       event.stopPropagation()
       event.stopImmediatePropagation()
 
-      const camera = window.Capacitor?.Plugins?.Camera
-      if (!nativeAndroid() || typeof camera?.takePhoto !== 'function') {
+      if (!nativeAndroid()) {
         try {
           openBrowserPicker(input)
         } catch (error) {
           showError(error?.message || '这个浏览器无法打开相机，请检查相机权限')
         }
+        return
+      }
+
+      const camera = nativeCameraPlugin()
+      if (!camera || typeof camera.takePhoto !== 'function') {
+        showError('OPS 原生相机组件没有加载。请安装最新版本后重新打开应用。')
         return
       }
 
@@ -152,7 +167,7 @@ export default function NativeMediaCaptureBridge() {
         quality: 90,
         includeMetadata: true,
         saveToGallery: false,
-        cameraDirection: 'rear',
+        cameraDirection: 'REAR',
       }))
         .then(nativeResultFile)
         .then((file) => {
@@ -165,7 +180,9 @@ export default function NativeMediaCaptureBridge() {
             setState({ kind: '', message: '' })
             return
           }
-          showError(error?.message || '相机启动失败，请确认 OPS 的相机权限')
+          const code = String(error?.code || '').trim()
+          const detail = String(error?.message || '').trim()
+          showError(code ? `相机启动失败 [${code}] ${detail}` : detail || '相机启动失败，请确认 OPS 的相机权限')
         })
         .finally(() => {
           opening.current = false
