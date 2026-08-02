@@ -28,7 +28,7 @@ requireText('worker/migrations/0002_submission_locks.sql', [
   'CREATE TABLE IF NOT EXISTS ops_submission_locks',
 ])
 requireText('worker/src/entry.js', [
-  "const WORKER_REVISION = 'realtime-resilience-v9-media-roster-recovery'",
+  "const WORKER_REVISION = 'realtime-resilience-v10-public-drive-media-fallback'",
   'handleCloudflareAuth',
   'handleD1OperationalTaskAction',
   'handleD1CloseUpUpsert',
@@ -106,6 +106,9 @@ requireText('worker/src/drive.js', [
   "const MEDIA_CACHE_PREFIX = 'media:file:'",
   'cacheMedia',
   'cachedMedia',
+  'publicDriveMedia',
+  'drive.usercontent.google.com/download',
+  'lh3.googleusercontent.com/d/',
   "storage: 'cloudflare-kv'",
   "X-ChefOps-Media-Source",
 ])
@@ -235,4 +238,4 @@ if (failures.length) {
 }
 
 console.log('Realtime closure audit passed.')
-console.log('D1-primary live reads, direct duty roster hydration, Cloudflare media cache, authenticated Drive proxy, stable sessions, draft autosave, WebSocket broadcast and Queue mirroring are wired.')
+console.log('D1-primary live reads, direct duty roster hydration, Cloudflare media cache, authenticated plus public Drive delivery, stable sessions, draft autosave, WebSocket broadcast and Queue mirroring are wired.')
