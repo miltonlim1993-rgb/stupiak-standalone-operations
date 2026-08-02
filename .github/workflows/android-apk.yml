@@ -39,7 +39,7 @@ jobs:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_VERSION_CODE: 1
-      ANDROID_VERSION_NAME: 4.5.14-validation
+      ANDROID_VERSION_NAME: 4.5.15-validation
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -52,13 +52,25 @@ jobs:
           java-version: 21
       - name: Install dependencies
         run: npm ci
-      - name: Validate closed-loop Task and update source
+      - name: Validate OPS 4.5.15 mandatory update source
         run: |
-          grep -q '"apk_version": "4.5.14"' web/public/app-release.json
-          grep -q '"minimum_apk_version": "4.5.14"' web/public/app-release.json
+          grep -q '"apk_version": "4.5.15"' web/public/app-release.json
+          grep -q '"minimum_apk_version": "4.5.15"' web/public/app-release.json
+          grep -q '"force_update": true' web/public/app-release.json
+          grep -q '"pwa_version": "label-d1-runtime-pwa-v30"' web/public/app-release.json
+          grep -q '"pwa_force_update": true' web/public/app-release.json
+          grep -q "CURRENT_RELEASE = '4.5.15'" web/src/components/AppUpdateBanner.jsx
           grep -q "AUTO_OPEN_COOLDOWN_MS" web/src/components/AppUpdateBanner.jsx
-          grep -q "sw-v24.js" web/src/main.jsx
-          grep -q "exact-on-shift-v24" web/public/sw-v24.js
+          grep -q "Number(asset.size || 0) < 1_000_000" web/src/components/AppUpdateBanner.jsx
+          grep -q "sw-v30.js" web/src/main.jsx
+          grep -q "label-d1-runtime-pwa-v30" web/src/main.jsx
+          grep -q "label-d1-runtime-pwa-v30" web/public/sw-v30.js
+          grep -q "caches.delete" web/public/sw-v30.js
+          grep -q "realtime-resilience-v17-label-d1-runtime" worker/src/entry.js
+          grep -q "handleD1Labels" worker/src/entry.js
+          test -f worker/src/label-d1-store.js
+          test -f worker/src/label-d1-printer.js
+          test -f worker/src/label-d1-operations.js
           grep -q "open_time: night ? '21:00' : '10:00'" worker/src/opening-checklist-feedback.js
           grep -q "due_time: night ? '00:00' : '17:30'" worker/src/opening-checklist-feedback.js
           grep -q "due_day_offset: night ? 1 : 0" worker/src/opening-checklist-feedback.js
@@ -72,8 +84,8 @@ jobs:
           grep -q "purgeNativeServiceWorkers" web/src/main.jsx
           grep -q "TaskAlarmPlugin.class" scripts/configure-android-task-alarms.mjs
           grep -q "AppUpdatePlugin.class" scripts/configure-android-app-update.mjs
-      - name: Build web app
-        run: npm run build -w web
+      - name: Build web app and Worker dry-run
+        run: npm run build
       - name: Generate and configure Android debug project
         run: |
           npm run mobile:init
@@ -99,7 +111,7 @@ jobs:
       APK_V10_FILE_NAME: stupiaks-ops-direct-print-flow-v10.apk
       AAB_FILE_NAME: stupiaks-ops-release.aab
       ANDROID_VERSION_CODE: ${{ github.run_number }}
-      ANDROID_VERSION_NAME: 4.5.14.${{ github.run_number }}
+      ANDROID_VERSION_NAME: 4.5.15.${{ github.run_number }}
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
       ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
@@ -123,7 +135,7 @@ jobs:
           test -n "${ANDROID_KEY_PASSWORD}"
       - name: Install dependencies
         run: npm ci
-      - name: Generate and configure Android release project
+      - name: Generate and configure latest Android release project
         run: |
           npm run mobile:init
           node scripts/configure-android-branding.mjs
@@ -144,35 +156,67 @@ jobs:
           chmod +x web/android/gradlew
           cd web/android
           ./gradlew clean assembleRelease bundleRelease
-      - name: Verify APK signature
+      - name: Verify APK signature and embedded version
         run: |
           APK_PATH="web/android/app/build/outputs/apk/release/app-release.apk"
           APKSIGNER="$(find "${ANDROID_HOME}/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          AAPT="$(find "${ANDROID_HOME}/build-tools" -type f -name aapt | sort -V | tail -n 1)"
           test -x "${APKSIGNER}"
+          test -x "${AAPT}"
           "${APKSIGNER}" verify --verbose --print-certs "${APK_PATH}"
-      - name: Prepare release files
+          "${AAPT}" dump badging "${APK_PATH}" | tee /tmp/apk-badging.txt
+          grep -q "versionName='${ANDROID_VERSION_NAME}'" /tmp/apk-badging.txt
+      - name: Prepare latest release files
         run: |
           mkdir -p release
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_FILE_NAME}"
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_ALARM_FILE_NAME}"
           cp web/android/app/build/outputs/apk/release/app-release.apk "release/${APK_V10_FILE_NAME}"
           cp web/android/app/build/outputs/bundle/release/app-release.aab "release/${AAB_FILE_NAME}"
-          sha256sum release/* | tee release/SHA256SUMS.txt
+          cp web/public/app-release.json release/app-release.json
+          printf 'source_commit=%s\nandroid_version=%s\npwa_version=%s\n' \
+            "${GITHUB_SHA}" "${ANDROID_VERSION_NAME}" "label-d1-runtime-pwa-v30" \
+            > release/BUILD_INFO.txt
+          sha256sum release/*.apk release/*.aab release/app-release.json release/BUILD_INFO.txt \
+            | tee release/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: stupiaks-ops-signed-release
+          name: stupiaks-ops-signed-release-4.5.15
           path: release/
           if-no-files-found: error
-      - name: Publish stable signed release
+      - name: Publish fixed latest signed release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           gh release delete "${APK_RELEASE_TAG}" --cleanup-tag --yes || true
           gh release create "${APK_RELEASE_TAG}" \
             "release/${APK_FILE_NAME}#Stupiak's Ops signed release APK" \
-            "release/${APK_ALARM_FILE_NAME}#Stupiak's Ops Task and SOP alarm APK" \
+            "release/${APK_ALARM_FILE_NAME}#Stupiak's Ops mandatory latest APK" \
             "release/${APK_V10_FILE_NAME}#Stupiak's Ops Direct Print Flow v10 APK" \
             "release/${AAB_FILE_NAME}#Stupiak's Ops signed Android App Bundle" \
+            "release/app-release.json#Mandatory update manifest" \
+            "release/BUILD_INFO.txt#Source commit and PWA build" \
             "release/SHA256SUMS.txt#SHA-256 checksums" \
-            --title "Stupiak's Ops Exact On-Shift Alerts ${ANDROID_VERSION_NAME}" \
-            --notes "Production-signed Android release ${ANDROID_VERSION_NAME}. Morning operational Tasks run 10:00-17:30 and night Tasks run 21:00-00:00. Every Task, SOP and Training alarm is installed only when its trigger time is inside the signed-in employee's exact Duty Roster window, including overnight shifts. Android, web and installed PWA clients enforce the latest shell, data package and mandatory APK release automatically."
+            --title "Stupiak's Ops D1 Label Runtime ${ANDROID_VERSION_NAME}" \
+            --notes "Production-signed mandatory Android release ${ANDROID_VERSION_NAME}, built from ${GITHUB_SHA}. Food Labels now use D1 for rules, printer profiles, creation, reprints and print logs; July Stock Count history is restored. Website and installed PWA clients force shell label-d1-runtime-pwa-v30, while outdated Android clients remain locked until this signed package is installed."
+      - name: Verify release page and fixed download URL serve this exact APK
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p verify-release
+          gh release view "${APK_RELEASE_TAG}" --json name,tagName,assets \
+            | tee verify-release/release.json
+          grep -q "4.5.15.${{ github.run_number }}" verify-release/release.json
+          gh release download "${APK_RELEASE_TAG}" \
+            --pattern "${APK_ALARM_FILE_NAME}" \
+            --dir verify-release
+          curl -fL --retry 8 --retry-delay 3 \
+            -o verify-release/fixed-download.apk \
+            "https://github.com/${GITHUB_REPOSITORY}/releases/download/${APK_RELEASE_TAG}/${APK_ALARM_FILE_NAME}?source=${GITHUB_SHA}"
+          EXPECTED_SHA="$(sha256sum "release/${APK_ALARM_FILE_NAME}" | awk '{print $1}')"
+          RELEASE_SHA="$(sha256sum "verify-release/${APK_ALARM_FILE_NAME}" | awk '{print $1}')"
+          FIXED_URL_SHA="$(sha256sum verify-release/fixed-download.apk | awk '{print $1}')"
+          test "${EXPECTED_SHA}" = "${RELEASE_SHA}"
+          test "${EXPECTED_SHA}" = "${FIXED_URL_SHA}"
+          echo "LATEST_APK_SHA256=${EXPECTED_SHA}"
+          echo "LATEST_APK_FIXED_URL_VERIFIED=true"
