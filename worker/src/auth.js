@@ -8,7 +8,10 @@ const COOKIE_NAME = 'chefops_session'
 const USER_CACHE = new Map()
 const USER_INFLIGHT = new Map()
 const USER_CACHE_TTL_MS = 60_000
-const USER_KV_TTL_SECONDS = 15 * 60
+// Match the seven-day signed session. Once an approved user has logged in,
+// transient Google Sheets quota or availability problems must not lock that
+// user out of the realtime Cloudflare workspace.
+const USER_KV_TTL_SECONDS = 7 * 24 * 60 * 60
 const LAST_LOGIN_WRITE_INTERVAL_MS = 6 * 60 * 60_000
 
 function booleanValue(value) {
