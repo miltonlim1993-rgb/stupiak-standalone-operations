@@ -2,12 +2,12 @@ import app from './index.js'
 import { errorResponse, json, readJson } from './http.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleCloudflareAuth } from './cloudflare-auth.js'
+import { handleD1DirectoryApi } from './d1-directory-api.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
-import { handleRealtimeStockRead } from './realtime-stock-read.js'
 import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
 import { handleD1OperationalTaskAction } from './realtime-task-action-d1.js'
 import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
@@ -16,7 +16,6 @@ import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import { withSubmissionLock } from './submission-locks.js'
 import { augmentHealthResponse } from './realtime-health.js'
-import { handleRealtimeAttendanceRead } from './realtime-attendance-read.js'
 import { handleBundledSopMedia } from './bundled-sop-media.js'
 import {
   flushPendingSheetMirrors,
@@ -24,7 +23,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v14-complete-stock-history'
+const WORKER_REVISION = 'realtime-resilience-v15-d1-source-of-truth'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -170,6 +169,9 @@ export default {
       const authResponse = await handleCloudflareAuth(request, runEnv, url)
       if (authResponse) return withApiHeaders(request, env, authResponse)
 
+      const directoryResponse = await handleD1DirectoryApi(request, runEnv, url)
+      if (directoryResponse) return withApiHeaders(request, env, directoryResponse)
+
       const bundledSopMediaResponse = await handleBundledSopMedia(request, runEnv, url)
       if (bundledSopMediaResponse) return withApiHeaders(request, env, bundledSopMediaResponse)
 
@@ -216,13 +218,9 @@ export default {
       const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
       if (taskPhotoResponse) return withApiHeaders(request, env, taskPhotoResponse)
 
-      const attendanceReadResponse = await handleRealtimeAttendanceRead(request, runEnv, url)
-      if (attendanceReadResponse) return withApiHeaders(request, env, attendanceReadResponse)
-
-      const stockReadResponse = await handleRealtimeStockRead(request, runEnv, url)
-      if (stockReadResponse) return withApiHeaders(request, env, stockReadResponse)
-
-      const realtimeDataResponse = await handleRealtimeDataApi(request, runEnv, url)
+      const runtimeUrl = new URL(url)
+      runtimeUrl.searchParams.set('legacy_seed', '0')
+      const realtimeDataResponse = await handleRealtimeDataApi(request, runEnv, runtimeUrl)
       if (realtimeDataResponse) return withApiHeaders(request, env, realtimeDataResponse)
 
       const realtimeResponse = await handleRealtimeApi(request, runEnv, url)
