@@ -56,7 +56,7 @@ function matchesExpected(actual, expected) {
   if (Array.isArray(expected)) return expected.map(comparable).includes(comparable(actual))
   if (expected && typeof expected === 'object') {
     if (Array.isArray(expected.$in) && !expected.$in.map(comparable).includes(comparable(actual))) return false
-    if (Array.isArray(expected.$nin) && expected.$nin.map(comparable).includes(comparable(actual)) return false
+    if (Array.isArray(expected.$nin) && expected.$nin.map(comparable).includes(comparable(actual))) return false
     if (Object.prototype.hasOwnProperty.call(expected, '$ne') && comparable(actual) === comparable(expected.$ne)) return false
     if (Object.prototype.hasOwnProperty.call(expected, '$eq') && comparable(actual) !== comparable(expected.$eq)) return false
     if (Object.prototype.hasOwnProperty.call(expected, '$lt') && orderedComparison(actual, expected.$lt) >= 0) return false
