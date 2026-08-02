@@ -117,14 +117,14 @@ async function persistAttendance(env, outletId, rows) {
     const updatedAt = String(row.updated_date || createdAt || timestamp)
     const createdBy = String(row.created_by || 'legacy-sheet')
     const updatedBy = String(row.updated_by || createdBy)
-    const deletedAt = String(row.deleted_at || '')
     const version = Math.max(1, Number(row.version || 1) || 1)
+    const activeRow = { ...row, deleted_at: '' }
 
     statements.push(env.OPS_DB.prepare(`
       INSERT INTO ops_records (
         entity, entity_id, outlet_id, business_date, status, payload_json,
         version, created_at, created_by, updated_at, updated_by, deleted_at
-      ) VALUES ('Attendance', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES ('Attendance', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')
       ON CONFLICT(entity, entity_id) DO UPDATE SET
         outlet_id = excluded.outlet_id,
         business_date = excluded.business_date,
@@ -144,20 +144,18 @@ async function persistAttendance(env, outletId, rows) {
         END,
         updated_at = excluded.updated_at,
         updated_by = excluded.updated_by,
-        deleted_at = excluded.deleted_at
-      WHERE ops_records.deleted_at <> '' OR excluded.updated_at >= ops_records.updated_at
+        deleted_at = ''
     `).bind(
       id,
       outletId,
       String(row.date || '').slice(0, 10),
       String(row.status || ''),
-      JSON.stringify(row),
+      JSON.stringify(activeRow),
       version,
       createdAt,
       createdBy,
       updatedAt,
       updatedBy,
-      deletedAt,
     ))
   }
 
@@ -172,11 +170,11 @@ function mergeRows(primary, fallback) {
   const byId = new Map()
   for (const row of fallback || []) {
     const id = rowId(row)
-    if (id) byId.set(id, row)
+    if (id) byId.set(id, { ...row, deleted_at: '' })
   }
   for (const row of primary || []) {
     const id = rowId(row)
-    if (id) byId.set(id, row)
+    if (id && !String(row.deleted_at || row.__realtime?.deleted_at || '').trim()) byId.set(id, row)
   }
   return [...byId.values()]
 }
@@ -206,12 +204,11 @@ export async function handleRealtimeAttendanceRead(request, env, url) {
 
     const filter = parseJson(url.searchParams.get('filter'), {}) || {}
     const sort = url.searchParams.get('sort') || ''
-    const includeDeleted = url.searchParams.get('include_deleted') === '1'
     const limit = Math.max(1, Math.min(Number(url.searchParams.get('limit') || 100), MAX_ROWS))
     const year = Number(url.searchParams.get('year') || String(filter.date?.$gte || filter.date || '').slice(0, 4) || new Date().getUTCFullYear())
 
     let allRows = await d1Attendance(env, outletId)
-    let visible = sortRows(filterRows(allRows, filter, includeDeleted), sort).slice(0, limit)
+    let visible = sortRows(filterRows(allRows, filter, false), sort).slice(0, limit)
     let source = visible.length ? 'd1' : 'd1-empty'
     let legacyErrorCode = ''
     let seeded = 0
@@ -221,8 +218,8 @@ export async function handleRealtimeAttendanceRead(request, env, url) {
         const sheetRows = await readAttendanceSheet(env, outletId, year)
         seeded = await persistAttendance(env, outletId, sheetRows)
         allRows = mergeRows(await d1Attendance(env, outletId), sheetRows)
-        visible = sortRows(filterRows(allRows, filter, includeDeleted), sort).slice(0, limit)
-        source = visible.length ? 'attendance-sheet-restored-d1' : 'd1-empty'
+        visible = sortRows(filterRows(allRows, filter, false), sort).slice(0, limit)
+        source = visible.length ? 'attendance-sheet-revived-d1' : 'd1-empty'
       } catch (error) {
         legacyErrorCode = String(error?.code || 'attendance_hydration_unavailable')
         console.error('Direct Attendance hydration unavailable', outletId, year, error)
