@@ -1,10 +1,14 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.14",
-  "minimum_apk_version": "4.5.14",
+  "apk_version": "4.5.15",
+  "minimum_apk_version": "4.5.15",
   "force_update": true,
-  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk",
+  "pwa_version": "label-d1-runtime-pwa-v30",
+  "minimum_pwa_version": "label-d1-runtime-pwa-v30",
+  "pwa_force_update": true,
+  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.15",
+  "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Morning Tasks remain 10:00 AM–5:30 PM and Night Tasks remain 9:00 PM–midnight. Every Task, SOP and Training alarm now requires its trigger time to fall inside the signed-in employee's exact Duty Roster window, including overnight shifts. Package, website, PWA and mandatory APK update enforcement remain enabled.",
-  "release_trigger": "2026-08-01-exact-on-shift-alerts-all-kinds-stable"
+  "release_notes": "Mandatory OPS 4.5.15 release. Food Labels now use D1 as the runtime source of truth for label rules, printer profiles, label creation, reprints and print logs. July Stock Count history is restored in D1. Website, installed PWA and Android clients automatically detect this release and block outdated clients until the latest package is installed.",
+  "release_trigger": "2026-08-02-label-d1-stock-history-forced-release"
 }
