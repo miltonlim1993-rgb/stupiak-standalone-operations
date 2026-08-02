@@ -56,7 +56,7 @@ ensure_queue() {
     cat /tmp/chefops-queue-create.log
     return 0
   fi
-  if grep -Eqi 'already exists|already been taken|name is already in use' /tmp/chefops-queue-create.log; then
+  if grep -Eqi 'already exists|already been taken|is already taken|name is already in use|code: 11009' /tmp/chefops-queue-create.log; then
     echo "Queue already exists: $queue_name"
     return 0
   fi
