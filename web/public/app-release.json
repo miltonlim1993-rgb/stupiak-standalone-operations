@@ -1,14 +1,14 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.22",
-  "minimum_apk_version": "4.5.22",
+  "apk_version": "4.5.23",
+  "minimum_apk_version": "4.5.23",
   "force_update": true,
-  "pwa_version": "task-save-on-close-pwa-v37",
-  "minimum_pwa_version": "task-save-on-close-pwa-v37",
+  "pwa_version": "task-photo-save-zoom-pwa-v38",
+  "minimum_pwa_version": "task-photo-save-zoom-pwa-v38",
   "pwa_force_update": true,
-  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.22",
+  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.23",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS 4.5.22 client-only Task save correction. Task fields no longer save after every input, selection, click, focus change, realtime event or foreground event. Data is saved only by Save Progress, Complete Task, or one protective save when closing a dirty Task or sending the app to the background. No saving/saved overlay is shown. Worker v21, D1 schema, D1 data, TaskPhoto storage, assignments and historical records are unchanged.",
-  "release_trigger": "2026-08-03-task-save-on-close-only"
+  "release_notes": "Mandatory OPS 4.5.23 client-only Task photo correction. Task photos open in a full-screen zoomable viewer again. Save Progress, Complete Task, dirty close and background protection now wait for every local captured photo to finish saving; a failed local photo uses the existing in-tile Retry action before Task progress is submitted. If the photo still fails, it remains in its tile and the Task save does not falsely succeed. No new save notification or global photo status panel is added. Worker v21, D1 schema, D1 data, assignments and historical TaskPhoto records are unchanged.",
+  "release_trigger": "2026-08-03-task-photo-save-and-zoom"
 }
