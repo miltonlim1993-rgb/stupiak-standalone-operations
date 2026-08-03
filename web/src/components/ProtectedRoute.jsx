@@ -12,8 +12,12 @@ function Loading() {
   )
 }
 
+function normalizedRole(role) {
+  return String(role || '').trim().toLowerCase().replace(/^role_/, '')
+}
+
 function managerAccess(role) {
-  return (ROLE_LEVEL[String(role || '').toLowerCase()] || 0) >= ROLE_LEVEL.manager
+  return (ROLE_LEVEL[normalizedRole(role)] || 0) >= ROLE_LEVEL.manager
 }
 
 export default function ProtectedRoute() {
