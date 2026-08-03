@@ -20,6 +20,8 @@ import { withSubmissionLock } from './submission-locks.js'
 import { augmentHealthResponse } from './realtime-health.js'
 import { handleBundledSopMedia } from './bundled-sop-media.js'
 import { handleD1Labels } from './realtime-labels-d1.js'
+import { handleRealtimeAttendanceRosterImport } from './realtime-attendance-roster.js'
+import { processAttendanceRosterMirrorQueue } from './realtime-attendance-roster-mirror.js'
 import { applyOperationalTaskPolicyResponse } from './operational-task-policy.js'
 import {
   flushPendingSheetMirrors,
@@ -27,7 +29,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v18-task-photo-access-policy'
+const WORKER_REVISION = 'realtime-resilience-v19-duty-roster-d1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -185,6 +187,9 @@ export default {
       const d1LabelsResponse = await handleD1Labels(request, runEnv, url)
       if (d1LabelsResponse) return withApiHeaders(request, env, d1LabelsResponse)
 
+      const attendanceRosterResponse = await handleRealtimeAttendanceRosterImport(request, runEnv, url)
+      if (attendanceRosterResponse) return withApiHeaders(request, env, attendanceRosterResponse)
+
       const atomicStockResponse = url.pathname === '/api/stock-counts/batch'
         ? await withSubmissionLock(
             request,
@@ -273,7 +278,9 @@ export default {
 
   async queue(batch, env, ctx) {
     const runEnv = runtimeEnv(env, ctx)
-    const remaining = await processDirectoryMirrorQueue(batch, runEnv)
+    const afterDirectory = await processDirectoryMirrorQueue(batch, runEnv)
+    if (!afterDirectory.length) return
+    const remaining = await processAttendanceRosterMirrorQueue({ messages: afterDirectory }, runEnv)
     if (!remaining.length) return
     return processSheetMirrorQueue({ messages: remaining }, runEnv, ctx)
   },
