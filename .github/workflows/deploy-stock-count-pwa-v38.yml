@@ -12,7 +12,7 @@ permissions:
   issues: write
 
 env:
-  DEPLOYMENT_RUN_ID: stock-count-ui-pwa-v38-20260803-2108
+  DEPLOYMENT_RUN_ID: stock-count-ui-pwa-v38-20260803-2115
   DEPLOYMENT_STATUS_ISSUE: "44"
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
@@ -21,6 +21,8 @@ env:
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
   CLOUDFLARE_MEDIA_BUCKET_NAME: ${{ secrets.CLOUDFLARE_MEDIA_BUCKET_NAME }}
+  ALL_SECRETS_JSON: ${{ toJSON(secrets) }}
+  ALL_VARS_JSON: ${{ toJSON(vars) }}
 
 jobs:
   deploy-web-pwa:
@@ -37,12 +39,103 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Check Cloudflare deployment credentials
+      - name: Resolve existing Cloudflare credentials safely
+        id: credentials
         shell: bash
         run: |
           set -euo pipefail
-          [[ -n "${CLOUDFLARE_API_TOKEN}" ]] || { echo "CLOUDFLARE_API_TOKEN is missing" >&2; exit 1; }
-          [[ -n "${CLOUDFLARE_ACCOUNT_ID}" ]] || { echo "CLOUDFLARE_ACCOUNT_ID is missing" >&2; exit 1; }
+          node <<'NODE'
+          const fs = require('node:fs')
+          const secrets = JSON.parse(process.env.ALL_SECRETS_JSON || '{}')
+          const vars = JSON.parse(process.env.ALL_VARS_JSON || '{}')
+          const combined = { ...vars, ...secrets }
+          const nonEmpty = Object.entries(combined).filter(([, value]) => String(value || '').trim())
+          const relevantNames = nonEmpty
+            .map(([name]) => name)
+            .filter((name) => /(cloudflare|wrangler|^cf[_-])/i.test(name))
+            .sort()
+
+          function firstByNames(names) {
+            for (const name of names) {
+              const value = String(combined[name] || '').trim()
+              if (value) return { name, value }
+            }
+            return null
+          }
+
+          function firstByPattern(pattern) {
+            for (const [name, value] of nonEmpty) {
+              if (pattern.test(name)) return { name, value: String(value).trim() }
+            }
+            return null
+          }
+
+          function appendEnv(name, value) {
+            const marker = `OPS_${name}_${Date.now()}_${Math.random().toString(16).slice(2)}`
+            fs.appendFileSync(process.env.GITHUB_ENV, `${name}<<${marker}\n${value}\n${marker}\n`)
+          }
+
+          function output(name, value) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${String(value || '').replace(/[\r\n]/g, ' ')}\n`)
+          }
+
+          const existingToken = String(process.env.CLOUDFLARE_API_TOKEN || '').trim()
+          const token = existingToken
+            ? { name: 'CLOUDFLARE_API_TOKEN', value: existingToken }
+            : firstByNames([
+                'CLOUDFLARE_API_TOKEN',
+                'CF_API_TOKEN',
+                'WRANGLER_API_TOKEN',
+                'CLOUDFLARE_WORKERS_API_TOKEN',
+                'CLOUDFLARE_TOKEN',
+                'CF_TOKEN',
+              ])
+              || firstByPattern(/(?:cloudflare|wrangler|^cf[_-]).*(?:api[_-]?)?token|(?:api[_-]?)?token.*(?:cloudflare|wrangler|^cf[_-])/i)
+
+          const apiKey = firstByNames(['CLOUDFLARE_API_KEY', 'CF_API_KEY'])
+            || firstByPattern(/(?:cloudflare|^cf[_-]).*api.*key|api.*key.*(?:cloudflare|^cf[_-])/i)
+          const email = firstByNames(['CLOUDFLARE_EMAIL', 'CF_EMAIL'])
+            || firstByPattern(/(?:cloudflare|^cf[_-]).*email|email.*(?:cloudflare|^cf[_-])/i)
+
+          const existingAccount = String(process.env.CLOUDFLARE_ACCOUNT_ID || '').trim()
+          const account = existingAccount
+            ? { name: 'CLOUDFLARE_ACCOUNT_ID', value: existingAccount }
+            : firstByNames(['CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID', 'CLOUDFLARE_ACCOUNT'])
+              || firstByPattern(/(?:cloudflare|^cf[_-]).*account.*id|account.*id.*(?:cloudflare|^cf[_-])/i)
+
+          let authMode = 'none'
+          let authName = 'none'
+          if (token) {
+            appendEnv('CLOUDFLARE_API_TOKEN', token.value)
+            authMode = 'api-token'
+            authName = token.name
+          } else if (apiKey && email) {
+            appendEnv('CLOUDFLARE_API_KEY', apiKey.value)
+            appendEnv('CLOUDFLARE_EMAIL', email.value)
+            authMode = 'global-api-key'
+            authName = `${apiKey.name}+${email.name}`
+          }
+          if (account) appendEnv('CLOUDFLARE_ACCOUNT_ID', account.value)
+
+          output('auth_mode', authMode)
+          output('auth_name', authName)
+          output('account_name', account?.name || 'none')
+          output('available_names', relevantNames.join(',') || 'none')
+
+          console.log(`Cloudflare credential aliases available: ${relevantNames.join(', ') || 'none'}`)
+          console.log(`Selected auth mode: ${authMode}`)
+          console.log(`Selected auth name: ${authName}`)
+          console.log(`Selected account name: ${account?.name || 'none'}`)
+
+          if (authMode === 'none') {
+            console.error('No usable Cloudflare API token or API key/email pair is visible to the production environment')
+            process.exit(2)
+          }
+          if (!account) {
+            console.error('No Cloudflare account ID is visible to the production environment')
+            process.exit(3)
+          }
+          NODE
 
       - name: Install exact dependencies
         run: npm ci
@@ -83,6 +176,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           DEPLOYMENT_JOB_STATUS: ${{ job.status }}
           LIVE_VERIFIED: ${{ steps.verify.outputs.verified }}
+          AUTH_MODE: ${{ steps.credentials.outputs.auth_mode }}
+          AUTH_NAME: ${{ steps.credentials.outputs.auth_name }}
+          ACCOUNT_NAME: ${{ steps.credentials.outputs.account_name }}
+          AVAILABLE_NAMES: ${{ steps.credentials.outputs.available_names }}
         shell: bash
         run: |
           set -euo pipefail
@@ -99,6 +196,10 @@ jobs:
           - Commit: \`${GITHUB_SHA}\`
           - Job status: \`${DEPLOYMENT_JOB_STATUS}\`
           - Live v38 verified: \`${LIVE_VERIFIED:-false}\`
+          - Auth mode selected: \`${AUTH_MODE:-none}\`
+          - Auth secret selected: \`${AUTH_NAME:-none}\`
+          - Account setting selected: \`${ACCOUNT_NAME:-none}\`
+          - Visible Cloudflare/Wrangler setting names: \`${AVAILABLE_NAMES:-none}\`
           - Production: \`${OPS_PRODUCTION_ORIGIN}\`
           - Workflow: ${run_url}
           - Checked at: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`
