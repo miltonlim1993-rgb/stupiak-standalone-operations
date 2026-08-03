@@ -244,31 +244,33 @@ export default function AppDrawer({
   }, [taskWorkspace])
 
   return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
-      <DialogPrimitive.Portal>
-        {taskWorkspace ? <style>{taskVisualStyles}</style> : null}
-        <DialogPrimitive.Overlay className={`chefops-drawer-overlay ${taskWorkspace ? 'chefops-task-workspace-overlay' : ''} fixed z-[880] bg-black/45 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0`} />
-        <DialogPrimitive.Content
-          data-fullscreen={fullScreen ? 'true' : 'false'}
-          data-task-visual-workspace={taskWorkspace ? 'true' : 'false'}
-          className={`chefops-drawer-content ${taskWorkspace ? 'chefops-task-workspace' : ''} fixed bottom-0 left-1/2 z-[881] flex -translate-x-1/2 flex-col overflow-hidden bg-background shadow-2xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:slide-out-to-bottom-8 ${contentClass}`}
-        >
-          <div className={`chefops-drawer-header ${taskWorkspace ? 'chefops-task-workspace-header' : ''} shrink-0 border-b bg-background px-4 pb-3 pt-[calc(.5rem+env(safe-area-inset-top))]`}>
-            {!fullScreen && !taskWorkspace ? <div className="chefops-drawer-handle mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/25" /> : null}
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                {taskWorkspace ? <span className="chefops-task-form-label mb-2">Template form</span> : null}
-                <DialogPrimitive.Title className={taskWorkspace ? 'text-xl font-bold leading-tight' : 'text-base font-semibold leading-tight'}>{title}</DialogPrimitive.Title>
-                {subtitle && <DialogPrimitive.Description className="mt-1 text-xs text-muted-foreground">{subtitle}</DialogPrimitive.Description>}
+    <>
+      {taskWorkspace ? <style>{taskVisualStyles}</style> : null}
+      <DialogPrimitive.Root open={open} onOpenChange={onOpenChange}>
+        <DialogPrimitive.Portal>
+          <DialogPrimitive.Overlay className={`chefops-drawer-overlay ${taskWorkspace ? 'chefops-task-workspace-overlay' : ''} fixed z-[880] bg-black/45 backdrop-blur-[1px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0`} />
+          <DialogPrimitive.Content
+            data-fullscreen={fullScreen ? 'true' : 'false'}
+            data-task-visual-workspace={taskWorkspace ? 'true' : 'false'}
+            className={`chefops-drawer-content ${taskWorkspace ? 'chefops-task-workspace' : ''} fixed bottom-0 left-1/2 z-[881] flex -translate-x-1/2 flex-col overflow-hidden bg-background shadow-2xl outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:slide-in-from-bottom-8 data-[state=closed]:slide-out-to-bottom-8 ${contentClass}`}
+          >
+            <div className={`chefops-drawer-header ${taskWorkspace ? 'chefops-task-workspace-header' : ''} shrink-0 border-b bg-background px-4 pb-3 pt-[calc(.5rem+env(safe-area-inset-top))]`}>
+              {!fullScreen && !taskWorkspace ? <div className="chefops-drawer-handle mx-auto mb-2 h-1 w-10 rounded-full bg-muted-foreground/25" /> : null}
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  {taskWorkspace ? <span className="chefops-task-form-label mb-2">Template form</span> : null}
+                  <DialogPrimitive.Title className={taskWorkspace ? 'text-xl font-bold leading-tight' : 'text-base font-semibold leading-tight'}>{title}</DialogPrimitive.Title>
+                  {subtitle && <DialogPrimitive.Description className="mt-1 text-xs text-muted-foreground">{subtitle}</DialogPrimitive.Description>}
+                </div>
+                <DialogPrimitive.Close className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Close">
+                  <X className="h-4 w-4" />
+                </DialogPrimitive.Close>
               </div>
-              <DialogPrimitive.Close className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border bg-background text-muted-foreground transition hover:bg-muted hover:text-foreground" aria-label="Close">
-                <X className="h-4 w-4" />
-              </DialogPrimitive.Close>
             </div>
-          </div>
-          {children}
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
+            {children}
+          </DialogPrimitive.Content>
+        </DialogPrimitive.Portal>
+      </DialogPrimitive.Root>
+    </>
   )
 }
