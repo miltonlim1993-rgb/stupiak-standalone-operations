@@ -1,14 +1,14 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.20",
-  "minimum_apk_version": "4.5.20",
+  "apk_version": "4.5.21",
+  "minimum_apk_version": "4.5.21",
   "force_update": true,
-  "pwa_version": "task-live-photo-confirm-pwa-v35",
-  "minimum_pwa_version": "task-live-photo-confirm-pwa-v35",
+  "pwa_version": "task-photo-clean-ui-pwa-v36",
+  "minimum_pwa_version": "task-photo-clean-ui-pwa-v36",
   "pwa_force_update": true,
-  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.20",
+  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.21",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS 4.5.20 reliability release. Every active outlet member can see the outlet's daily tasks even when off duty; roster data is advisory and no longer hides Tasks or returns a fabricated empty page. Assignment still controls who can start, change, photograph or complete a Task. A captured Task photo is shown immediately, remains visible while D1 confirmation catches up, and clearly reports saved, queued or rejected status. TaskPhoto validation reads D1 and the published Cloudflare package only and does not wait on Google Sheets. Historical Tasks, assignments and photos are not rewritten.",
-  "release_trigger": "2026-08-03-live-task-photo-confirmation"
+  "release_notes": "Mandatory OPS 4.5.21 client-only Task photo UI correction. Removes duplicate global photo-save overlays and the misleading Task autosave toast triggered by file inputs. A captured photo appears directly inside its own Task photo group. Photo upload or registration failure stays on that photo tile with Retry and Delete only. Existing camera, assignment, Worker v21, D1 schema, Task records and TaskPhoto records are unchanged.",
+  "release_trigger": "2026-08-03-task-photo-clean-ui-only"
 }
