@@ -20,7 +20,8 @@
     "sheets:upgrade": "node scripts/upgrade-sheet-layout.mjs",
     "sheets:create-year": "node scripts/create-operations-year.mjs",
     "mobile:init": "node scripts/setup-android.mjs",
-    "mobile:sync": "npm run build -w web && cd web && npx cap sync android",
+    "mobile:sync": "npm run mobile:init",
+    "mobile:configure": "node scripts/configure-android-branding.mjs && node scripts/configure-android-native-google-auth.mjs && node scripts/configure-android-direct-label-print.mjs && node scripts/configure-android-task-alarms.mjs && node scripts/configure-android-app-update.mjs",
     "test:sales-template-direct": "node scripts/test-sales-template-direct.mjs",
     "cf:render": "node scripts/render-wrangler-production.mjs",
     "cf:deploy": "npm run ops:deploy:verified",
@@ -36,8 +37,8 @@
     "ops:deploy:verified": "bash scripts/deploy-realtime-ops-now.sh",
     "ops:backfill:build": "node scripts/ops/build-safe-backfill.mjs",
     "ops:backfill:run": "bash scripts/ops/run-approved-backfill.sh",
-    "mobile:open": "cd web && npx cap open android",
-    "mobile:apk:debug": "npm run mobile:sync && cd web/android && ./gradlew assembleDebug",
+    "mobile:open": "npm run mobile:sync && npm run mobile:configure && cd web && npx cap open android",
+    "mobile:apk:debug": "npm run mobile:sync && npm run mobile:configure && cd web/android && ./gradlew assembleDebug",
     "deploy:workers-builds": "npm run ops:audit:contract && npm run build && npm run cf:render && npx wrangler deploy --config worker/wrangler.production.jsonc"
   }
 }
