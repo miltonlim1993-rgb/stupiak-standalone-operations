@@ -39,7 +39,7 @@ function normalizeTask(task = {}) {
   }
 }
 
-function applyPayloadPolicy(payload = {}) {
+export function applyOperationalTaskPayloadPolicy(payload = {}) {
   const tasks = (Array.isArray(payload.tasks) ? payload.tasks : [])
     .filter((task) => !RETIRED_TEMPLATE_IDS.has(templateId(task)))
     .map(normalizeTask)
@@ -93,7 +93,7 @@ function installBootstrapPolicy() {
       headers.set('Content-Type', 'application/json; charset=utf-8')
       headers.set('Cache-Control', 'no-store')
       headers.set('X-ChefOps-Client-Task-Policy', 'opening-only-photo10-v1')
-      return new Response(JSON.stringify(applyPayloadPolicy(payload)), {
+      return new Response(JSON.stringify(applyOperationalTaskPayloadPolicy(payload)), {
         status: response.status,
         statusText: response.statusText,
         headers,
@@ -109,13 +109,34 @@ function guidanceText(pathname) {
     return {
       title: '任务照片：同类物品一起拍',
       body: `${GUIDANCE_CN} ${GUIDANCE_EN}`,
+      heading: '今日任务',
     }
   }
   if (pathname === '/urgent') {
     return {
       title: 'Issue 照片：相关物品一起拍',
-      body: `相关或同类物品可放在同一张照片中清楚呈现，不需要逐件分开拍；最多可上传 10 张。 Related or matching items may be shown clearly in the same photo; up to 10 photos are supported.`,
+      body: '相关或同类物品可放在同一张照片中清楚呈现，不需要逐件分开拍；最多可上传 10 张。 Related or matching items may be shown clearly in the same photo; up to 10 photos are supported.',
+      heading: 'Urgent Issues',
     }
+  }
+  return null
+}
+
+function pageRootForGuidance(guidance) {
+  const main = document.getElementById('chefops-mobile-main')
+  if (!main) return null
+  const heading = [...main.querySelectorAll('h1')]
+    .find((node) => String(node.textContent || '').trim().includes(guidance.heading))
+  if (!heading) return null
+
+  let current = heading.parentElement
+  while (current && current !== main) {
+    if (
+      current.classList.contains('chefops-page')
+      || current.classList.contains('urgent-page')
+      || current.classList.contains('max-w-lg')
+    ) return current
+    current = current.parentElement
   }
   return null
 }
@@ -124,21 +145,26 @@ function installPageGuidance() {
   let scheduled = false
   const render = () => {
     scheduled = false
-    const guidance = guidanceText(window.location.pathname)
+    const pathname = window.location.pathname
+    const guidance = guidanceText(pathname)
     document.querySelectorAll('[data-chefops-photo-policy-guidance]').forEach((node) => {
-      if (!guidance || node.dataset.chefopsPhotoPolicyGuidance !== window.location.pathname) node.remove()
+      if (!guidance || node.dataset.chefopsPhotoPolicyGuidance !== pathname) node.remove()
     })
     if (!guidance) return
 
-    const page = document.querySelector('#chefops-mobile-main .chefops-page')
-      || document.querySelector('#chefops-mobile-main > div')
-    if (!page || page.querySelector(`[data-chefops-photo-policy-guidance="${window.location.pathname}"]`)) return
+    const page = pageRootForGuidance(guidance)
+    if (!page || page.querySelector(`[data-chefops-photo-policy-guidance="${pathname}"]`)) return
 
     const notice = document.createElement('aside')
     notice.className = 'chefops-photo-policy-guidance'
-    notice.dataset.chefopsPhotoPolicyGuidance = window.location.pathname
+    notice.dataset.chefopsPhotoPolicyGuidance = pathname
     notice.setAttribute('role', 'note')
-    notice.innerHTML = `<strong>${guidance.title}</strong><span>${guidance.body}</span>`
+    const title = document.createElement('strong')
+    title.textContent = guidance.title
+    const body = document.createElement('span')
+    body.textContent = guidance.body
+    notice.append(title, body)
+
     const firstSection = page.firstElementChild
     if (firstSection?.nextSibling) page.insertBefore(notice, firstSection.nextSibling)
     else page.appendChild(notice)
