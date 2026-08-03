@@ -37,8 +37,8 @@
     "ops:deploy:verified": "bash scripts/deploy-realtime-ops-now.sh",
     "ops:backfill:build": "node scripts/ops/build-safe-backfill.mjs",
     "ops:backfill:run": "bash scripts/ops/run-approved-backfill.sh",
-    "mobile:open": "npm run mobile:sync && npm run mobile:configure && cd web && npx cap open android",
-    "mobile:apk:debug": "npm run mobile:sync && npm run mobile:configure && cd web/android && ./gradlew assembleDebug",
+    "mobile:open": "node scripts/run-android.mjs open",
+    "mobile:apk:debug": "node scripts/run-android.mjs debug",
     "deploy:workers-builds": "npm run ops:audit:contract && npm run build && npm run cf:render && npx wrangler deploy --config worker/wrangler.production.jsonc"
   }
 }
