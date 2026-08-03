@@ -20,13 +20,14 @@ import { withSubmissionLock } from './submission-locks.js'
 import { augmentHealthResponse } from './realtime-health.js'
 import { handleBundledSopMedia } from './bundled-sop-media.js'
 import { handleD1Labels } from './realtime-labels-d1.js'
+import { applyOperationalTaskPolicyResponse } from './operational-task-policy.js'
 import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v17-label-d1-runtime'
+const WORKER_REVISION = 'realtime-resilience-v18-task-photo-access-policy'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -245,6 +246,9 @@ export default {
       let response = bootstrapRequest
         ? await overlayOperationalBootstrapResponse(bootstrapRequest, url, runEnv, appResponse)
         : appResponse
+      if (bootstrapRequest) {
+        response = await applyOperationalTaskPolicyResponse(bootstrapRequest, url, response)
+      }
       if (url.pathname === '/api/health' && request.method === 'GET') {
         response = await augmentHealthResponse(response, runEnv)
       }
