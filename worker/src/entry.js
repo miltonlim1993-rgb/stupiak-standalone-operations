@@ -22,6 +22,7 @@ import { handleBundledSopMedia } from './bundled-sop-media.js'
 import { handleD1Labels } from './realtime-labels-d1.js'
 import { handleRealtimeAttendanceRosterImport } from './realtime-attendance-roster.js'
 import { processAttendanceRosterMirrorQueue } from './realtime-attendance-roster-mirror.js'
+import { handleDutyRosterSourceUpload } from './realtime-attendance-roster-source.js'
 import { applyOperationalTaskPolicyResponse } from './operational-task-policy.js'
 import {
   flushPendingSheetMirrors,
@@ -180,6 +181,9 @@ export default {
 
       const directoryResponse = await handleD1DirectoryApi(request, runEnv, url)
       if (directoryResponse) return withApiHeaders(request, env, directoryResponse)
+
+      const rosterSourceResponse = await handleDutyRosterSourceUpload(request, runEnv, url)
+      if (rosterSourceResponse) return withApiHeaders(request, env, rosterSourceResponse)
 
       const bundledSopMediaResponse = await handleBundledSopMedia(request, runEnv, url)
       if (bundledSopMediaResponse) return withApiHeaders(request, env, bundledSopMediaResponse)
