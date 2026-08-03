@@ -1,18 +1,27 @@
-/* ---------- Stock Count interaction polish (presentation only) ---------- */
+/* ---------- Stock Count presentation refinement ---------- */
 .chefops-stock-page {
   --stock-accent: hsl(var(--primary));
   --stock-surface: hsl(var(--card));
-  --stock-soft-surface: hsl(var(--muted) / 0.38);
-  --stock-control-height: 48px;
+  --stock-soft-surface: hsl(var(--muted) / 0.34);
+  --stock-control-height: 56px;
 }
 
+.chefops-stock-page > * {
+  margin-top: 0 !important;
+}
+
+/* Header */
 .chefops-stock-page > .flex.items-start.justify-between.gap-3 {
-  min-height: 96px;
+  min-height: 82px;
   align-items: center;
   overflow: hidden;
+  border: 1px solid hsl(var(--border) / 0.82);
+  border-radius: 20px;
+  padding: 18px 20px;
   background:
-    radial-gradient(circle at 88% 15%, hsl(var(--primary) / 0.14), transparent 27%),
-    linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--muted) / 0.24) 100%);
+    radial-gradient(circle at 91% 8%, hsl(var(--primary) / 0.11), transparent 26%),
+    linear-gradient(135deg, hsl(var(--card)) 0%, hsl(var(--muted) / 0.16) 100%);
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.045);
 }
 
 .chefops-stock-page > .flex.items-start.justify-between.gap-3 > div:first-child {
@@ -20,14 +29,14 @@
 }
 
 .chefops-stock-page > .flex.items-start.justify-between.gap-3 > div:first-child p {
-  margin-top: 3px;
+  margin-top: 4px;
   font-size: 0.76rem;
-  line-height: 1.15rem;
+  line-height: 1.1rem;
 }
 
 .chefops-stock-page > .flex.items-start.justify-between.gap-3 > .flex.gap-2 {
-  align-items: center;
   flex: 0 0 auto;
+  align-items: center;
 }
 
 .chefops-stock-page > .flex.items-start.justify-between.gap-3 > .flex.gap-2 > button {
@@ -36,124 +45,209 @@
   border-radius: 12px;
   padding-inline: 12px;
   box-shadow: none;
-  transition: transform 150ms ease, box-shadow 150ms ease, border-color 150ms ease;
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease;
 }
 
 .chefops-stock-page > .flex.items-start.justify-between.gap-3 > .flex.gap-2 > button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.1);
+  border-color: hsl(var(--primary) / 0.45);
+  box-shadow: 0 7px 18px rgba(15, 23, 42, 0.075);
 }
 
-.chefops-stock-page > input[type='date'],
-.chefops-stock-page > section.rounded-2xl,
-.chefops-stock-page > div.rounded-xl.border.border-border.bg-card {
-  min-height: var(--stock-control-height);
-  border-color: hsl(var(--border));
-  background: var(--stock-surface);
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.035);
-}
-
+/* Date + outlet: one visual control row, not a card inside another card */
 .chefops-stock-page > input[type='date'] {
-  font-weight: 650;
+  height: var(--stock-control-height);
+  min-height: var(--stock-control-height);
+  border: 1px solid hsl(var(--border));
+  border-radius: 15px;
+  background: var(--stock-surface);
+  padding-inline: 16px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.035);
 }
 
 .chefops-stock-page > section.rounded-2xl {
-  border-radius: 16px;
-  padding: 11px 13px;
+  position: relative;
+  min-height: var(--stock-control-height);
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.chefops-stock-page > section.rounded-2xl > .mb-2.flex.items-center.gap-2 {
+  position: absolute;
+  z-index: 2;
+  top: 50%;
+  left: 15px;
+  margin: 0;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+.chefops-stock-page > section.rounded-2xl > .mb-2.flex.items-center.gap-2 p {
+  display: none;
+}
+
+.chefops-stock-page > section.rounded-2xl > .mb-2.flex.items-center.gap-2 svg {
+  width: 18px;
+  height: 18px;
 }
 
 .chefops-stock-page > section.rounded-2xl select {
+  width: 100%;
   height: var(--stock-control-height);
-  border-radius: 12px;
-  font-weight: 600;
+  border: 1px solid hsl(var(--border));
+  border-radius: 15px;
+  background: var(--stock-surface);
+  padding-right: 42px;
+  padding-left: 44px;
+  font-size: 0.9rem;
+  font-weight: 650;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.035);
 }
 
 .chefops-stock-page > div.rounded-xl.border.border-border.bg-card {
-  display: inline-flex;
+  display: flex;
+  min-height: var(--stock-control-height);
   align-items: center;
-  min-height: 64px;
-  border-radius: 16px;
-  padding: 0 14px;
+  border-radius: 15px;
+  padding: 0 16px;
+  font-weight: 650;
+  box-shadow: 0 5px 16px rgba(15, 23, 42, 0.035);
+}
+
+.chefops-stock-page > input[type='date']:focus-visible,
+.chefops-stock-page > section.rounded-2xl select:focus-visible {
+  border-color: hsl(var(--primary));
+  outline: none;
+  box-shadow: 0 0 0 3px hsl(var(--primary) / 0.15);
+}
+
+/* Compact KPI strip */
+.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  text-align: left;
 }
 
 .chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div {
   position: relative;
+  display: flex;
+  min-height: 84px;
+  flex-direction: column;
+  justify-content: center;
   overflow: hidden;
-  min-height: 100px;
-  padding: 17px 16px 15px;
-  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  border: 1px solid hsl(var(--border) / 0.9);
+  border-radius: 16px;
+  background: hsl(var(--card));
+  padding: 13px 16px;
+  box-shadow: none;
+  transition: border-color 150ms ease, background-color 150ms ease;
+}
+
+.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div::before {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  content: '';
+  background: hsl(var(--primary) / 0.72);
+  box-shadow: 0 0 0 5px hsl(var(--primary) / 0.08);
 }
 
 .chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div::after {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 4px;
-  content: '';
-  background: hsl(var(--primary) / 0.82);
+  display: none;
 }
 
-.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div:nth-child(2)::after {
-  background: hsl(152 69% 43% / 0.78);
+.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div:nth-child(2)::before {
+  background: hsl(152 58% 43%);
+  box-shadow: 0 0 0 5px hsl(152 58% 43% / 0.09);
 }
 
-.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div:nth-child(3)::after {
-  background: hsl(215 20% 55% / 0.62);
+.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div:nth-child(3)::before {
+  background: hsl(215 20% 58%);
+  box-shadow: 0 0 0 5px hsl(215 20% 58% / 0.09);
 }
 
-.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div:nth-child(4)::after {
-  background: hsl(0 72% 51% / 0.82);
+.chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div:nth-child(4)::before {
+  background: hsl(0 68% 52%);
+  box-shadow: 0 0 0 5px hsl(0 68% 52% / 0.09);
 }
 
 .chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div:hover {
-  transform: translateY(-1px);
-  border-color: hsl(var(--primary) / 0.32);
-  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.07);
+  border-color: hsl(var(--primary) / 0.34);
+  background: hsl(var(--muted) / 0.12);
 }
 
 .chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div > p:first-child {
-  font-size: 1.55rem;
-  line-height: 1.85rem;
-  letter-spacing: -0.035em;
+  font-size: 1.65rem;
+  line-height: 1.8rem;
+  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums;
 }
 
 .chefops-stock-page > .grid.grid-cols-2.gap-2.text-center > div > p:last-child {
-  margin-top: 4px;
-  font-size: 0.69rem;
+  margin-top: 5px;
+  font-size: 0.72rem;
   line-height: 1rem;
-  font-weight: 600;
+  font-weight: 650;
 }
 
+/* Search and section filters are separate layers, not one giant pill */
 .chefops-stock-toolbar {
-  top: 10px;
+  top: 8px;
   z-index: 48;
-  border-color: hsl(var(--border) / 0.94) !important;
-  background: hsl(var(--background) / 0.94) !important;
+  display: block !important;
+  margin-inline: 0 !important;
+  border: 0 !important;
+  padding: 8px 0 12px !important;
+  background: linear-gradient(to bottom, hsl(var(--background) / 0.98) 74%, hsl(var(--background) / 0.86)) !important;
+  box-shadow: none !important;
+  backdrop-filter: blur(12px);
+}
+
+.chefops-stock-toolbar > .relative {
+  max-width: 440px;
 }
 
 .chefops-stock-toolbar input {
-  height: 44px;
-  border-radius: 12px;
+  height: 46px;
+  border-radius: 14px;
+  border-color: hsl(var(--border));
   background: hsl(var(--card));
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.03);
+}
+
+.chefops-stock-toolbar > .mt-2 {
+  margin-top: 10px;
+  padding-bottom: 2px;
 }
 
 .chefops-stock-toolbar button {
   min-height: 34px;
   border-radius: 999px;
+  padding-inline: 13px;
+  font-weight: 650;
 }
 
+/* Stock sections and item cards */
 .chefops-stock-page > .space-y-5 > section {
   overflow: hidden;
-  border-color: hsl(var(--border) / 0.9);
+  border: 1px solid hsl(var(--border) / 0.88);
+  border-radius: 18px;
+  background: hsl(var(--card));
+  padding: 16px;
 }
 
 .chefops-stock-page > .space-y-5 > section > .flex.items-center.justify-between.border-b {
   margin: -16px -16px 4px !important;
   padding: 13px 16px 12px;
-  background: hsl(var(--muted) / 0.24);
+  background: hsl(var(--muted) / 0.2);
 }
 
 .chefops-stock-page > .space-y-5 > section > .flex.items-center.justify-between.border-b h2 {
@@ -164,18 +258,17 @@
 .chefops-stock-page > .space-y-5 > section > div.rounded-xl.border {
   position: relative;
   overflow: hidden;
-  border-color: hsl(var(--border) / 0.88);
+  border-color: hsl(var(--border) / 0.86);
   background: hsl(var(--card));
-  transition: transform 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
 }
 
 .chefops-stock-page > .space-y-5 > section > div.rounded-xl.border::before {
   position: absolute;
   inset: 0 auto 0 0;
-  width: 4px;
+  width: 3px;
   content: '';
   background: hsl(var(--border));
-  transition: background-color 150ms ease;
 }
 
 .chefops-stock-page > .space-y-5 > section > div.rounded-xl.border:has(.text-red-800)::before,
@@ -202,9 +295,8 @@
 }
 
 .chefops-stock-page > .space-y-5 > section > div.rounded-xl.border:hover {
-  transform: translateY(-1px);
-  border-color: hsl(var(--primary) / 0.34);
-  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.07);
+  border-color: hsl(var(--primary) / 0.3);
+  box-shadow: 0 9px 22px rgba(15, 23, 42, 0.05);
 }
 
 .chefops-stock-page > .space-y-5 > section > div.rounded-xl.border .mt-3.grid.grid-cols-2.gap-3 {
@@ -213,7 +305,7 @@
 
 .chefops-stock-page > .space-y-5 > section > div.rounded-xl.border .mt-3.grid.grid-cols-2.gap-3 > div:first-child > div {
   height: 46px;
-  border: 1px solid hsl(var(--border) / 0.72);
+  border: 1px solid hsl(var(--border) / 0.7);
   border-radius: 10px;
   background: var(--stock-soft-surface);
   font-weight: 600;
@@ -240,9 +332,10 @@
   letter-spacing: 0.055em;
 }
 
+/* Desktop/tablet Save = icon + Save. Mobile remains icon-only. */
 @media (min-width: 640px) {
   .chefops-stock-page > .flex.items-start.justify-between.gap-3 > .flex.gap-2 > button:last-child {
-    min-width: 108px;
+    min-width: 96px;
     gap: 8px;
     padding-inline: 16px;
     font-size: 0;
@@ -254,6 +347,38 @@
     line-height: 1rem;
     font-weight: 750;
     letter-spacing: 0.01em;
+  }
+}
+
+@media (min-width: 700px) {
+  .chefops-stock-page {
+    display: grid;
+    grid-template-columns: minmax(190px, 260px) minmax(340px, 620px) minmax(0, 1fr);
+    gap: 14px 16px;
+  }
+
+  .chefops-stock-page > .flex.items-start.justify-between.gap-3,
+  .chefops-stock-page > .grid.grid-cols-2.gap-2.text-center,
+  .chefops-stock-page > .chefops-stock-toolbar,
+  .chefops-stock-page > .space-y-5,
+  .chefops-stock-page > div.rounded-lg {
+    grid-column: 1 / -1;
+  }
+
+  .chefops-stock-page > input[type='date'] {
+    grid-column: 1;
+    grid-row: 2;
+  }
+
+  .chefops-stock-page > section.rounded-2xl,
+  .chefops-stock-page > div.rounded-xl.border.border-border.bg-card {
+    grid-column: 2;
+    grid-row: 2;
+  }
+
+  .chefops-stock-page > .grid.grid-cols-2.gap-2.text-center {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
   }
 }
 
@@ -273,25 +398,18 @@
   }
 }
 
-@media (min-width: 900px) {
-  .chefops-stock-toolbar {
-    display: grid;
-    grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.7fr);
-    align-items: center;
-    gap: 12px;
-  }
-
-  .chefops-stock-toolbar > .mt-2 {
-    min-width: 0;
-    margin-top: 0;
-  }
-}
-
-@media (max-width: 560px) {
+@media (max-width: 699px) {
   .chefops-stock-page > .flex.items-start.justify-between.gap-3 {
     padding: 15px;
   }
 
+  .chefops-stock-page > section.rounded-2xl,
+  .chefops-stock-page > div.rounded-xl.border.border-border.bg-card {
+    width: 100%;
+  }
+}
+
+@media (max-width: 560px) {
   .chefops-stock-page > .space-y-5 > section > div.rounded-xl.border .mt-3.grid.grid-cols-2.gap-3 {
     grid-template-columns: minmax(0, 1fr);
   }
