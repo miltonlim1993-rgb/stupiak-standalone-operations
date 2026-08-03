@@ -2,17 +2,20 @@ import { execFileSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import process from 'node:process'
+import { java21Environment } from './android-java.mjs'
 
 const root = process.cwd()
 const web = path.join(root, 'web')
-const cap = path.join(web, 'node_modules', '.bin', 'cap')
+const cap = path.join(web, 'node_modules', '.bin', process.platform === 'win32' ? 'cap.cmd' : 'cap')
+const { javaHome, env } = java21Environment()
 
 function run(command, args, cwd = root) {
   console.log(`\n$ ${command} ${args.join(' ')}`)
-  execFileSync(command, args, { cwd, stdio: 'inherit' })
+  execFileSync(command, args, { cwd, env, stdio: 'inherit' })
 }
 
 if (!existsSync(path.join(web, 'package.json'))) throw new Error('Run this from the ChefOps project root.')
+console.log(`Using Java 21: ${javaHome}`)
 
 run('npm', [
   'install',
