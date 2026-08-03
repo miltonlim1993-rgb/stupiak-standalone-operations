@@ -8,10 +8,12 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
+  issues: write
 
 env:
-  DEPLOYMENT_RUN_ID: stock-count-ui-pwa-v38-20260803-2056
+  DEPLOYMENT_RUN_ID: stock-count-ui-pwa-v38-20260803-2108
+  DEPLOYMENT_STATUS_ISSUE: "44"
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
@@ -35,6 +37,13 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Check Cloudflare deployment credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${CLOUDFLARE_API_TOKEN}" ]] || { echo "CLOUDFLARE_API_TOKEN is missing" >&2; exit 1; }
+          [[ -n "${CLOUDFLARE_ACCOUNT_ID}" ]] || { echo "CLOUDFLARE_ACCOUNT_ID is missing" >&2; exit 1; }
+
       - name: Install exact dependencies
         run: npm ci
 
@@ -48,6 +57,7 @@ jobs:
         run: npx wrangler deploy --config worker/wrangler.production.jsonc
 
       - name: Verify live PWA v38
+        id: verify
         shell: bash
         run: |
           set -euo pipefail
@@ -56,34 +66,41 @@ jobs:
             shell="$(curl -fsS --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/sw-v38.js?attempt=${attempt}&ts=$(date +%s)" || true)"
             if grep -Fq '"pwa_version": "stock-count-ui-pwa-v38"' <<<"$release" \
               && grep -Fq "stock-count-ui-pwa-v38" <<<"$shell"; then
+              echo "verified=true" >> "$GITHUB_OUTPUT"
               echo "LIVE_PWA_VERSION=stock-count-ui-pwa-v38"
               echo "PRODUCTION_DEPLOYMENT_VERIFIED=true"
-              mkdir -p audit
-              {
-                echo "deployment_run_id=${DEPLOYMENT_RUN_ID}"
-                echo "deployed_commit=${GITHUB_SHA}"
-                echo "pwa_version=stock-count-ui-pwa-v38"
-                echo "verified_origin=${OPS_PRODUCTION_ORIGIN}"
-                echo "verified_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-                echo "production_deployment_verified=true"
-              } > audit/stock-count-pwa-v38-deploy.txt
               exit 0
             fi
             sleep 10
           done
+          echo "verified=false" >> "$GITHUB_OUTPUT"
           echo "Production did not expose PWA v38 within the verification window" >&2
           exit 1
 
-      - name: Commit deployment receipt
+      - name: Publish deployment status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_JOB_STATUS: ${{ job.status }}
+          LIVE_VERIFIED: ${{ steps.verify.outputs.verified }}
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "stupiaks-ops-release"
-          git config user.email "actions@users.noreply.github.com"
-          git add audit/stock-count-pwa-v38-deploy.txt
-          if git diff --cached --quiet; then
-            echo "Deployment receipt already current"
-            exit 0
+          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [[ "${DEPLOYMENT_JOB_STATUS}" == "success" && "${LIVE_VERIFIED}" == "true" ]]; then
+            result="SUCCESS"
+          else
+            result="FAILED"
           fi
-          git commit -m "Record verified Stock Count PWA v38 deployment"
-          git push origin HEAD:main
+          gh issue comment "${DEPLOYMENT_STATUS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "$(cat <<EOF
+          ## Stock Count PWA v38 deployment: ${result}
+
+          - Run ID: \`${DEPLOYMENT_RUN_ID}\`
+          - Commit: \`${GITHUB_SHA}\`
+          - Job status: \`${DEPLOYMENT_JOB_STATUS}\`
+          - Live v38 verified: \`${LIVE_VERIFIED:-false}\`
+          - Production: \`${OPS_PRODUCTION_ORIGIN}\`
+          - Workflow: ${run_url}
+          - Checked at: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`
+          EOF
+          )"
