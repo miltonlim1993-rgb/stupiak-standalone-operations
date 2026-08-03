@@ -205,7 +205,6 @@ export default function OperationalTasksV2() {
 
   useEffect(() => {
     if (!outletId) return
-    // Always bypass the old Task/Data Package cache on first entry or date/outlet change.
     load(true)
   }, [date, load, outletId])
 
@@ -373,18 +372,62 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
   const config = task.config || {}
   const groups = task.photo_requirements || config.photo_groups || []
   const input = useRef({})
+  const localPhotoUrls = useRef(new Map())
   const [responses, setResponses] = useState(() => mapResponses(task))
   const [notes, setNotes] = useState(task.completion_notes || '')
   const [busy, setBusy] = useState(false)
   const [uploading, setUploading] = useState('')
   const [deleting, setDeleting] = useState('')
+  const [localPhotos, setLocalPhotos] = useState([])
+  const [groupErrors, setGroupErrors] = useState({})
   const readonly = ['NOT_OPEN', 'LOCKED', 'DONE'].includes(String(task.access_state).toUpperCase())
   const sop = task.sop_id || config.sop_id
+
+  const releaseLocalPhoto = useCallback((id) => {
+    const url = localPhotoUrls.current.get(id)
+    if (url) URL.revokeObjectURL(url)
+    localPhotoUrls.current.delete(id)
+  }, [])
 
   useEffect(() => {
     setResponses(mapResponses(task))
     setNotes(task.completion_notes || '')
   }, [task.id, task.version, task.updated_date])
+
+  useEffect(() => {
+    setLocalPhotos((current) => {
+      current.forEach((photo) => releaseLocalPhoto(photo.id))
+      return []
+    })
+    setGroupErrors({})
+  }, [releaseLocalPhoto, task.id])
+
+  useEffect(() => () => {
+    localPhotoUrls.current.forEach((url) => URL.revokeObjectURL(url))
+    localPhotoUrls.current.clear()
+  }, [])
+
+  useEffect(() => {
+    const onCameraError = (event) => {
+      const groupId = String(event.detail?.groupId || '')
+      if (!groupId) return
+      setGroupErrors((current) => ({
+        ...current,
+        [groupId]: String(event.detail?.message || '无法打开相机'),
+      }))
+    }
+    window.addEventListener('chefops:task-photo-inline-error', onCameraError)
+    return () => window.removeEventListener('chefops:task-photo-inline-error', onCameraError)
+  }, [])
+
+  useEffect(() => {
+    const serverIds = new Set((photos || []).map((photo) => String(photo.id || '')).filter(Boolean))
+    setLocalPhotos((current) => current.filter((photo) => {
+      if (!photo.serverId || !serverIds.has(String(photo.serverId))) return true
+      releaseLocalPhoto(photo.id)
+      return false
+    }))
+  }, [photos, releaseLocalPhoto])
 
   const update = (id, patch) => setResponses((current) => ({
     ...current,
@@ -409,35 +452,95 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
     }
   }
 
-  async function upload(group, file) {
+  function removeLocalPhoto(id) {
+    releaseLocalPhoto(id)
+    setLocalPhotos((current) => current.filter((photo) => photo.id !== id))
+  }
+
+  async function upload(group, file, existingLocal = null) {
     if (!file) return
+
+    const localId = existingLocal?.id || `task-photo-local-${crypto.randomUUID()}`
+    if (!existingLocal) {
+      const url = URL.createObjectURL(file)
+      localPhotoUrls.current.set(localId, url)
+      setLocalPhotos((current) => [
+        ...current,
+        {
+          id: localId,
+          groupId: group.id,
+          file,
+          url,
+          uploaded: null,
+          serverId: '',
+          error: '',
+        },
+      ])
+    } else {
+      setLocalPhotos((current) => current.map((photo) => (
+        photo.id === localId ? { ...photo, error: '' } : photo
+      )))
+    }
+
+    setGroupErrors((current) => ({ ...current, [group.id]: '' }))
     setUploading(group.id)
+
     try {
       const watermarked = await watermarkTaskPhoto(file, { capturedAt: new Date() })
-      const uploaded = await opsClient.integrations.Core.UploadFile({
-        file: watermarked.file,
-        folderType: 'Task Evidence',
-        outletName,
-        outletId,
-      })
-      await opsClient.entities.TaskPhoto.create({
-        outlet_id: outletId,
-        task_id: task.id,
-        template_id: task.template_id,
-        photo_type: `checklist:${group.id}`,
-        drive_file_id: uploaded.drive_file_id || '',
-        file_name: uploaded.file_name || watermarked.file.name,
-        file_url: uploaded.file_url || '',
-        caption: cn(group, 'name'),
-        status: 'active',
-        mime_type: uploaded.mime_type || watermarked.file.type,
-        file_size: Number(uploaded.file_size || watermarked.file.size),
-        captured_at: watermarked.capturedAt,
-        watermark_text: watermarked.watermarkText,
-      }, { year: Number(task.due_date.slice(0, 4)) })
+      let uploaded = existingLocal?.uploaded || null
+      if (!uploaded) {
+        try {
+          uploaded = await opsClient.integrations.Core.UploadFile({
+            file: watermarked.file,
+            folderType: 'Task Checklist Photos',
+            outletName,
+            outletId,
+          })
+        } catch (uploadError) {
+          const failure = new Error('照片上传失败')
+          failure.cause = uploadError
+          throw failure
+        }
+        setLocalPhotos((current) => current.map((photo) => (
+          photo.id === localId ? { ...photo, uploaded } : photo
+        )))
+      }
+
+      let created
+      try {
+        created = await opsClient.entities.TaskPhoto.create({
+          outlet_id: outletId,
+          task_id: task.id,
+          template_id: task.template_id,
+          photo_type: `checklist:${group.id}`,
+          drive_file_id: uploaded.drive_file_id || '',
+          file_name: uploaded.file_name || watermarked.file.name,
+          file_url: uploaded.file_url || '',
+          caption: cn(group, 'name'),
+          status: 'active',
+          mime_type: uploaded.mime_type || watermarked.file.type,
+          file_size: Number(uploaded.file_size || watermarked.file.size),
+          captured_at: watermarked.capturedAt,
+          watermark_text: watermarked.watermarkText,
+        }, { year: Number(task.due_date.slice(0, 4)) })
+      } catch (createError) {
+        const failure = new Error('照片登记失败')
+        failure.cause = createError
+        throw failure
+      }
+
+      setLocalPhotos((current) => current.map((photo) => (
+        photo.id === localId
+          ? { ...photo, uploaded, serverId: String(created?.id || ''), error: '' }
+          : photo
+      )))
       await reload()
     } catch (uploadError) {
-      error(uploadError?.message || 'Unable to upload photo')
+      setLocalPhotos((current) => current.map((photo) => (
+        photo.id === localId
+          ? { ...photo, error: uploadError?.message || '照片处理失败' }
+          : photo
+      )))
     } finally {
       setUploading('')
       if (input.current[group.id]) input.current[group.id].value = ''
@@ -518,12 +621,14 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
             </div>
             {groups.map((group) => {
               const rows = photos.filter((photo) => photo.photo_type === `checklist:${group.id}`)
+              const localRows = localPhotos.filter((photo) => photo.groupId === group.id)
+              const displayCount = rows.length + localRows.length
               const required = String(group.rule).toUpperCase() === 'REQUIRED'
                 || flat(task).filter((item) => item.photo_group_id === group.id).some((item) => result(item, responses[item.id]) === 'fail')
               const minimum = Number(group.min_photos || 1)
               const maximum = Number(group.max_photos || 1)
               return (
-                <div key={group.id} className="rounded-2xl border p-3">
+                <div key={group.id} className="rounded-2xl border p-3" data-task-photo-ui data-task-photo-group={group.id}>
                   <div className="flex justify-between gap-2">
                     <div>
                       <b className="text-sm">{cn(group, 'name')}</b>
@@ -531,17 +636,21 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
                     </div>
                     <small className="whitespace-nowrap">
                       {required
-                        ? rows.length < minimum
-                          ? `还需 ${minimum - rows.length} 张`
-                          : `已完成 · ${rows.length}/${maximum} 张`
-                        : `异常时拍 · ${rows.length}/${maximum} 张`}
+                        ? displayCount < minimum
+                          ? `还需 ${minimum - displayCount} 张`
+                          : `已完成 · ${displayCount}/${maximum} 张`
+                        : `异常时拍 · ${displayCount}/${maximum} 张`}
                     </small>
                   </div>
 
-                  {rows.length ? (
+                  {groupErrors[group.id] ? (
+                    <p className="mt-2 rounded-lg bg-rose-50 px-2.5 py-2 text-xs font-medium text-rose-700">{groupErrors[group.id]}</p>
+                  ) : null}
+
+                  {(rows.length || localRows.length) ? (
                     <div className="mt-2 grid grid-cols-2 gap-2">
                       {rows.map((photo) => (
-                        <div key={photo.id} className="relative">
+                        <div key={photo.id} className="relative" data-task-photo-ui>
                           <TaskEvidenceImage photo={photo} />
                           {!readonly ? (
                             <button
@@ -556,6 +665,29 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
                           ) : null}
                         </div>
                       ))}
+                      {localRows.map((photo) => (
+                        <div key={photo.id} className="relative" data-task-photo-ui>
+                          <img src={photo.url} className="aspect-[4/3] w-full rounded-xl object-cover" alt="刚拍摄的任务照片" />
+                          {photo.error ? (
+                            <div className="absolute inset-0 flex items-center justify-center gap-2 rounded-xl bg-black/65 p-2">
+                              <button
+                                type="button"
+                                onClick={() => upload(group, photo.file, photo)}
+                                className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-slate-900"
+                              >
+                                重试
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeLocalPhoto(photo.id)}
+                                className="rounded-lg border border-white/70 px-3 py-1.5 text-xs font-bold text-white"
+                              >
+                                删除
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
                     </div>
                   ) : null}
 
@@ -565,11 +697,12 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
                         size="sm"
                         variant="outline"
                         className="mt-2"
-                        disabled={uploading === group.id || rows.length >= maximum}
+                        data-task-photo-ui
+                        disabled={uploading === group.id || displayCount >= maximum}
                         onClick={() => input.current[group.id]?.click()}
                       >
-                        {uploading === group.id ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : <Camera className="mr-1 h-4 w-4" />}
-                        {rows.length ? `加拍照片 ${rows.length}/${maximum}` : '拍照'}
+                        <Camera className="mr-1 h-4 w-4" />
+                        {displayCount ? `加拍照片 ${displayCount}/${maximum}` : '拍照'}
                       </Button>
                       <input
                         ref={(node) => { input.current[group.id] = node }}
@@ -577,6 +710,8 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
                         accept="image/*"
                         capture="environment"
                         className="hidden"
+                        data-task-photo-input
+                        data-task-photo-group={group.id}
                         onChange={(event) => upload(group, event.target.files?.[0])}
                       />
                     </>
