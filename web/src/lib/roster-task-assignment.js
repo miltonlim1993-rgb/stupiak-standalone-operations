@@ -227,7 +227,10 @@ function refreshRosterInBackground(args = {}) {
 }
 
 function composeVisibleData(data, rosterRows, user, extra = {}) {
-  const merged = mergeOptimisticTaskPhotos(data, { outletId: extra.outletId || '' })
+  const merged = mergeOptimisticTaskPhotos(data, {
+    outletId: extra.outletId || '',
+    includeUnconfirmed: false,
+  })
   const tasks = (merged?.tasks || []).map((task) => decorateTask(task, taskRosterAssignment(task, rosterRows, user)))
 
   return {
@@ -251,7 +254,10 @@ async function visibleOperationalBootstrap(args = {}) {
   const data = await originalOperationalBootstrap(args)
   const user = currentUser || {}
   if (!user?.email && !user?.full_name && !user?.name) {
-    return mergeOptimisticTaskPhotos(data, { outletId: args.outletId })
+    return mergeOptimisticTaskPhotos(data, {
+      outletId: args.outletId,
+      includeUnconfirmed: false,
+    })
   }
 
   const cachedRoster = readCachedRoster(args.outletId, args.date)
