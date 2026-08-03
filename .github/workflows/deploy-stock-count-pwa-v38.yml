@@ -1,4 +1,4 @@
-name: Deploy Stock Count PWA v38
+name: Deploy Stock Count layout PWA v39
 
 on:
   push:
@@ -12,14 +12,16 @@ permissions:
   issues: write
 
 env:
-  DEPLOYMENT_RUN_ID: stock-count-ui-pwa-v38-20260803-2120
+  DEPLOYMENT_RUN_ID: stock-count-layout-pwa-v39-20260804-0625
   DEPLOYMENT_STATUS_ISSUE: "44"
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
+  CLOUDFLARE_OPS_DB_ID: 080c13d7-e2f5-4c01-a1ca-aa00094d6fc0
+  CLOUDFLARE_SHEET_SYNC_QUEUE_NAME: stupiaks-ops-sheet-sync
+  CLOUDFLARE_SHEET_SYNC_DLQ_NAME: stupiaks-ops-sheet-sync-dlq
   CLOUDFLARE_MEDIA_BUCKET_NAME: ${{ secrets.CLOUDFLARE_MEDIA_BUCKET_NAME }}
 
 jobs:
@@ -42,6 +44,8 @@ jobs:
         env:
           ALL_SECRETS_JSON: ${{ toJSON(secrets) }}
           ALL_VARS_JSON: ${{ toJSON(vars) }}
+          DIRECT_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          DIRECT_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         shell: bash
         run: |
           set -euo pipefail
@@ -50,13 +54,11 @@ jobs:
           const secrets = JSON.parse(process.env.ALL_SECRETS_JSON || '{}')
           const vars = JSON.parse(process.env.ALL_VARS_JSON || '{}')
           const combined = { ...vars, ...secrets }
-          const nonEmpty = Object.entries(combined).filter(([, value]) => String(value || '').trim())
-          const relevantNames = nonEmpty
-            .map(([name]) => name)
-            .filter((name) => /(cloudflare|wrangler|^cf[_-])/i.test(name))
-            .sort()
+          const entries = Object.entries(combined)
+            .map(([name, value]) => [name, String(value || '').trim()])
+            .filter(([, value]) => value)
 
-          function firstByNames(names) {
+          function byName(names) {
             for (const name of names) {
               const value = String(combined[name] || '').trim()
               if (value) return { name, value }
@@ -64,9 +66,9 @@ jobs:
             return null
           }
 
-          function firstByPattern(pattern) {
-            for (const [name, value] of nonEmpty) {
-              if (pattern.test(name)) return { name, value: String(value).trim() }
+          function byPattern(pattern) {
+            for (const [name, value] of entries) {
+              if (pattern.test(name)) return { name, value }
             }
             return null
           }
@@ -80,10 +82,10 @@ jobs:
             fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${String(value || '').replace(/[\r\n]/g, ' ')}\n`)
           }
 
-          const existingToken = String(process.env.CLOUDFLARE_API_TOKEN || '').trim()
-          const token = existingToken
-            ? { name: 'CLOUDFLARE_API_TOKEN', value: existingToken }
-            : firstByNames([
+          const directToken = String(process.env.DIRECT_TOKEN || '').trim()
+          const token = directToken
+            ? { name: 'CLOUDFLARE_API_TOKEN', value: directToken }
+            : byName([
                 'CLOUDFLARE_API_TOKEN',
                 'CF_API_TOKEN',
                 'WRANGLER_API_TOKEN',
@@ -91,18 +93,18 @@ jobs:
                 'CLOUDFLARE_TOKEN',
                 'CF_TOKEN',
               ])
-              || firstByPattern(/(?:cloudflare|wrangler|^cf[_-]).*(?:api[_-]?)?token|(?:api[_-]?)?token.*(?:cloudflare|wrangler|^cf[_-])/i)
+              || byPattern(/(?:cloudflare|wrangler|^cf[_-]).*(?:api[_-]?)?token|(?:api[_-]?)?token.*(?:cloudflare|wrangler|^cf[_-])/i)
 
-          const apiKey = firstByNames(['CLOUDFLARE_API_KEY', 'CF_API_KEY'])
-            || firstByPattern(/(?:cloudflare|^cf[_-]).*api.*key|api.*key.*(?:cloudflare|^cf[_-])/i)
-          const email = firstByNames(['CLOUDFLARE_EMAIL', 'CF_EMAIL'])
-            || firstByPattern(/(?:cloudflare|^cf[_-]).*email|email.*(?:cloudflare|^cf[_-])/i)
+          const apiKey = byName(['CLOUDFLARE_API_KEY', 'CF_API_KEY'])
+            || byPattern(/(?:cloudflare|^cf[_-]).*api.*key|api.*key.*(?:cloudflare|^cf[_-])/i)
+          const email = byName(['CLOUDFLARE_EMAIL', 'CF_EMAIL'])
+            || byPattern(/(?:cloudflare|^cf[_-]).*email|email.*(?:cloudflare|^cf[_-])/i)
 
-          const existingAccount = String(process.env.CLOUDFLARE_ACCOUNT_ID || '').trim()
-          const account = existingAccount
-            ? { name: 'CLOUDFLARE_ACCOUNT_ID', value: existingAccount }
-            : firstByNames(['CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID', 'CLOUDFLARE_ACCOUNT'])
-              || firstByPattern(/(?:cloudflare|^cf[_-]).*account.*id|account.*id.*(?:cloudflare|^cf[_-])/i)
+          const directAccount = String(process.env.DIRECT_ACCOUNT || '').trim()
+          const account = directAccount
+            ? { name: 'CLOUDFLARE_ACCOUNT_ID', value: directAccount }
+            : byName(['CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID', 'CLOUDFLARE_ACCOUNT'])
+              || byPattern(/(?:cloudflare|^cf[_-]).*account.*id|account.*id.*(?:cloudflare|^cf[_-])/i)
 
           let authMode = 'none'
           let authName = 'none'
@@ -118,12 +120,17 @@ jobs:
           }
           if (account) appendEnv('CLOUDFLARE_ACCOUNT_ID', account.value)
 
+          const visibleNames = entries
+            .map(([name]) => name)
+            .filter((name) => /(cloudflare|wrangler|^cf[_-])/i.test(name))
+            .sort()
+
           output('auth_mode', authMode)
           output('auth_name', authName)
           output('account_name', account?.name || 'none')
-          output('available_names', relevantNames.join(',') || 'none')
+          output('available_names', visibleNames.join(',') || 'none')
 
-          console.log(`Cloudflare credential aliases available: ${relevantNames.join(', ') || 'none'}`)
+          console.log(`Cloudflare credential aliases available: ${visibleNames.join(', ') || 'none'}`)
           console.log(`Selected auth mode: ${authMode}`)
           console.log(`Selected auth name: ${authName}`)
           console.log(`Selected account name: ${account?.name || 'none'}`)
@@ -141,34 +148,38 @@ jobs:
       - name: Install exact dependencies
         run: npm ci
 
+      - name: Validate source and architecture
+        run: npm run ops:audit:contract
+
       - name: Build Web/PWA and validate Worker
         run: npm run build
 
-      - name: Render production Cloudflare config
+      - name: Render canonical production bindings
         run: npm run cf:render
 
-      - name: Deploy Web/PWA assets to production
+      - name: Deploy Worker and Web/PWA assets
         run: npx wrangler deploy --config worker/wrangler.production.jsonc
 
-      - name: Verify live PWA v38
+      - name: Verify live PWA v39
         id: verify
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 18); do
-            release="$(curl -fsS --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/app-release.json?attempt=${attempt}&ts=$(date +%s)" || true)"
-            shell="$(curl -fsS --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/sw-v38.js?attempt=${attempt}&ts=$(date +%s)" || true)"
-            if grep -Fq '"pwa_version": "stock-count-ui-pwa-v38"' <<<"$release" \
-              && grep -Fq "stock-count-ui-pwa-v38" <<<"$shell"; then
+          for attempt in $(seq 1 24); do
+            stamp="$(date +%s)"
+            release="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/app-release.json?attempt=${attempt}&ts=${stamp}" || true)"
+            shell="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/sw-v38.js?attempt=${attempt}&ts=${stamp}" || true)"
+            if grep -Fq '"pwa_version": "stock-count-layout-pwa-v39"' <<<"$release" \
+              && grep -Fq 'stock-count-layout-pwa-v39' <<<"$shell"; then
               echo "verified=true" >> "$GITHUB_OUTPUT"
-              echo "LIVE_PWA_VERSION=stock-count-ui-pwa-v38"
+              echo "LIVE_PWA_VERSION=stock-count-layout-pwa-v39"
               echo "PRODUCTION_DEPLOYMENT_VERIFIED=true"
               exit 0
             fi
             sleep 10
           done
           echo "verified=false" >> "$GITHUB_OUTPUT"
-          echo "Production did not expose PWA v38 within the verification window" >&2
+          echo "Production did not expose PWA v39 within the verification window" >&2
           exit 1
 
       - name: Publish deployment status
@@ -191,12 +202,12 @@ jobs:
             result="FAILED"
           fi
           gh issue comment "${DEPLOYMENT_STATUS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "$(cat <<EOF
-          ## Stock Count PWA v38 deployment: ${result}
+          ## Stock Count layout PWA v39 deployment: ${result}
 
           - Run ID: \`${DEPLOYMENT_RUN_ID}\`
           - Commit: \`${GITHUB_SHA}\`
           - Job status: \`${DEPLOYMENT_JOB_STATUS}\`
-          - Live v38 verified: \`${LIVE_VERIFIED:-false}\`
+          - Live v39 verified: \`${LIVE_VERIFIED:-false}\`
           - Auth mode selected: \`${AUTH_MODE:-none}\`
           - Auth secret selected: \`${AUTH_NAME:-none}\`
           - Account setting selected: \`${ACCOUNT_NAME:-none}\`
