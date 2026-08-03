@@ -11,6 +11,7 @@ permissions:
   contents: write
 
 env:
+  DEPLOYMENT_RUN_ID: stock-count-ui-pwa-v38-20260803-2056
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
@@ -59,6 +60,7 @@ jobs:
               echo "PRODUCTION_DEPLOYMENT_VERIFIED=true"
               mkdir -p audit
               {
+                echo "deployment_run_id=${DEPLOYMENT_RUN_ID}"
                 echo "deployed_commit=${GITHUB_SHA}"
                 echo "pwa_version=stock-count-ui-pwa-v38"
                 echo "verified_origin=${OPS_PRODUCTION_ORIGIN}"
