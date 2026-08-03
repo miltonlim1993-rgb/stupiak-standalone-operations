@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
@@ -57,9 +57,31 @@ jobs:
               && grep -Fq "stock-count-ui-pwa-v38" <<<"$shell"; then
               echo "LIVE_PWA_VERSION=stock-count-ui-pwa-v38"
               echo "PRODUCTION_DEPLOYMENT_VERIFIED=true"
+              mkdir -p audit
+              {
+                echo "deployed_commit=${GITHUB_SHA}"
+                echo "pwa_version=stock-count-ui-pwa-v38"
+                echo "verified_origin=${OPS_PRODUCTION_ORIGIN}"
+                echo "verified_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+                echo "production_deployment_verified=true"
+              } > audit/stock-count-pwa-v38-deploy.txt
               exit 0
             fi
             sleep 10
           done
           echo "Production did not expose PWA v38 within the verification window" >&2
           exit 1
+
+      - name: Commit deployment receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "stupiaks-ops-release"
+          git config user.email "actions@users.noreply.github.com"
+          git add audit/stock-count-pwa-v38-deploy.txt
+          if git diff --cached --quiet; then
+            echo "Deployment receipt already current"
+            exit 0
+          fi
+          git commit -m "Record verified Stock Count PWA v38 deployment"
+          git push origin HEAD:main
