@@ -35,7 +35,7 @@ import {
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v20-task-audience-assignment'
+const WORKER_REVISION = 'realtime-resilience-v21-live-task-photo-confirmation'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
