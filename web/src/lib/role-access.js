@@ -1,4 +1,4 @@
-import { ROLE_LEVEL } from '@/lib/ops-helpers'
+import { ROLE_LEVEL } from './ops-helpers.js'
 
 export const DAILY_OPERATION_PATHS = Object.freeze([
   '/tasks',
