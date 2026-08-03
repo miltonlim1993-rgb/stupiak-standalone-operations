@@ -19,7 +19,7 @@ import { installMediaUiRepair } from '@/lib/media-ui'
 import { installViewportGeometry } from '@/lib/viewport-geometry'
 import { installOperationalTaskPolicy } from '@/lib/operational-task-policy'
 
-const SHELL_VERSION = 'task-save-on-close-pwa-v37'
+const SHELL_VERSION = 'task-photo-save-zoom-pwa-v38'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -154,7 +154,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) 
   })
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw-v37.js', { updateViaCache: 'none' }).then((registration) => {
+    navigator.serviceWorker.register('/sw-v38.js', { updateViaCache: 'none' }).then((registration) => {
       if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' })
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing
