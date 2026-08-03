@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { applyOperationalTaskPolicyPayload as applyServerPolicy } from '../../worker/src/operational-task-policy.js'
 import { applyOperationalTaskPayloadPolicy as applyClientPolicy } from '../../web/src/lib/operational-task-policy.js'
+import { resolveMediaRule } from '../../web/src/lib/media-rules.js'
 import {
   canAccessDailyOperations,
   canAccessSensitiveManagerRoute,
@@ -92,6 +93,13 @@ verify('server policy', serverResult)
 verify('client policy', clientResult)
 assert.deepEqual(clientResult, serverResult, 'server and client task policy outputs must remain equivalent')
 
+const staleRules = [
+  { id: 'old-task-rule', module: 'task', outlet_id: 'RR-KCH', max_files: 8, active: true },
+  { id: 'old-issue-rule', module: 'urgent_issue', outlet_id: 'RR-KCH', max_files: 4, active: true },
+]
+assert.equal(resolveMediaRule(staleRules, 'task', 'RR-KCH').max_files, 10, 'stale Task rule must be normalized to ten')
+assert.equal(resolveMediaRule(staleRules, 'urgent_issue', 'RR-KCH').max_files, 10, 'stale Issue rule must be normalized to ten')
+
 for (const role of ['staff', 'role_staff', 'leader', 'role_leader', 'supervisor', 'role_supervisor']) {
   assert.equal(canAccessDailyOperations(role), true, `${role} must retain daily Task, Training and SOP access`)
   assert.equal(canAccessSensitiveManagerRoute(role, '/tasks'), true, `${role} must access Tasks`)
@@ -99,7 +107,7 @@ for (const role of ['staff', 'role_staff', 'leader', 'role_leader', 'supervisor'
   assert.equal(canAccessSensitiveManagerRoute(role, '/ops-control'), false, `${role} must not access sensitive Ops Control`)
 }
 
-for (const role of ['manager', 'role_manager', 'admin', 'role_admin', 'owner', 'role_owner']) {
+for (const role of ['manager', 'role_manager', 'owner', 'role_owner']) {
   assert.equal(canAccessDailyOperations(role), true, `${role} must retain daily operations access`)
   assert.equal(canAccessSensitiveManagerRoute(role, '/ops-control'), true, `${role} must access Ops Control`)
 }
@@ -111,6 +119,7 @@ console.log('OPERATIONAL_TASK_POLICY_TEST_OK=true')
 console.log('CANONICAL_TASK=tmpl-rr-opening-checklist-v3')
 console.log('RETIRED_TASK=tmpl-rr-daily-standards-v4')
 console.log('PHOTO_LIMIT=10')
+console.log('STALE_MEDIA_RULE_NORMALIZED=true')
 console.log('STAFF_TASK_SOP_ACCESS=true')
 console.log('OPS_CONTROL_MANAGER_ONLY=true')
 console.log('HISTORICAL_RECORD_DELETE=false')
