@@ -5,6 +5,7 @@ import '@/index.css'
 import '@/viewport.css'
 import '@/panels-v8.css'
 import '@/responsive-overlays-v33.css'
+import '@/operational-task-policy.css'
 import '@/direct-print-v10.css'
 import '@/guided-sop-media.css'
 import '@/guided-sop-mobile-readable.css'
@@ -16,8 +17,9 @@ import { installRealtimeClientHeader } from '@/lib/client-id'
 import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
 import { installMediaUiRepair } from '@/lib/media-ui'
 import { installViewportGeometry } from '@/lib/viewport-geometry'
+import { installOperationalTaskPolicy } from '@/lib/operational-task-policy'
 
-const SHELL_VERSION = 'event-autosave-responsive-viewport-v33'
+const SHELL_VERSION = 'task-photo10-staff-access-pwa-v34'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
@@ -125,6 +127,7 @@ markRuntime()
 installNativeSessionFetch()
 installRealtimeClientHeader()
 installRealtimeMutationQueue()
+installOperationalTaskPolicy()
 installNativeLabelPrintBridge()
 installMediaUiRepair()
 applyTheme()
@@ -151,7 +154,7 @@ if ('serviceWorker' in navigator && import.meta.env.PROD && !isNativeAndroid()) 
   })
 
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw-v33.js', { updateViaCache: 'none' }).then((registration) => {
+    navigator.serviceWorker.register('/sw-v34.js', { updateViaCache: 'none' }).then((registration) => {
       if (registration.waiting) registration.waiting.postMessage({ type: 'SKIP_WAITING' })
       registration.addEventListener('updatefound', () => {
         const worker = registration.installing
