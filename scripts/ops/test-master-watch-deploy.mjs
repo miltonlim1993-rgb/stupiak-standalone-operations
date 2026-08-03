@@ -3,12 +3,14 @@ import assert from 'node:assert/strict'
 
 const entry = fs.readFileSync('worker/src/entry-master-watch.js', 'utf8')
 const config = JSON.parse(fs.readFileSync('worker/wrangler.production.example.jsonc', 'utf8'))
+const render = fs.readFileSync('scripts/render-wrangler-production.mjs', 'utf8')
 const deploy = fs.readFileSync('scripts/deploy-master-watch-now.sh', 'utf8')
 const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'))
 
 assert.equal(config.main, 'src/entry-master-watch.js')
 assert.ok(config.triggers?.crons?.includes('*/2 * * * *'))
 assert.ok(config.triggers?.crons?.includes('0 * * * *'))
+assert.equal(config.vars?.GOOGLE_MASTER_SPREADSHEET_ID, '__GOOGLE_MASTER_SPREADSHEET_ID__')
 
 assert.match(entry, /policy:\s*'drive-modified-time-v1'/)
 assert.match(entry, /master_data_watch/)
@@ -17,7 +19,14 @@ assert.match(entry, /published_at/)
 assert.match(entry, /async fetch\(request, env, ctx\)/)
 assert.match(entry, /async scheduled\(event, env, ctx\)/)
 
+assert.match(render, /GOOGLE_MASTER_SPREADSHEET_ID/)
+assert.match(render, /__GOOGLE_MASTER_SPREADSHEET_ID__/)
+assert.match(render, /Missing required Cloudflare configuration/)
+
 assert.match(deploy, /src\/entry-master-watch\.js/)
+assert.match(deploy, /GOOGLE_MASTER_SPREADSHEET_ID/)
+assert.match(deploy, /1sy-4AIbZssCmP9HQaq-K4OicXjdvOs2EXVNmvh4bSzM/)
+assert.match(deploy, /MASTER_SPREADSHEET_BINDING_VERIFIED=true/)
 assert.match(deploy, /MASTER_WATCH_FIRST_PUBLISH_CONFIRMED=true/)
 assert.match(deploy, /FORMAL_TASK_TESTING_READY=true/)
 assert.match(deploy, /D1_MIGRATION_RUN=false/)
@@ -31,6 +40,7 @@ assert.equal(pkg.scripts['ops:deploy:verified'], 'bash scripts/deploy-master-wat
 
 console.log('MASTER_WATCH_DEPLOY_CONTRACT_OK=true')
 console.log('PRODUCTION_ENTRY=src/entry-master-watch.js')
+console.log('MASTER_SPREADSHEET_BINDING_REQUIRED=true')
 console.log('MASTER_WATCH_HEALTH_MARKER=true')
 console.log('MASTER_WATCH_FIRST_PUBLISH_REQUIRED=true')
 console.log('D1_MIGRATION_RUN=false')

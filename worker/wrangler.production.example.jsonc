@@ -9,6 +9,9 @@
     "not_found_handling": "single-page-application",
     "run_worker_first": true
   },
+  "vars": {
+    "GOOGLE_MASTER_SPREADSHEET_ID": "__GOOGLE_MASTER_SPREADSHEET_ID__"
+  },
   "kv_namespaces": [
     {
       "binding": "APP_DATA_PACKS",
