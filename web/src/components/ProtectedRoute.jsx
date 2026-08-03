@@ -2,6 +2,8 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAuth } from '@/lib/AuthContext'
 import { canAccessSensitiveManagerRoute } from '@/lib/role-access'
 
+const SENSITIVE_MANAGER_PATHS = new Set(['/ops-control'])
+
 function Loading() {
   return (
     <div className="fixed inset-0 flex items-center justify-center bg-background">
@@ -16,7 +18,10 @@ export default function ProtectedRoute() {
   if (isLoadingAuth || !authChecked) return <Loading />
   if (!isAuthenticated) return <Navigate to="/login" replace state={{ from: location.pathname }} />
 
-  if (!canAccessSensitiveManagerRoute(user?.role, location.pathname)) {
+  if (
+    SENSITIVE_MANAGER_PATHS.has(location.pathname)
+    && !canAccessSensitiveManagerRoute(user?.role, location.pathname)
+  ) {
     return <Navigate to="/tasks" replace state={{ accessDenied: 'manager_required', from: location.pathname }} />
   }
 
