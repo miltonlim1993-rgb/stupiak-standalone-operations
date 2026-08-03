@@ -23,13 +23,19 @@ run('npm', [
   '@capacitor/android@^8',
   '@capacitor/app@^8',
   '@capacitor/camera@^8',
+])
+run('npm', [
+  'install',
+  '--no-save',
+  '--package-lock=false',
+  '-D',
+  '-w',
+  'web',
   '@capacitor/cli@^8',
 ])
 run('npm', ['run', 'build', '-w', 'web'])
-if (!existsSync(path.join(web, 'android'))) {
-  run('npm', ['exec', '-w', 'web', '--', 'cap', 'add', 'android'])
-}
-run('npm', ['exec', '-w', 'web', '--', 'cap', 'sync', 'android'])
+if (!existsSync(path.join(web, 'android'))) run('npx', ['cap', 'add', 'android'], web)
+run('npx', ['cap', 'sync', 'android'], web)
 
 console.log('\nAndroid project is ready at web/android.')
 console.log('Open it with: npm run mobile:open')
