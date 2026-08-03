@@ -2,6 +2,7 @@ import { opsClient } from '@/api/opsClient'
 import { normalizePositionCode, parseDutySegments } from '@/lib/positions'
 import { parseOutletIds } from '@/lib/outlets'
 import { isScheduledRosterRow, rosterNameMatchesUser } from '@/lib/roster-alert-gate'
+import { mergeOptimisticTaskPhotos } from '@/lib/task-photo-optimistic'
 
 export const CASHIER_POSITION_CODES = ['C', 'CA']
 export const KITCHEN_POSITION_CODES = ['P', 'G', 'DF']
@@ -9,8 +10,7 @@ export const FRONTLINE_POSITION_CODES = [...CASHIER_POSITION_CODES, ...KITCHEN_P
 
 const LEADERSHIP_ROLES = new Set(['leader', 'supervisor', 'manager', 'owner'])
 const ROSTER_MEMORY_TTL_MS = 15_000
-const ROSTER_STORAGE_PREFIX = 'chefops.roster-task-assignment.roster.v2.'
-const TASK_STORAGE_PREFIX = 'chefops.roster-task-assignment.tasks.v2.'
+const ROSTER_STORAGE_PREFIX = 'chefops.roster-task-assignment.roster.v3.'
 const rosterCache = new Map()
 const freshBuilds = new Map()
 
@@ -134,21 +134,17 @@ export function taskRosterAssignment(task = {}, rosterRows = [], user = currentU
   return { group, codes, names, eligibleRows, assignedToUser }
 }
 
-function canReviewAllTasks(user = {}) {
-  return ['manager', 'owner'].includes(normalized(user.role))
-}
-
-function userIsExcludedLeadership(user = {}) {
-  return ['leader', 'supervisor'].includes(normalized(user.role))
-}
-
 function decorateTask(task, assignment) {
   const config = { ...(task.config || {}) }
-  const originalSubtitle = String(config.title_en || '').replace(/\s*·\s*Assigned:.*$/i, '').replace(/\s*·\s*No .* staff scheduled$/i, '').trim()
-  const assignmentText = assignment.names.length
-    ? `Assigned: ${assignment.names.join(', ')}`
+  const originalSubtitle = String(config.title_en || '')
+    .replace(/\s*·\s*Scheduled:.*$/i, '')
+    .replace(/\s*·\s*No .* staff scheduled$/i, '')
+    .replace(/\s*·\s*Assigned:.*$/i, '')
+    .trim()
+  const scheduleText = assignment.names.length
+    ? `Scheduled: ${assignment.names.join(', ')}`
     : `No ${assignment.group === 'cashier' ? 'Cashier / Cashier Assistant' : assignment.group === 'kitchen' ? 'Packaging / Grill / Deep Fryer' : 'frontline'} staff scheduled`
-  config.title_en = originalSubtitle ? `${originalSubtitle} · ${assignmentText}` : assignmentText
+  config.title_en = originalSubtitle ? `${originalSubtitle} · ${scheduleText}` : scheduleText
 
   return {
     ...task,
@@ -156,8 +152,10 @@ function decorateTask(task, assignment) {
     assignment_group: assignment.group,
     assigned_position_codes: assignment.codes,
     assigned_roster_names: assignment.names,
-    assigned_to_name: assignment.names.join(', '),
-    assigned_to_current_user: assignment.assignedToUser,
+    roster_assigned_to_current_user: assignment.assignedToUser,
+    roster_assignment_mode: 'advisory_only',
+    can_view: true,
+    attendance_required_for_visibility: false,
   }
 }
 
@@ -182,20 +180,12 @@ function rosterStorageKey(outletId, date) {
   return `${ROSTER_STORAGE_PREFIX}${rosterKey(outletId, date)}`
 }
 
-function userIdentity(user = {}) {
-  return normalized(user.email || user.full_name || user.name || 'anonymous')
-}
-
-function taskStorageKey(args = {}, user = {}) {
-  return `${TASK_STORAGE_PREFIX}${userIdentity(user)}|${normalized(user.role)}|${String(args.outletId || '')}|${String(args.date || '')}`
-}
-
 function readCachedRoster(outletId, date) {
   const key = rosterKey(outletId, date)
   const memory = rosterCache.get(key)
-  if (memory?.rows) return memory.rows
+  if (memory?.rows && memory.expiresAt > Date.now()) return memory.rows
   const stored = storageGet(rosterStorageKey(outletId, date))
-  if (!Array.isArray(stored?.rows)) return []
+  if (!Array.isArray(stored?.rows)) return memory?.rows || []
   rosterCache.set(key, { rows: stored.rows, expiresAt: 0 })
   return stored.rows
 }
@@ -205,7 +195,7 @@ async function fetchRoster(outletId, date) {
     { outlet_id: outletId, date },
     'clock_in,staff_role,staff_name',
     300,
-    { year: Number(String(date).slice(0, 4)) },
+    { year: Number(String(date).slice(0, 4)), legacySeed: false },
   )
   const result = rows || []
   const key = rosterKey(outletId, date)
@@ -214,65 +204,18 @@ async function fetchRoster(outletId, date) {
   return result
 }
 
-function assignmentSignature(result = {}) {
-  return JSON.stringify({
-    tasks: (result.tasks || []).map((task) => ({
-      id: task.id,
-      version: task.version,
-      updated_date: task.updated_date,
-      status: task.status,
-      access_state: task.access_state,
-      checklist_completed: task.checklist_completed,
-      assigned_roster_names: task.assigned_roster_names,
-      responses: (task.responses || []).map((row) => [row.item_id, row.value, row.remark, row.updated_date]),
-    })),
-    photos: (result.task_photos || []).map((photo) => [photo.id, photo.updated_date, photo.status, photo.deleted_at]),
-  })
-}
-
-function readTaskSnapshot(args, user) {
-  const stored = storageGet(taskStorageKey(args, user))
-  return stored?.data && Array.isArray(stored.data.tasks) ? stored : null
-}
-
-function persistTaskSnapshot(args, user, data) {
-  const key = taskStorageKey(args, user)
-  const signature = assignmentSignature(data)
-  const previous = storageGet(key)
-  storageSet(key, { data, signature, savedAt: Date.now() })
-  return previous?.signature !== signature
-}
-
-function updateTaskSnapshotAfterAction(args = {}, actionResult = {}, user = currentUser || {}) {
-  const snapshotArgs = { outletId: args.outlet_id || args.outletId, date: args.date || args.due_date }
-  const stored = readTaskSnapshot(snapshotArgs, user)
-  if (!stored?.data || !actionResult?.task) return actionResult
-
-  const rosterRows = readCachedRoster(snapshotArgs.outletId, snapshotArgs.date)
-  const assignment = taskRosterAssignment(actionResult.task, rosterRows, user)
-  const decoratedTask = decorateTask(actionResult.task, assignment)
-  const nextData = {
-    ...stored.data,
-    tasks: (stored.data.tasks || []).map((task) => task.id === decoratedTask.id ? decoratedTask : task),
-  }
-  persistTaskSnapshot(snapshotArgs, user, nextData)
-  return { ...actionResult, task: decoratedTask }
-}
-
-function composeAssignedData(data, rosterRows, user, extra = {}) {
-  const decorated = (data?.tasks || []).map((task) => decorateTask(task, taskRosterAssignment(task, rosterRows, user)))
-  const tasks = canReviewAllTasks(user)
-    ? decorated
-    : userIsExcludedLeadership(user)
-      ? []
-      : decorated.filter((task) => task.assigned_to_current_user)
+function composeVisibleData(data, rosterRows, user, extra = {}) {
+  const merged = mergeOptimisticTaskPhotos(data, { outletId: extra.outletId || '' })
+  const tasks = (merged?.tasks || []).map((task) => decorateTask(task, taskRosterAssignment(task, rosterRows, user)))
 
   return {
-    ...(data || {}),
+    ...(merged || {}),
     tasks,
     roster_assignment: {
-      strict: true,
-      leadership_excluded: true,
+      strict: false,
+      visibility_scope: 'assigned_outlet_members',
+      attendance_required_for_visibility: false,
+      assignment_mode: 'advisory_only',
       cashier_positions: CASHIER_POSITION_CODES,
       kitchen_positions: KITCHEN_POSITION_CODES,
       checked_at: new Date().toISOString(),
@@ -286,75 +229,51 @@ function notifyTaskAssignmentUpdated(args = {}) {
   window.dispatchEvent(new CustomEvent('chefops:roster-task-assignment-updated', {
     detail: { outletId: String(args.outletId || ''), date: String(args.date || '') },
   }))
-  // OperationalTasksV2 already performs a silent sync on focus. Trigger it after
-  // the background snapshot is safely stored, without blocking the page spinner.
-  window.setTimeout(() => window.dispatchEvent(new Event('focus')), 60)
-  window.setTimeout(() => window.dispatchEvent(new Event('focus')), 700)
 }
 
-async function buildFreshAssignedData(args = {}, user = currentUser || {}) {
+async function buildFreshVisibleData(args = {}, user = currentUser || {}) {
   if (!user || !args.outletId || !args.date || !originalOperationalBootstrap) return null
-  const key = taskStorageKey(args, user)
+  const key = rosterKey(args.outletId, args.date)
   if (freshBuilds.has(key)) return freshBuilds.get(key)
 
-  const build = Promise.all([
-    originalOperationalBootstrap(args),
-    fetchRoster(String(args.outletId), String(args.date)),
-  ])
-    .then(([data, rosterRows]) => {
-      const result = composeAssignedData(data, rosterRows, user, { cache_mode: 'fresh', pending: false })
-      const changed = persistTaskSnapshot(args, user, result)
-      if (changed) notifyTaskAssignmentUpdated(args)
-      return result
+  const build = (async () => {
+    const dataPromise = originalOperationalBootstrap(args)
+    const rosterPromise = fetchRoster(String(args.outletId), String(args.date))
+      .catch(() => readCachedRoster(args.outletId, args.date))
+    const [data, rosterRows] = await Promise.all([dataPromise, rosterPromise])
+    const result = composeVisibleData(data, rosterRows, user, {
+      outletId: String(args.outletId),
+      cache_mode: 'live-d1',
+      pending: false,
     })
-    .finally(() => freshBuilds.delete(key))
+    notifyTaskAssignmentUpdated(args)
+    return result
+  })().finally(() => freshBuilds.delete(key))
 
   freshBuilds.set(key, build)
   return build
 }
 
-async function assignedOperationalBootstrap(args = {}) {
+async function visibleOperationalBootstrap(args = {}) {
   const user = currentUser || {}
-  if (!user?.email && !user?.full_name && !user?.name) return originalOperationalBootstrap(args)
+  if (!user?.email && !user?.full_name && !user?.name) {
+    return mergeOptimisticTaskPhotos(await originalOperationalBootstrap(args), { outletId: args.outletId })
+  }
 
-  const snapshot = readTaskSnapshot(args, user)
-  void buildFreshAssignedData(args, user).catch(() => undefined)
-
-  if (snapshot?.data) {
-    return {
-      ...snapshot.data,
-      roster_assignment: {
-        ...(snapshot.data.roster_assignment || {}),
-        cache_mode: 'instant-local',
+  try {
+    return await buildFreshVisibleData(args, user)
+  } catch (error) {
+    const fallbackRoster = readCachedRoster(args.outletId, args.date)
+    try {
+      const fallbackData = await originalOperationalBootstrap({ ...args, refresh: false })
+      return composeVisibleData(fallbackData, fallbackRoster, user, {
+        outletId: String(args.outletId || ''),
+        cache_mode: 'live-fallback',
         pending: false,
-        cached_at: snapshot.savedAt ? new Date(snapshot.savedAt).toISOString() : '',
-      },
+      })
+    } catch {
+      throw error
     }
-  }
-
-  const rosterRows = readCachedRoster(args.outletId, args.date)
-  if (rosterRows.length) {
-    const rawData = await originalOperationalBootstrap({ ...args, refresh: false })
-    const result = composeAssignedData(rawData, rosterRows, user, { cache_mode: 'instant-roster', pending: false })
-    persistTaskSnapshot(args, user, result)
-    return result
-  }
-
-  // First use on a device returns immediately instead of blocking the whole Task
-  // page on two network requests. The background build dispatches a silent reload.
-  return {
-    tasks: [],
-    task_photos: [],
-    server_time: new Date().toISOString(),
-    roster_assignment: {
-      strict: true,
-      leadership_excluded: true,
-      cashier_positions: CASHIER_POSITION_CODES,
-      kitchen_positions: KITCHEN_POSITION_CODES,
-      cache_mode: 'warming',
-      pending: true,
-      checked_at: new Date().toISOString(),
-    },
   }
 }
 
@@ -365,7 +284,7 @@ export function warmRosterTaskAssignmentCache(user = currentUser || {}) {
     timeZone: 'Asia/Kuching', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())
   for (const outletId of outletIds) {
-    void buildFreshAssignedData({ outletId, date: today, refresh: false }, user).catch(() => undefined)
+    void buildFreshVisibleData({ outletId, date: today, refresh: false }, user).catch(() => undefined)
   }
 }
 
@@ -374,10 +293,7 @@ export function configureRosterTaskAssignment(user = null) {
   if (installed) return
   originalOperationalBootstrap = opsClient.tasks.operationalBootstrap.bind(opsClient.tasks)
   originalOperationalAction = opsClient.tasks.operationalAction.bind(opsClient.tasks)
-  opsClient.tasks.operationalBootstrap = assignedOperationalBootstrap
-  opsClient.tasks.operationalAction = async (args = {}) => {
-    const result = await originalOperationalAction(args)
-    return updateTaskSnapshotAfterAction(args, result, currentUser || {})
-  }
+  opsClient.tasks.operationalBootstrap = visibleOperationalBootstrap
+  opsClient.tasks.operationalAction = async (args = {}) => originalOperationalAction(args)
   installed = true
 }
