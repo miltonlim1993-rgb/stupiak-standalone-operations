@@ -1,8 +1,8 @@
 const RETAINED_TEMPLATE_ID = 'tmpl-rr-opening-checklist-v3'
 const RETIRED_TEMPLATE_IDS = new Set(['tmpl-rr-daily-standards-v4'])
 const TASK_PHOTO_LIMIT = 10
-const GUIDANCE_CN = '同类物品请放在同一张照片一起拍摄，不要逐件分开拍；最多可上传 10 张。'
-const GUIDANCE_EN = 'Photograph matching items together in one frame instead of taking separate photos for each item; up to 10 photos are supported.'
+const GUIDANCE_CN = '同类物品请放在同一张照片一起拍摄，不要逐件分开拍；每组最多可上传 10 张。'
+const GUIDANCE_EN = 'Photograph matching items together in one frame instead of taking separate photos for each item; each group supports up to 10 photos.'
 
 function templateId(task) {
   return String(task?.template_id || task?.config?.template_id || '').trim()
