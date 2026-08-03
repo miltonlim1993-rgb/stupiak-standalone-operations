@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "stupiaks-ops",
-  "main": "src/entry.js",
+  "main": "src/entry-master-watch.js",
   "compatibility_date": "2026-07-25",
   "assets": {
     "directory": "../web/dist",
@@ -65,6 +65,6 @@
     "enabled": true
   },
   "triggers": {
-    "crons": ["0 * * * *"]
+    "crons": ["*/2 * * * *", "0 * * * *"]
   }
 }
