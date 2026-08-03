@@ -1,0 +1,80 @@
+import assert from 'node:assert/strict'
+import { readFileSync } from 'node:fs'
+import {
+  clearOptimisticTaskPhotos,
+  commitOptimisticTaskPhoto,
+  mergeOptimisticTaskPhotos,
+  rejectOptimisticTaskPhoto,
+  trackOptimisticTaskPhoto,
+} from '../../web/src/lib/task-photo-optimistic.js'
+
+const mutation = {
+  mutation_id: 'photo-mutation-1',
+  entity: 'TaskPhoto',
+  entity_id: 'photo-1',
+  outlet_id: 'RR-KCH',
+  operation: 'create',
+  queued_at: '2026-08-03T04:00:00.000Z',
+  payload: {
+    id: 'photo-1',
+    outlet_id: 'RR-KCH',
+    task_id: 'task-1',
+    photo_type: 'checklist:opening-sauce',
+    drive_file_id: 'drive-1',
+    file_url: '/api/files/drive-1',
+    status: 'active',
+  },
+}
+
+clearOptimisticTaskPhotos()
+trackOptimisticTaskPhoto(mutation, 'uploading')
+let merged = mergeOptimisticTaskPhotos({ tasks: [{ id: 'task-1' }], task_photos: [] }, { outletId: 'RR-KCH' })
+assert.equal(merged.task_photos.length, 1, 'captured photo must remain visible before D1 confirmation')
+assert.equal(merged.task_photos[0].client_upload_state, 'uploading')
+
+commitOptimisticTaskPhoto(mutation, {
+  record: {
+    ...mutation.payload,
+    __realtime: { version: 1, sync_status: 'pending' },
+  },
+})
+merged = mergeOptimisticTaskPhotos({ task_photos: [] }, { outletId: 'RR-KCH' })
+assert.equal(merged.task_photos.length, 1, 'committed photo must not disappear while bootstrap catches up')
+assert.equal(merged.task_photos[0].client_upload_state, 'committed')
+
+merged = mergeOptimisticTaskPhotos({
+  task_photos: [{ ...mutation.payload, updated_date: '2026-08-03T04:01:00.000Z' }],
+}, { outletId: 'RR-KCH' })
+assert.equal(merged.task_photos.length, 1, 'server confirmation must deduplicate the optimistic photo')
+assert.equal(merged.optimistic_task_photo_count, 0)
+
+trackOptimisticTaskPhoto({ ...mutation, entity_id: 'photo-2', payload: { ...mutation.payload, id: 'photo-2' } }, 'uploading')
+rejectOptimisticTaskPhoto({ ...mutation, entity_id: 'photo-2', payload: { ...mutation.payload, id: 'photo-2' } }, 'rejected')
+merged = mergeOptimisticTaskPhotos({ task_photos: [] }, { outletId: 'RR-KCH' })
+assert.equal(merged.task_photos.length, 0, 'rejected evidence must not be falsely shown as saved')
+
+const rosterSource = readFileSync('web/src/lib/roster-task-assignment.js', 'utf8')
+assert(rosterSource.includes("mergeOptimisticTaskPhotos"), 'roster wrapper must merge optimistic TaskPhoto records')
+assert(rosterSource.includes("cache_mode: 'live-d1'"), 'task bootstrap must use live D1 data')
+assert(rosterSource.includes("attendance_required_for_visibility: false"), 'attendance must not control task visibility')
+assert(!rosterSource.includes('decorated.filter((task) => task.assigned_to_current_user)'), 'roster wrapper must not hide tasks from off-duty staff')
+assert(!rosterSource.includes('userIsExcludedLeadership(user)'), 'leader and supervisor task lists must not be emptied')
+assert(!rosterSource.includes('tasks: [],\n    task_photos: []'), 'first load must not return a fabricated empty task response')
+
+const realtimePhotoSource = readFileSync('worker/src/realtime-task-photo.js', 'utf8')
+assert(realtimePhotoSource.includes('publishedTaskTemplates'), 'TaskPhoto validation must use the published Task package')
+assert(realtimePhotoSource.includes('d1TaskPhotos'), 'TaskPhoto count must come from D1')
+assert(!realtimePhotoSource.includes("from './sheets.js'"), 'TaskPhoto realtime mutation must not import Sheet runtime reads')
+assert(!realtimePhotoSource.includes('listRecords('), 'TaskPhoto realtime mutation must not read Sheet records')
+assert(!realtimePhotoSource.includes('findRecord('), 'TaskPhoto realtime mutation must not fall back to Sheet records')
+
+const appSource = readFileSync('web/src/App.jsx', 'utf8')
+assert(appSource.includes('<TaskPhotoSyncStatus />'), 'staff must receive explicit TaskPhoto save status')
+
+console.log('TASK_PHOTO_VISIBILITY_TEST_OK=true')
+console.log('OFF_DUTY_TASK_VISIBILITY=true')
+console.log('ROSTER_FILTERS_TASKS=false')
+console.log('STALE_TASK_SNAPSHOT_PRIMARY=false')
+console.log('CAPTURED_PHOTO_OPTIMISTICALLY_VISIBLE=true')
+console.log('TASK_PHOTO_D1_ONLY=true')
+console.log('TASK_PHOTO_SHEET_RUNTIME_READ=false')
