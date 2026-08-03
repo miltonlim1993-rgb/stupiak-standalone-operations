@@ -272,6 +272,10 @@ export async function commitAttendanceRoster(request, env, actor, body) {
     SELECT * FROM ops_records
     WHERE entity = '${ENTITY}' AND outlet_id = ?
       AND business_date IN (${placeholders})
+      AND (
+        status = 'scheduled'
+        OR lower(COALESCE(json_extract(payload_json, '$.status'), '')) = 'scheduled'
+      )
   `).bind(outletId, ...normalized.dates).all()
   const existingRows = existingResponse.results || []
   const existingById = new Map(existingRows.map((row) => [String(row.entity_id), row]))
@@ -321,6 +325,10 @@ export async function commitAttendanceRoster(request, env, actor, body) {
       SET deleted_at = ?, status = 'archived', updated_at = ?, updated_by = ?
       WHERE entity = '${ENTITY}' AND outlet_id = ?
         AND business_date IN (${placeholders}) AND deleted_at = ''
+        AND (
+          status = 'scheduled'
+          OR lower(COALESCE(json_extract(payload_json, '$.status'), '')) = 'scheduled'
+        )
     `).bind(timestamp, timestamp, actor.email, outletId, ...normalized.dates))
   }
 
@@ -426,6 +434,7 @@ export async function mirrorAttendanceRosterToSheets(env, message) {
       await updateManyRecords(env, ENTITY, {
         outlet_id: String(message.outlet_id || ''),
         date: String(date || '').slice(0, 10),
+        status: 'scheduled',
       }, {
         deleted_at: timestamp,
         updated_date: timestamp,
@@ -443,5 +452,5 @@ export const ATTENDANCE_ROSTER_POLICY = Object.freeze({
   maximum_rows: MAX_ROWS,
   maximum_dates: MAX_DATES,
   storage: 'd1',
-  replacement: 'soft-delete-selected-outlet-dates',
+  replacement: 'soft-delete-selected-outlet-date-scheduled-rows',
 })
