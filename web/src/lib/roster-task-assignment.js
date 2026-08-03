@@ -12,7 +12,7 @@ const LEADERSHIP_ROLES = new Set(['leader', 'supervisor', 'manager', 'owner'])
 const ROSTER_MEMORY_TTL_MS = 15_000
 const ROSTER_STORAGE_PREFIX = 'chefops.roster-task-assignment.roster.v3.'
 const rosterCache = new Map()
-const freshBuilds = new Map()
+const rosterRefreshes = new Map()
 
 let currentUser = null
 let installed = false
@@ -204,6 +204,28 @@ async function fetchRoster(outletId, date) {
   return result
 }
 
+function refreshRosterInBackground(args = {}) {
+  const outletId = String(args.outletId || '')
+  const date = String(args.date || '')
+  if (!outletId || !date) return Promise.resolve([])
+  const key = rosterKey(outletId, date)
+  if (rosterRefreshes.has(key)) return rosterRefreshes.get(key)
+
+  const refresh = fetchRoster(outletId, date)
+    .then((rows) => {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('chefops:roster-task-assignment-updated', {
+          detail: { outletId, date, advisoryOnly: true },
+        }))
+      }
+      return rows
+    })
+    .catch(() => readCachedRoster(outletId, date))
+    .finally(() => rosterRefreshes.delete(key))
+  rosterRefreshes.set(key, refresh)
+  return refresh
+}
+
 function composeVisibleData(data, rosterRows, user, extra = {}) {
   const merged = mergeOptimisticTaskPhotos(data, { outletId: extra.outletId || '' })
   const tasks = (merged?.tasks || []).map((task) => decorateTask(task, taskRosterAssignment(task, rosterRows, user)))
@@ -216,6 +238,7 @@ function composeVisibleData(data, rosterRows, user, extra = {}) {
       visibility_scope: 'assigned_outlet_members',
       attendance_required_for_visibility: false,
       assignment_mode: 'advisory_only',
+      blocks_task_bootstrap: false,
       cashier_positions: CASHIER_POSITION_CODES,
       kitchen_positions: KITCHEN_POSITION_CODES,
       checked_at: new Date().toISOString(),
@@ -224,57 +247,20 @@ function composeVisibleData(data, rosterRows, user, extra = {}) {
   }
 }
 
-function notifyTaskAssignmentUpdated(args = {}) {
-  if (typeof window === 'undefined') return
-  window.dispatchEvent(new CustomEvent('chefops:roster-task-assignment-updated', {
-    detail: { outletId: String(args.outletId || ''), date: String(args.date || '') },
-  }))
-}
-
-async function buildFreshVisibleData(args = {}, user = currentUser || {}) {
-  if (!user || !args.outletId || !args.date || !originalOperationalBootstrap) return null
-  const key = rosterKey(args.outletId, args.date)
-  if (freshBuilds.has(key)) return freshBuilds.get(key)
-
-  const build = (async () => {
-    const dataPromise = originalOperationalBootstrap(args)
-    const rosterPromise = fetchRoster(String(args.outletId), String(args.date))
-      .catch(() => readCachedRoster(args.outletId, args.date))
-    const [data, rosterRows] = await Promise.all([dataPromise, rosterPromise])
-    const result = composeVisibleData(data, rosterRows, user, {
-      outletId: String(args.outletId),
-      cache_mode: 'live-d1',
-      pending: false,
-    })
-    notifyTaskAssignmentUpdated(args)
-    return result
-  })().finally(() => freshBuilds.delete(key))
-
-  freshBuilds.set(key, build)
-  return build
-}
-
 async function visibleOperationalBootstrap(args = {}) {
+  const data = await originalOperationalBootstrap(args)
   const user = currentUser || {}
   if (!user?.email && !user?.full_name && !user?.name) {
-    return mergeOptimisticTaskPhotos(await originalOperationalBootstrap(args), { outletId: args.outletId })
+    return mergeOptimisticTaskPhotos(data, { outletId: args.outletId })
   }
 
-  try {
-    return await buildFreshVisibleData(args, user)
-  } catch (error) {
-    const fallbackRoster = readCachedRoster(args.outletId, args.date)
-    try {
-      const fallbackData = await originalOperationalBootstrap({ ...args, refresh: false })
-      return composeVisibleData(fallbackData, fallbackRoster, user, {
-        outletId: String(args.outletId || ''),
-        cache_mode: 'live-fallback',
-        pending: false,
-      })
-    } catch {
-      throw error
-    }
-  }
+  const cachedRoster = readCachedRoster(args.outletId, args.date)
+  void refreshRosterInBackground(args)
+  return composeVisibleData(data, cachedRoster, user, {
+    outletId: String(args.outletId || ''),
+    cache_mode: 'live-d1-roster-background',
+    pending: false,
+  })
 }
 
 export function warmRosterTaskAssignmentCache(user = currentUser || {}) {
@@ -284,7 +270,7 @@ export function warmRosterTaskAssignmentCache(user = currentUser || {}) {
     timeZone: 'Asia/Kuching', year: 'numeric', month: '2-digit', day: '2-digit',
   }).format(new Date())
   for (const outletId of outletIds) {
-    void buildFreshVisibleData({ outletId, date: today, refresh: false }, user).catch(() => undefined)
+    void refreshRosterInBackground({ outletId, date: today })
   }
 }
 
