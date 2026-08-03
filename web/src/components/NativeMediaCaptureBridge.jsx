@@ -1,8 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { AlertTriangle, Camera, CheckCircle2, CloudOff, Loader2, X } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 
 const CAPTURE_LABEL = /(拍照|加拍照片|capture|take\s*photo|camera)/i
-const STATUS_CLEAR_MS = 6000
 let cameraProxy = null
 
 function nativeAndroid() {
@@ -83,6 +81,18 @@ function deliverFile(input, file) {
   input.dispatchEvent(new Event('change', { bubbles: true }))
 }
 
+function reportInlineError(input, error) {
+  const code = String(error?.code || '').trim()
+  const detail = String(error?.message || error || '').trim()
+  const message = code ? `相机启动失败 [${code}] ${detail}` : detail || '相机启动失败，请检查相机权限'
+  window.dispatchEvent(new CustomEvent('chefops:task-photo-inline-error', {
+    detail: {
+      groupId: String(input?.dataset?.taskPhotoGroup || ''),
+      message,
+    },
+  }))
+}
+
 function openBrowserPicker(input) {
   const previous = {
     display: input.style.display,
@@ -115,80 +125,9 @@ function openBrowserPicker(input) {
 }
 
 export default function NativeMediaCaptureBridge() {
-  const [state, setState] = useState({ kind: '', message: '', previewUrl: '' })
-  const clearTimer = useRef(null)
   const opening = useRef(false)
-  const previewUrl = useRef('')
 
   useEffect(() => {
-    const releasePreview = () => {
-      if (!previewUrl.current) return
-      URL.revokeObjectURL(previewUrl.current)
-      previewUrl.current = ''
-    }
-
-    const clearState = () => {
-      window.clearTimeout(clearTimer.current)
-      releasePreview()
-      setState({ kind: '', message: '', previewUrl: '' })
-    }
-
-    const clearLater = (delay = STATUS_CLEAR_MS) => {
-      window.clearTimeout(clearTimer.current)
-      clearTimer.current = window.setTimeout(clearState, delay)
-    }
-
-    const showPreview = (file) => {
-      if (!(file instanceof File) || !String(file.type || '').startsWith('image/')) return
-      releasePreview()
-      previewUrl.current = URL.createObjectURL(file)
-      setState({
-        kind: 'processing',
-        message: '照片已取得并显示，正在保存到系统…',
-        previewUrl: previewUrl.current,
-      })
-    }
-
-    const showError = (message) => {
-      setState((current) => ({
-        kind: 'error',
-        message: String(message || '无法打开相机'),
-        previewUrl: current.previewUrl || previewUrl.current,
-      }))
-    }
-
-    const onInputChange = (event) => {
-      const input = event.target
-      if (!(input instanceof HTMLInputElement)) return
-      if (input.type !== 'file' || !input.hasAttribute('capture')) return
-      const file = input.files?.[0]
-      if (file) showPreview(file)
-    }
-
-    const onPhotoSyncState = (event) => {
-      const detail = event.detail || {}
-      const syncState = String(detail.state || '')
-      if (!previewUrl.current) return
-      if (syncState === 'committed') {
-        setState((current) => ({
-          ...current,
-          kind: 'saved',
-          message: '照片已显示并保存成功',
-          previewUrl: current.previewUrl || previewUrl.current,
-        }))
-        clearLater(3500)
-      } else if (syncState === 'queued_offline') {
-        setState((current) => ({
-          ...current,
-          kind: 'queued',
-          message: '照片已显示；网络恢复后会自动完成同步',
-          previewUrl: current.previewUrl || previewUrl.current,
-        }))
-      } else if (syncState === 'rejected') {
-        showError(`照片没有保存成功：${detail.error || '请保留画面并重新尝试'}`)
-      }
-    }
-
     const onClick = (event) => {
       const target = event.target
       if (!(target instanceof Element)) return
@@ -208,21 +147,19 @@ export default function NativeMediaCaptureBridge() {
         try {
           openBrowserPicker(input)
         } catch (error) {
-          showError(error?.message || '这个浏览器无法打开相机，请检查相机权限')
+          reportInlineError(input, error)
         }
         return
       }
 
       const camera = nativeCameraPlugin()
       if (!camera || typeof camera.takePhoto !== 'function') {
-        showError('OPS 原生相机组件没有加载。请安装最新版本后重新打开应用。')
+        reportInlineError(input, new Error('OPS 原生相机组件没有加载，请重新打开应用'))
         return
       }
 
       if (opening.current) return
       opening.current = true
-      releasePreview()
-      setState({ kind: 'opening', message: '正在打开相机…', previewUrl: '' })
 
       Promise.resolve(camera.takePhoto({
         quality: 90,
@@ -231,18 +168,9 @@ export default function NativeMediaCaptureBridge() {
         cameraDirection: 'REAR',
       }))
         .then(nativeResultFile)
-        .then((file) => {
-          showPreview(file)
-          deliverFile(input, file)
-        })
+        .then((file) => deliverFile(input, file))
         .catch((error) => {
-          if (cancellation(error)) {
-            clearState()
-            return
-          }
-          const code = String(error?.code || '').trim()
-          const detail = String(error?.message || '').trim()
-          showError(code ? `相机启动失败 [${code}] ${detail}` : detail || '相机启动失败，请确认 OPS 的相机权限')
+          if (!cancellation(error)) reportInlineError(input, error)
         })
         .finally(() => {
           opening.current = false
@@ -250,59 +178,8 @@ export default function NativeMediaCaptureBridge() {
     }
 
     document.addEventListener('click', onClick, true)
-    document.addEventListener('change', onInputChange, true)
-    window.addEventListener('chefops:task-photo-sync-state', onPhotoSyncState)
-    return () => {
-      window.clearTimeout(clearTimer.current)
-      releasePreview()
-      document.removeEventListener('click', onClick, true)
-      document.removeEventListener('change', onInputChange, true)
-      window.removeEventListener('chefops:task-photo-sync-state', onPhotoSyncState)
-    }
+    return () => document.removeEventListener('click', onClick, true)
   }, [])
 
-  if (!state.kind) return null
-
-  const error = state.kind === 'error'
-  const saved = state.kind === 'saved'
-  const queued = state.kind === 'queued'
-  return (
-    <div
-      className={`fixed left-1/2 top-16 z-[10020] flex w-[min(92vw,420px)] -translate-x-1/2 gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold shadow-2xl ${error ? 'border-red-300 bg-red-50 text-red-800' : saved ? 'border-emerald-300 bg-emerald-50 text-emerald-900' : queued ? 'border-sky-300 bg-sky-50 text-sky-900' : 'border-amber-300 bg-amber-50 text-amber-900'}`}
-      role="status"
-      aria-live="assertive"
-    >
-      {state.previewUrl ? (
-        <img src={state.previewUrl} alt="刚拍摄的任务照片" className="h-16 w-16 shrink-0 rounded-xl object-cover" />
-      ) : error
-        ? <AlertTriangle className="h-5 w-5 shrink-0" />
-        : <Camera className="h-5 w-5 shrink-0" />}
-      <div className="flex min-w-0 flex-1 items-center gap-2">
-        {error
-          ? <AlertTriangle className="h-4 w-4 shrink-0" />
-          : saved
-            ? <CheckCircle2 className="h-4 w-4 shrink-0" />
-            : queued
-              ? <CloudOff className="h-4 w-4 shrink-0" />
-              : state.kind === 'opening'
-                ? <Camera className="h-4 w-4 shrink-0" />
-                : <Loader2 className="h-4 w-4 shrink-0 animate-spin" />}
-        <span className="min-w-0 flex-1">{state.message}</span>
-      </div>
-      {(error || queued || saved) ? (
-        <button
-          type="button"
-          onClick={() => {
-            if (previewUrl.current) URL.revokeObjectURL(previewUrl.current)
-            previewUrl.current = ''
-            setState({ kind: '', message: '', previewUrl: '' })
-          }}
-          className="rounded-full p-1"
-          aria-label="Close camera status"
-        >
-          <X className="h-4 w-4" />
-        </button>
-      ) : null}
-    </div>
-  )
+  return null
 }

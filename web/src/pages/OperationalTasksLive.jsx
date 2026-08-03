@@ -20,11 +20,19 @@ function buttonWithText(root, text) {
     .find((button) => String(button.textContent || '').trim().includes(text)) || null
 }
 
+function isTaskPhotoInteraction(target) {
+  return target instanceof Element && Boolean(
+    target.matches('input[type="file"]')
+    || target.closest('[data-task-photo-ui]')
+  )
+}
+
 function isTaskDraftInteraction(target) {
   if (!(target instanceof Element)) return false
   const drawer = target.closest('.chefops-drawer-content')
   if (!drawer) return false
   if (target.closest('.chefops-drawer-header')) return false
+  if (isTaskPhotoInteraction(target)) return false
   if (target.matches('input, textarea, select')) return true
   const button = target.closest('button')
   if (!button) return false
@@ -33,8 +41,6 @@ function isTaskDraftInteraction(target) {
   return ![
     '保存进度',
     '完成任务',
-    '拍照',
-    '加拍照片',
     '查看标准做法',
     '删除',
   ].some((action) => label.includes(action))
@@ -58,7 +64,6 @@ function buttonBusy(button) {
 
 export default function OperationalTasksLive() {
   const [revision, setRevision] = useState(0)
-  const [autosaveState, setAutosaveState] = useState('')
   const refreshTimer = useRef(null)
   const lastRefreshAt = useRef(0)
   const pendingRefresh = useRef(false)
@@ -120,11 +125,9 @@ export default function OperationalTasksLive() {
 
       if (success) {
         savedRevision.current = Math.max(savedRevision.current, savingRevision)
-        setAutosaveState('saved')
         if (pendingCloseButton.current) closeAfterSave()
       } else {
         pendingCloseButton.current = null
-        setAutosaveState('error')
       }
 
       if (changeRevision.current > savedRevision.current) scheduleSave({ immediate: true })
@@ -169,7 +172,6 @@ export default function OperationalTasksLive() {
       let sawBusy = false
       let settled = false
       saveInFlight.current = true
-      setAutosaveState('saving')
 
       const inspect = () => {
         if (settled) return
@@ -237,6 +239,7 @@ export default function OperationalTasksLive() {
     const onDraftChange = (event) => markDraftChanged(event, { immediate: true })
     const onDraftFocusOut = (event) => {
       if (!(event.target instanceof Element)) return
+      if (isTaskPhotoInteraction(event.target)) return
       if (!event.target.closest('.chefops-drawer-content')) return
       if (changeRevision.current > savedRevision.current) scheduleSave({ immediate: true })
     }
@@ -333,18 +336,5 @@ export default function OperationalTasksLive() {
     }
   }, [])
 
-  return (
-    <>
-      <OperationalTasksV2 key={revision} />
-      {autosaveState ? (
-        <div className={`chefops-autosave-toast pointer-events-none fixed left-1/2 z-[360] -translate-x-1/2 rounded-full px-3 py-1.5 text-[11px] font-bold text-white shadow-lg ${autosaveState === 'error' ? 'bg-rose-700' : 'bg-black/85'}`} role="status" aria-live="polite">
-          {autosaveState === 'saving'
-            ? '保存中…'
-            : autosaveState === 'saved'
-              ? '已保存'
-              : '保存失败，表单仍保持打开'}
-        </div>
-      ) : null}
-    </>
-  )
+  return <OperationalTasksV2 key={revision} />
 }
