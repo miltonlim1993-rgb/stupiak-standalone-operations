@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict'
 import { applyOperationalTaskPolicyPayload as applyServerPolicy } from '../../worker/src/operational-task-policy.js'
 import { applyOperationalTaskPayloadPolicy as applyClientPolicy } from '../../web/src/lib/operational-task-policy.js'
+import {
+  canAccessDailyOperations,
+  canAccessSensitiveManagerRoute,
+  normalizedRole,
+} from '../../web/src/lib/role-access.js'
 
 const sample = {
   tasks: [
@@ -87,8 +92,25 @@ verify('server policy', serverResult)
 verify('client policy', clientResult)
 assert.deepEqual(clientResult, serverResult, 'server and client task policy outputs must remain equivalent')
 
+for (const role of ['staff', 'role_staff', 'leader', 'role_leader', 'supervisor', 'role_supervisor']) {
+  assert.equal(canAccessDailyOperations(role), true, `${role} must retain daily Task, Training and SOP access`)
+  assert.equal(canAccessSensitiveManagerRoute(role, '/tasks'), true, `${role} must access Tasks`)
+  assert.equal(canAccessSensitiveManagerRoute(role, '/training'), true, `${role} must access Training`)
+  assert.equal(canAccessSensitiveManagerRoute(role, '/ops-control'), false, `${role} must not access sensitive Ops Control`)
+}
+
+for (const role of ['manager', 'role_manager', 'admin', 'role_admin', 'owner', 'role_owner']) {
+  assert.equal(canAccessDailyOperations(role), true, `${role} must retain daily operations access`)
+  assert.equal(canAccessSensitiveManagerRoute(role, '/ops-control'), true, `${role} must access Ops Control`)
+}
+
+assert.equal(normalizedRole('role_staff'), 'staff')
+assert.equal(normalizedRole(' ROLE_MANAGER '), 'manager')
+
 console.log('OPERATIONAL_TASK_POLICY_TEST_OK=true')
 console.log('CANONICAL_TASK=tmpl-rr-opening-checklist-v3')
 console.log('RETIRED_TASK=tmpl-rr-daily-standards-v4')
 console.log('PHOTO_LIMIT=10')
+console.log('STAFF_TASK_SOP_ACCESS=true')
+console.log('OPS_CONTROL_MANAGER_ONLY=true')
 console.log('HISTORICAL_RECORD_DELETE=false')
