@@ -3,12 +3,12 @@
   "apk_version": "4.5.22",
   "minimum_apk_version": "4.5.22",
   "force_update": true,
-  "pwa_version": "task-save-on-close-pwa-v37",
-  "minimum_pwa_version": "task-save-on-close-pwa-v37",
+  "pwa_version": "stock-count-ui-pwa-v38",
+  "minimum_pwa_version": "stock-count-ui-pwa-v38",
   "pwa_force_update": true,
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.22",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS 4.5.22 client-only Task save correction. Task fields no longer save after every input, selection, click, focus change, realtime event or foreground event. Data is saved only by Save Progress, Complete Task, or one protective save when closing a dirty Task or sending the app to the background. No saving/saved overlay is shown. Worker v21, D1 schema, D1 data, TaskPhoto storage, assignments and historical records are unchanged.",
-  "release_trigger": "2026-08-03-task-save-on-close-only"
+  "release_notes": "Mandatory OPS PWA v38 Stock Count UI release. Improves the Stock Count desktop and tablet layout, changes Save to icon plus Save, strengthens progress and status presentation, and adds bilingual illustrated usage documentation. Worker v21, D1 schema, D1 data, Stock Count save flow and validation rules are unchanged.",
+  "release_trigger": "2026-08-03-stock-count-ui-pwa-v38"
 }
