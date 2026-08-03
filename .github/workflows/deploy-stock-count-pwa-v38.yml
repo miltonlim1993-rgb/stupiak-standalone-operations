@@ -1,0 +1,65 @@
+name: Deploy Stock Count PWA v38
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/deploy-stock-count-pwa-v38.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
+  VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
+  VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+  CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
+  CLOUDFLARE_MEDIA_BUCKET_NAME: ${{ secrets.CLOUDFLARE_MEDIA_BUCKET_NAME }}
+
+jobs:
+  deploy-web-pwa:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Build Web/PWA and validate Worker
+        run: npm run build
+
+      - name: Render production Cloudflare config
+        run: npm run cf:render
+
+      - name: Deploy Web/PWA assets to production
+        run: npx wrangler deploy --config worker/wrangler.production.jsonc
+
+      - name: Verify live PWA v38
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 18); do
+            release="$(curl -fsS --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/app-release.json?attempt=${attempt}&ts=$(date +%s)" || true)"
+            shell="$(curl -fsS --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/sw-v38.js?attempt=${attempt}&ts=$(date +%s)" || true)"
+            if grep -Fq '"pwa_version": "stock-count-ui-pwa-v38"' <<<"$release" \
+              && grep -Fq "stock-count-ui-pwa-v38" <<<"$shell"; then
+              echo "LIVE_PWA_VERSION=stock-count-ui-pwa-v38"
+              echo "PRODUCTION_DEPLOYMENT_VERIFIED=true"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Production did not expose PWA v38 within the verification window" >&2
+          exit 1
