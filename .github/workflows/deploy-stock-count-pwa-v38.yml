@@ -12,7 +12,7 @@ permissions:
   issues: write
 
 env:
-  DEPLOYMENT_RUN_ID: stock-count-ui-pwa-v38-20260803-2115
+  DEPLOYMENT_RUN_ID: stock-count-ui-pwa-v38-20260803-2120
   DEPLOYMENT_STATUS_ISSUE: "44"
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
@@ -21,8 +21,6 @@ env:
   CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
   CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
   CLOUDFLARE_MEDIA_BUCKET_NAME: ${{ secrets.CLOUDFLARE_MEDIA_BUCKET_NAME }}
-  ALL_SECRETS_JSON: ${{ toJSON(secrets) }}
-  ALL_VARS_JSON: ${{ toJSON(vars) }}
 
 jobs:
   deploy-web-pwa:
@@ -41,6 +39,9 @@ jobs:
 
       - name: Resolve existing Cloudflare credentials safely
         id: credentials
+        env:
+          ALL_SECRETS_JSON: ${{ toJSON(secrets) }}
+          ALL_VARS_JSON: ${{ toJSON(vars) }}
         shell: bash
         run: |
           set -euo pipefail
