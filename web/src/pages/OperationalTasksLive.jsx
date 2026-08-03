@@ -265,6 +265,7 @@ export default function OperationalTasksLive() {
     const commitLocalPhotosBeforeSave = (button) => {
       const drawer = activeTaskDrawer()
       if (!drawer || !button || !localPhotoImages(drawer).length) return false
+      if (photoSaveGate.isInFlight()) return true
       const label = String(button.textContent || '').includes('完成任务') ? '完成任务' : '保存进度'
       photoSaveGate.commit().then((success) => {
         if (success) continueExplicitSave(label)
