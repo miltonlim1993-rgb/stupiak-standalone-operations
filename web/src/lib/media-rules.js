@@ -1,11 +1,15 @@
+const TEN_PHOTO_MODULES = new Set(['task', 'urgent_issue'])
+
 const FALLBACKS = {
   task: {
-    module: 'task', max_files: 8, allowed_media: 'IMAGE', capture_mode: 'CAMERA_ONLY',
+    module: 'task', max_files: 10, allowed_media: 'IMAGE', capture_mode: 'CAMERA_ONLY',
     watermark_mode: 'DATE_TIME', max_file_mb: 10, active: true,
+    notes: 'Photograph matching items together in one frame instead of taking separate photos for each item.',
   },
   urgent_issue: {
-    module: 'urgent_issue', max_files: 4, allowed_media: 'IMAGE', capture_mode: 'CAMERA_AND_GALLERY',
+    module: 'urgent_issue', max_files: 10, allowed_media: 'IMAGE', capture_mode: 'CAMERA_AND_GALLERY',
     watermark_mode: 'NONE', max_file_mb: 10, active: true,
+    notes: 'Photograph matching or related items together when one frame can show the issue clearly.',
   },
 }
 
@@ -14,12 +18,15 @@ function active(row) {
 }
 
 export function resolveMediaRule(rows, module, outletId = '') {
-  const fallback = FALLBACKS[module] || { module, max_files: 4, allowed_media: 'IMAGE', capture_mode: 'CAMERA_AND_GALLERY', watermark_mode: 'NONE', max_file_mb: 10, active: true }
-  const candidates = (rows || []).filter((row) => active(row) && String(row.module || '').toLowerCase() === String(module).toLowerCase())
+  const normalizedModule = String(module || '').toLowerCase()
+  const fallback = FALLBACKS[normalizedModule] || { module: normalizedModule, max_files: 10, allowed_media: 'IMAGE', capture_mode: 'CAMERA_AND_GALLERY', watermark_mode: 'NONE', max_file_mb: 10, active: true }
+  const candidates = (rows || []).filter((row) => active(row) && String(row.module || '').toLowerCase() === normalizedModule)
   const selected = candidates.find((row) => String(row.outlet_id || '') === String(outletId || ''))
     || candidates.find((row) => !String(row.outlet_id || '').trim())
   const value = { ...fallback, ...(selected || {}) }
-  value.max_files = Math.max(1, Number(value.max_files || fallback.max_files || 1))
+  value.max_files = TEN_PHOTO_MODULES.has(normalizedModule)
+    ? 10
+    : Math.max(1, Number(value.max_files || fallback.max_files || 10))
   value.max_file_mb = Math.max(1, Number(value.max_file_mb || fallback.max_file_mb || 10))
   value.allowed_media = String(value.allowed_media || fallback.allowed_media || 'IMAGE').toUpperCase()
   value.capture_mode = String(value.capture_mode || fallback.capture_mode || 'CAMERA_AND_GALLERY').toUpperCase()

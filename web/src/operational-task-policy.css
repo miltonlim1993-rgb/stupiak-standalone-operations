@@ -1,0 +1,39 @@
+.chefops-photo-policy-guidance {
+  display: grid;
+  gap: .3rem;
+  width: 100%;
+  margin: 0 0 1rem;
+  padding: .8rem .9rem;
+  border: 1px solid rgb(245 158 11 / .35);
+  border-radius: 14px;
+  background: rgb(255 251 235 / .96);
+  color: rgb(120 53 15);
+  box-shadow: 0 4px 14px rgb(15 23 42 / .04);
+}
+
+.chefops-photo-policy-guidance strong {
+  font-size: .78rem;
+  line-height: 1.2;
+}
+
+.chefops-photo-policy-guidance span {
+  font-size: .68rem;
+  line-height: 1.45;
+}
+
+@media (min-width: 640px) {
+  .chefops-photo-policy-guidance {
+    grid-template-columns: max-content minmax(0, 1fr);
+    align-items: center;
+    column-gap: .9rem;
+    padding: .85rem 1rem;
+  }
+}
+
+@media (prefers-color-scheme: dark) {
+  .chefops-photo-policy-guidance {
+    border-color: rgb(180 83 9 / .55);
+    background: rgb(69 26 3 / .92);
+    color: rgb(254 215 170);
+  }
+}

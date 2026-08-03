@@ -1,14 +1,14 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.18",
-  "minimum_apk_version": "4.5.18",
+  "apk_version": "4.5.19",
+  "minimum_apk_version": "4.5.19",
   "force_update": true,
-  "pwa_version": "event-autosave-responsive-viewport-v33",
-  "minimum_pwa_version": "event-autosave-responsive-viewport-v33",
+  "pwa_version": "task-photo10-staff-access-pwa-v34",
+  "minimum_pwa_version": "task-photo10-staff-access-pwa-v34",
   "pwa_force_update": true,
-  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.18",
+  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.19",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS 4.5.18 app-behaviour release. Task draft saving is now event-driven instead of using fixed autosave seconds: fields save during idle browser work, selections and blur save immediately, leaving or closing flushes the draft, and a dirty drawer only closes after a successful save. Phone, tablet, desktop, split-screen, browser navigation bars and software keyboards now use the real Visual Viewport. Sheets and notices stay above app navigation and inside the visible screen.",
-  "release_trigger": "2026-08-02-event-autosave-responsive-visual-viewport"
+  "release_notes": "Mandatory OPS 4.5.19 operations policy release. The overlapping Daily Operations Standards Check is retired and Opening Preparation Check remains the canonical daily opening task. Task photo groups and Urgent Issues support up to 10 photos, with clear instructions to photograph matching items together instead of separating every item. Staff, leaders and supervisors retain direct access to Daily Tasks, Training and SOP while sensitive Ops Control remains manager-only. Historical Tasks and photos are not deleted or overwritten.",
+  "release_trigger": "2026-08-03-task-overlap-photo10-staff-access"
 }

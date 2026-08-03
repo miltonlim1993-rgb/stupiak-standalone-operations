@@ -1,0 +1,125 @@
+import assert from 'node:assert/strict'
+import { applyOperationalTaskPolicyPayload as applyServerPolicy } from '../../worker/src/operational-task-policy.js'
+import { applyOperationalTaskPayloadPolicy as applyClientPolicy } from '../../web/src/lib/operational-task-policy.js'
+import { resolveMediaRule } from '../../web/src/lib/media-rules.js'
+import {
+  canAccessDailyOperations,
+  canAccessSensitiveManagerRoute,
+  normalizedRole,
+} from '../../web/src/lib/role-access.js'
+
+const sample = {
+  tasks: [
+    {
+      id: 'task-opening',
+      template_id: 'tmpl-rr-opening-checklist-v3',
+      title: 'Opening Preparation Check',
+      config: {
+        photo_groups: [
+          { id: 'opening-sauce', max_photos: 2 },
+          { id: 'opening-material', max_photos: 4 },
+        ],
+      },
+      photo_requirements: [
+        { id: 'opening-sauce', max_photos: 2, uploaded_count: 1 },
+      ],
+    },
+    {
+      id: 'task-daily-standards',
+      template_id: 'tmpl-rr-daily-standards-v4',
+      title: 'Daily Operations Standards Check',
+      config: { photo_groups: [{ id: 'daily-standard', max_photos: 2 }] },
+      photo_requirements: [{ id: 'daily-standard', max_photos: 2 }],
+    },
+    {
+      id: 'task-unrelated',
+      template_id: 'tmpl-night-closing-v1',
+      title: 'Night Closing Check',
+      config: { photo_groups: [{ id: 'night-close', max_photos: 1 }] },
+      photo_requirements: [{ id: 'night-close', max_photos: 1 }],
+    },
+  ],
+  task_photos: [
+    { id: 'photo-opening', task_id: 'task-opening' },
+    { id: 'photo-retired', task_id: 'task-daily-standards' },
+    { id: 'photo-unrelated', task_id: 'task-unrelated' },
+    { id: 'photo-unlinked', task_id: '' },
+  ],
+  template_photos: [
+    { id: 'template-photo-opening', template_id: 'tmpl-rr-opening-checklist-v3' },
+    { id: 'template-photo-retired', template_id: 'tmpl-rr-daily-standards-v4' },
+    { id: 'template-photo-unrelated', template_id: 'tmpl-night-closing-v1' },
+  ],
+}
+
+function verify(label, result) {
+  assert.equal(result.tasks.length, 2, `${label}: exactly the retained opening and unrelated task must remain`)
+  assert.deepEqual(
+    result.tasks.map((task) => task.template_id),
+    ['tmpl-rr-opening-checklist-v3', 'tmpl-night-closing-v1'],
+    `${label}: retired Daily Standards task must be filtered without hiding unrelated tasks`,
+  )
+
+  for (const task of result.tasks) {
+    for (const group of task.config?.photo_groups || []) {
+      assert.equal(group.max_photos, 10, `${label}: every returned photo group must support ten photos`)
+      assert.match(group.grouping_guidance_cn || '', /同类物品/, `${label}: Chinese grouping guidance must be present`)
+      assert.match(group.grouping_guidance_en || '', /matching items together/i, `${label}: English grouping guidance must be present`)
+    }
+    for (const requirement of task.photo_requirements || []) {
+      assert.equal(requirement.max_photos, 10, `${label}: every photo requirement must support ten photos`)
+    }
+    assert.equal(task.photo_policy?.max_photos_per_group, 10, `${label}: task photo policy metadata must be ten`)
+  }
+
+  assert.deepEqual(
+    result.task_photos.map((photo) => photo.id),
+    ['photo-opening', 'photo-unrelated', 'photo-unlinked'],
+    `${label}: photos attached to the retired duplicate task must not leak into the list`,
+  )
+  assert.deepEqual(
+    result.template_photos.map((photo) => photo.id),
+    ['template-photo-opening', 'template-photo-unrelated'],
+    `${label}: retired template photos must be filtered`,
+  )
+  assert.equal(result.operational_task_policy?.retained_template_id, 'tmpl-rr-opening-checklist-v3')
+  assert.deepEqual(result.operational_task_policy?.retired_template_ids, ['tmpl-rr-daily-standards-v4'])
+  assert.equal(result.operational_task_policy?.max_photos_per_group, 10)
+}
+
+const serverResult = applyServerPolicy(structuredClone(sample))
+const clientResult = applyClientPolicy(structuredClone(sample))
+verify('server policy', serverResult)
+verify('client policy', clientResult)
+assert.deepEqual(clientResult, serverResult, 'server and client task policy outputs must remain equivalent')
+
+const staleRules = [
+  { id: 'old-task-rule', module: 'task', outlet_id: 'RR-KCH', max_files: 8, active: true },
+  { id: 'old-issue-rule', module: 'urgent_issue', outlet_id: 'RR-KCH', max_files: 4, active: true },
+]
+assert.equal(resolveMediaRule(staleRules, 'task', 'RR-KCH').max_files, 10, 'stale Task rule must be normalized to ten')
+assert.equal(resolveMediaRule(staleRules, 'urgent_issue', 'RR-KCH').max_files, 10, 'stale Issue rule must be normalized to ten')
+
+for (const role of ['staff', 'role_staff', 'leader', 'role_leader', 'supervisor', 'role_supervisor']) {
+  assert.equal(canAccessDailyOperations(role), true, `${role} must retain daily Task, Training and SOP access`)
+  assert.equal(canAccessSensitiveManagerRoute(role, '/tasks'), true, `${role} must access Tasks`)
+  assert.equal(canAccessSensitiveManagerRoute(role, '/training'), true, `${role} must access Training`)
+  assert.equal(canAccessSensitiveManagerRoute(role, '/ops-control'), false, `${role} must not access sensitive Ops Control`)
+}
+
+for (const role of ['manager', 'role_manager', 'owner', 'role_owner']) {
+  assert.equal(canAccessDailyOperations(role), true, `${role} must retain daily operations access`)
+  assert.equal(canAccessSensitiveManagerRoute(role, '/ops-control'), true, `${role} must access Ops Control`)
+}
+
+assert.equal(normalizedRole('role_staff'), 'staff')
+assert.equal(normalizedRole(' ROLE_MANAGER '), 'manager')
+
+console.log('OPERATIONAL_TASK_POLICY_TEST_OK=true')
+console.log('CANONICAL_TASK=tmpl-rr-opening-checklist-v3')
+console.log('RETIRED_TASK=tmpl-rr-daily-standards-v4')
+console.log('PHOTO_LIMIT=10')
+console.log('STALE_MEDIA_RULE_NORMALIZED=true')
+console.log('STAFF_TASK_SOP_ACCESS=true')
+console.log('OPS_CONTROL_MANAGER_ONLY=true')
+console.log('HISTORICAL_RECORD_DELETE=false')
