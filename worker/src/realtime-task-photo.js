@@ -3,10 +3,18 @@ import { getAppPackModule, getPublishedAppPack } from './app-pack.js'
 import { errorResponse } from './http.js'
 import { assertAssignedOutletAccess } from './permissions.js'
 import { applyOpeningChecklistFeedback } from './opening-checklist-feedback.js'
-import { allowedMediaKinds, getMediaRule } from './media-rules.js'
 import { handleRealtimeDataApi } from './realtime-store.js'
 
 const PREFIX = 'CHEFOPS_CHECKLIST_V1:'
+const DEFAULT_TASK_MEDIA_RULE = Object.freeze({
+  module: 'task',
+  outlet_id: '',
+  max_files: 10,
+  max_file_mb: 10,
+  allowed_media: 'IMAGE',
+  capture_mode: 'CAMERA_ONLY',
+  watermark_mode: 'DATE_TIME',
+})
 
 function parseJson(value, fallback = null) {
   try { return JSON.parse(String(value || '')) } catch { return fallback }
@@ -18,6 +26,22 @@ function truthy(value) {
 
 function csv(value) {
   return String(value || '').split(',').map((item) => item.trim()).filter(Boolean)
+}
+
+function activeRow(row) {
+  return row && !row.deleted_at && (
+    row.active === true
+    || String(row.active || '').toLowerCase() === 'true'
+    || row.active === ''
+    || row.active === undefined
+  )
+}
+
+function allowedMediaKinds(rule) {
+  return new Set(String(rule?.allowed_media || 'IMAGE')
+    .split(/[;,|]/)
+    .map((item) => item.trim().toUpperCase())
+    .filter(Boolean))
 }
 
 function templateVisible(template, outletId) {
@@ -128,22 +152,48 @@ async function d1TaskPhotos(env, outletId, taskId) {
     .filter((row) => String(row?.task_id || '') === String(taskId || ''))
 }
 
-async function publishedTaskTemplates(env, outletId) {
+async function publishedModule(env, outletId, name) {
   for (const target of [String(outletId || ''), '']) {
     const manifest = await getPublishedAppPack(env, target).catch(() => null)
-    const hash = manifest?.modules?.tasks?.hash
+    const hash = manifest?.modules?.[name]?.hash
     if (!hash) continue
-    const module = await getAppPackModule(env, target, 'tasks', hash).catch(() => null)
-    const templates = Array.isArray(module?.data?.task_templates) ? module.data.task_templates : []
-    if (templates.length) return templates
+    const module = await getAppPackModule(env, target, name, hash).catch(() => null)
+    if (module?.data) return module.data
   }
-  return []
+  return null
 }
 
-async function existingPhotoCount(env, task, groupId) {
+async function publishedTaskTemplates(env, outletId) {
+  const data = await publishedModule(env, outletId, 'tasks')
+  return Array.isArray(data?.task_templates) ? data.task_templates : []
+}
+
+async function publishedTaskMediaRule(env, outletId) {
+  const data = await publishedModule(env, outletId, 'core')
+  const rows = Array.isArray(data?.media_rules) ? data.media_rules : []
+  const taskRows = rows.filter((row) => (
+    activeRow(row)
+    && String(row.module || '').trim().toLowerCase() === 'task'
+  ))
+  const selected = taskRows.find((row) => String(row.outlet_id || '') === String(outletId || ''))
+    || taskRows.find((row) => !String(row.outlet_id || '').trim())
+    || DEFAULT_TASK_MEDIA_RULE
+  return {
+    ...DEFAULT_TASK_MEDIA_RULE,
+    ...(selected || {}),
+    max_files: 10,
+    max_file_mb: Math.max(1, Number(selected?.max_file_mb || DEFAULT_TASK_MEDIA_RULE.max_file_mb)),
+    allowed_media: String(selected?.allowed_media || DEFAULT_TASK_MEDIA_RULE.allowed_media).toUpperCase(),
+    capture_mode: String(selected?.capture_mode || DEFAULT_TASK_MEDIA_RULE.capture_mode).toUpperCase(),
+    watermark_mode: String(selected?.watermark_mode || DEFAULT_TASK_MEDIA_RULE.watermark_mode).toUpperCase(),
+  }
+}
+
+async function existingPhotoCount(env, task, groupId, excludedId = '') {
   const rows = await d1TaskPhotos(env, task.outlet_id, task.id)
   return rows.filter((row) => (
-    !row.deleted_at
+    String(row.id || '') !== String(excludedId || '')
+    && !row.deleted_at
     && String(row.status || 'active').toLowerCase() !== 'deleted'
     && String(row.photo_type || '') === `checklist:${groupId}`
   )).length
@@ -165,13 +215,9 @@ async function validatedMutationRequest(request, env, body) {
   const operation = String(body.operation || 'upsert').toLowerCase()
   const input = body.payload || {}
   const entityId = String(body.entity_id || input.id || crypto.randomUUID())
+  const existingPhoto = entityId ? await d1Record(env, 'TaskPhoto', entityId) : null
 
-  let existingPhoto = null
-  let taskId = String(input.task_id || '').trim()
-  if (!taskId && entityId) {
-    existingPhoto = await d1Record(env, 'TaskPhoto', entityId)
-    taskId = String(existingPhoto?.task_id || '').trim()
-  }
+  const taskId = String(input.task_id || existingPhoto?.task_id || '').trim()
   if (!taskId) invalid('Task photo must be linked to a task', 'missing_task')
 
   const task = await d1Record(env, 'Task', taskId)
@@ -191,8 +237,9 @@ async function validatedMutationRequest(request, env, body) {
   }
 
   if (operation === 'delete') {
+    if (!existingPhoto) invalid('Task photo was not found in the realtime workspace', 'task_photo_not_found', 404)
     const payload = {
-      ...(existingPhoto || input),
+      ...existingPhoto,
       id: entityId,
       outlet_id: task.outlet_id,
       task_id: task.id,
@@ -213,7 +260,7 @@ async function validatedMutationRequest(request, env, body) {
 
   const isCreate = operation === 'create' || operation === 'upsert' || !existingPhoto
   if (isCreate) {
-    const rule = await getMediaRule(env, 'task', task.outlet_id)
+    const rule = await publishedTaskMediaRule(env, task.outlet_id)
     const mime = String(input.mime_type || '').toLowerCase()
     if (!mime.startsWith('image/') || !allowedMediaKinds(rule).has('IMAGE')) {
       invalid('Task evidence must be an on-site photo', 'task_photo_only')
@@ -228,7 +275,7 @@ async function validatedMutationRequest(request, env, body) {
       invalid('Task photo date and time watermark is required', 'missing_watermark')
     }
 
-    const currentCount = await existingPhotoCount(env, task, groupId)
+    const currentCount = await existingPhotoCount(env, task, groupId, entityId)
     const groupMax = Math.max(1, Number(group.max_photos || rule.max_files || 1))
     const limit = Math.min(groupMax, Number(rule.max_files || groupMax))
     if (currentCount >= limit) {
@@ -278,7 +325,7 @@ export async function handleRealtimeTaskPhotoMutation(request, env, url) {
     const validatedRequest = await validatedMutationRequest(request, env, body)
     const response = await handleRealtimeDataApi(validatedRequest, env, url)
     const headers = new Headers(response.headers)
-    headers.set('X-ChefOps-Task-Photo-Path', 'd1-published-package-v2')
+    headers.set('X-ChefOps-Task-Photo-Path', 'd1-published-package-v3')
     return new Response(response.body, {
       status: response.status,
       statusText: response.statusText,
