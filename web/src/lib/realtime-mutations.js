@@ -4,6 +4,7 @@ import {
   rejectOptimisticTaskPhoto,
   trackOptimisticTaskPhoto,
 } from '@/lib/task-photo-optimistic'
+import { taskPhotoEntityId } from '@/lib/task-photo-persistence'
 
 const configuredApiUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
 const API_BASE_URL = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:8787' : window.location.origin)).replace(/\/$/, '')
@@ -125,18 +126,37 @@ function shouldQueue(error) {
   return !navigator.onLine || !Number.isFinite(Number(error?.status)) || Number(error.status) >= 500
 }
 
-export async function submitRealtimeMutation(input, { queueOffline = true } = {}) {
-  const mutation = {
-    mutation_id: mutationId(input.mutation_id),
-    entity: String(input.entity || '').trim(),
-    entity_id: String(input.entity_id || input.payload?.id || '').trim() || crypto.randomUUID(),
-    outlet_id: String(input.outlet_id || input.payload?.outlet_id || '').trim(),
-    operation: String(input.operation || 'upsert').trim().toLowerCase(),
+function canonicalMutationInput(input = {}) {
+  const entity = String(input.entity || '').trim()
+  const operation = String(input.operation || 'upsert').trim().toLowerCase()
+  const stablePhotoId = entity === 'TaskPhoto' && operation === 'create'
+    ? taskPhotoEntityId(input.payload || {})
+    : ''
+  const entityId = stablePhotoId
+    || String(input.entity_id || input.payload?.id || '').trim()
+    || crypto.randomUUID()
+  const suppliedMutationId = String(input.mutation_id || '').trim()
+  const idempotentPhotoMutationId = stablePhotoId ? `task-photo-create:${stablePhotoId}` : ''
+  const payload = entity === 'TaskPhoto' && operation === 'create'
+    ? { ...(input.payload || {}), id: entityId }
+    : (input.payload || {})
+
+  return {
+    mutation_id: mutationId(suppliedMutationId || idempotentPhotoMutationId),
+    entity,
+    entity_id: entityId,
+    outlet_id: String(input.outlet_id || payload?.outlet_id || '').trim(),
+    operation,
     expected_version: input.expected_version,
     requested_at: input.requested_at || new Date().toISOString(),
     queued_at: input.queued_at || new Date().toISOString(),
-    payload: input.payload || {},
+    payload,
   }
+}
+
+export async function submitRealtimeMutation(input, { queueOffline = true } = {}) {
+  const mutation = canonicalMutationInput(input)
+  const allowOfflineQueue = queueOffline && mutation.entity !== 'TaskPhoto'
 
   trackOptimisticTaskPhoto(mutation, 'uploading')
 
@@ -147,7 +167,7 @@ export async function submitRealtimeMutation(input, { queueOffline = true } = {}
     window.dispatchEvent(new CustomEvent('chefops:mutation-committed', { detail: result }))
     return result
   } catch (error) {
-    if (!queueOffline || !shouldQueue(error)) {
+    if (!allowOfflineQueue || !shouldQueue(error)) {
       rejectOptimisticTaskPhoto(mutation, error.message || String(error))
       throw error
     }

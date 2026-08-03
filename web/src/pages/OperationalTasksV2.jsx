@@ -24,6 +24,11 @@ import {
   Trash2,
 } from 'lucide-react'
 import { watermarkTaskPhoto } from '@/lib/watermark-image'
+import {
+  ensureTaskPhotoPersisted,
+  taskPhotoEntityId,
+  unconfirmedLocalTaskPhotos,
+} from '@/lib/task-photo-persistence'
 
 const shifts = ['MORNING', 'DAILY', 'NIGHT']
 const filters = [['all', '全部'], ['open', '待完成'], ['done', '已完成'], ['locked', '已锁定']]
@@ -179,18 +184,25 @@ export default function OperationalTasksV2() {
   const syncRunning = useRef(false)
   const lastForcedAt = useRef(0)
 
-  const load = useCallback(async (refresh = true, { silent = false } = {}) => {
-    if (!outletId || syncRunning.current) return
+  const load = useCallback(async (refresh = true, {
+    silent = false,
+    throwOnError = false,
+    suppressError = false,
+  } = {}) => {
+    if (!outletId || syncRunning.current) return null
     syncRunning.current = true
     if (!silent) setLoading(true)
-    setError('')
+    if (!suppressError) setError('')
     try {
       const response = await opsClient.tasks.operationalBootstrap({ outletId, date, refresh })
       setData(response || { tasks: [], task_photos: [] })
       setLastSyncedAt(response?.server_time || new Date().toISOString())
       if (refresh) lastForcedAt.current = Date.now()
+      return response
     } catch (loadError) {
-      setError(loadError?.message || 'Unable to load tasks')
+      if (!suppressError) setError(loadError?.message || 'Unable to load tasks')
+      if (throwOnError) throw loadError
+      return null
     } finally {
       syncRunning.current = false
       if (!silent) setLoading(false)
@@ -330,7 +342,7 @@ export default function OperationalTasksV2() {
               const updated = await act(chosen.id, action, payload)
               setSelected(updated.id)
             }}
-            reload={() => load(false)}
+            reload={(options = {}) => load(false, options)}
             openSop={(id) => navigate(`/sop/${id}`)}
             error={setError}
           />
@@ -506,35 +518,51 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
         )))
       }
 
-      let created
-      try {
-        created = await opsClient.entities.TaskPhoto.create({
-          outlet_id: outletId,
-          task_id: task.id,
-          template_id: task.template_id,
-          photo_type: `checklist:${group.id}`,
-          drive_file_id: uploaded.drive_file_id || '',
-          file_name: uploaded.file_name || watermarked.file.name,
-          file_url: uploaded.file_url || '',
-          caption: cn(group, 'name'),
-          status: 'active',
-          mime_type: uploaded.mime_type || watermarked.file.type,
-          file_size: Number(uploaded.file_size || watermarked.file.size),
-          captured_at: watermarked.capturedAt,
-          watermark_text: watermarked.watermarkText,
-        }, { year: Number(task.due_date.slice(0, 4)) })
-      } catch (createError) {
-        const failure = new Error('照片登记失败')
-        failure.cause = createError
-        throw failure
+      const photoPayload = {
+        outlet_id: outletId,
+        task_id: task.id,
+        template_id: task.template_id,
+        photo_type: `checklist:${group.id}`,
+        drive_file_id: uploaded.drive_file_id || '',
+        file_name: uploaded.file_name || watermarked.file.name,
+        file_url: uploaded.file_url || '',
+        caption: cn(group, 'name'),
+        status: 'active',
+        mime_type: uploaded.mime_type || watermarked.file.type,
+        file_size: Number(uploaded.file_size || watermarked.file.size),
+        captured_at: watermarked.capturedAt,
+        watermark_text: watermarked.watermarkText,
       }
+      const serverId = taskPhotoEntityId(photoPayload)
+      setLocalPhotos((current) => current.map((photo) => (
+        photo.id === localId ? { ...photo, uploaded, serverId, error: '' } : photo
+      )))
+
+      await ensureTaskPhotoPersisted({
+        payload: { ...photoPayload, id: serverId },
+        checkExisting: Boolean(existingLocal?.serverId),
+        createTaskPhoto: async (canonicalPayload) => {
+          try {
+            return await opsClient.entities.TaskPhoto.create(
+              canonicalPayload,
+              { year: Number(task.due_date.slice(0, 4)) },
+            )
+          } catch (createError) {
+            const failure = new Error('照片登记失败')
+            failure.cause = createError
+            throw failure
+          }
+        },
+        readBootstrap: () => reload({
+          silent: true,
+          throwOnError: true,
+          suppressError: true,
+        }),
+      })
 
       setLocalPhotos((current) => current.map((photo) => (
-        photo.id === localId
-          ? { ...photo, uploaded, serverId: String(created?.id || ''), error: '' }
-          : photo
+        photo.id === localId ? { ...photo, uploaded, serverId, error: '' } : photo
       )))
-      await reload()
     } catch (uploadError) {
       setLocalPhotos((current) => current.map((photo) => (
         photo.id === localId
@@ -621,7 +649,10 @@ function TaskForm({ task, outletId, outletName, photos, onAct, reload, openSop, 
             </div>
             {groups.map((group) => {
               const rows = photos.filter((photo) => photo.photo_type === `checklist:${group.id}`)
-              const localRows = localPhotos.filter((photo) => photo.groupId === group.id)
+              const localRows = unconfirmedLocalTaskPhotos(
+                localPhotos.filter((photo) => photo.groupId === group.id),
+                rows,
+              )
               const displayCount = rows.length + localRows.length
               const required = String(group.rule).toUpperCase() === 'REQUIRED'
                 || flat(task).filter((item) => item.photo_group_id === group.id).some((item) => result(item, responses[item.id]) === 'fail')
