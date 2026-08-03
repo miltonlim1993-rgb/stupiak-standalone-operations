@@ -125,7 +125,7 @@ export function rejectOptimisticTaskPhoto(mutation = {}, error = '') {
   announce('rejected', record, error)
 }
 
-export function mergeOptimisticTaskPhotos(data = {}, { outletId = '' } = {}) {
+export function mergeOptimisticTaskPhotos(data = {}, { outletId = '', includeUnconfirmed = true } = {}) {
   hydrate()
   const serverRows = Array.isArray(data?.task_photos) ? data.task_photos : []
   const merged = new Map(serverRows
@@ -149,6 +149,7 @@ export function mergeOptimisticTaskPhotos(data = {}, { outletId = '' } = {}) {
       merged.set(id, serverRecord)
       continue
     }
+    if (!includeUnconfirmed) continue
     if (record.deleted_at || String(record.status || '').toLowerCase() === 'deleted') continue
     merged.set(id, record)
   }

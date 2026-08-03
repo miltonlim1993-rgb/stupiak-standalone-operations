@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import OperationalTasksV2 from '@/pages/OperationalTasksV2'
+import { createTaskPhotoSaveGate } from '@/lib/task-photo-save-gate'
 
 const TASK_ENTITIES = new Set(['Task', 'TaskPhoto'])
 
@@ -18,6 +19,36 @@ function activeTaskDrawer() {
 function buttonWithText(root, text) {
   return [...(root?.querySelectorAll?.('button') || [])]
     .find((button) => String(button.textContent || '').trim().includes(text)) || null
+}
+
+function localPhotoImages(root) {
+  return [...(root?.querySelectorAll?.('img[alt="刚拍摄的任务照片"]') || [])]
+}
+
+function retryButtonsForLocalPhotos(root) {
+  return localPhotoImages(root)
+    .map((image) => image.closest('[data-task-photo-ui]'))
+    .map((tile) => buttonWithText(tile, '重试'))
+    .filter(Boolean)
+}
+
+function photoForPreview(target) {
+  if (!(target instanceof Element)) return null
+  if (target.closest('button, input, textarea, select')) return null
+  const tile = target.closest('[data-task-photo-ui]')
+  if (!tile) return null
+  const image = tile.querySelector(':scope > img')
+  if (!image?.src) return null
+  return {
+    src: image.currentSrc || image.src,
+    alt: image.alt || 'Task photo',
+  }
+}
+
+function touchDistance(event) {
+  if (event.touches?.length !== 2) return 0
+  const [first, second] = event.touches
+  return Math.hypot(second.clientX - first.clientX, second.clientY - first.clientY)
 }
 
 function isTaskPhotoInteraction(target) {
@@ -74,6 +105,8 @@ function explicitSaveButton(target) {
 
 export default function OperationalTasksLive() {
   const [revision, setRevision] = useState(0)
+  const [photoViewer, setPhotoViewer] = useState(null)
+  const [photoScale, setPhotoScale] = useState(1)
   const refreshTimer = useRef(null)
   const lastRefreshAt = useRef(0)
   const pendingRefresh = useRef(false)
@@ -81,8 +114,10 @@ export default function OperationalTasksLive() {
   const changeRevision = useRef(0)
   const savedRevision = useRef(0)
   const saveInFlight = useRef(false)
+  const bypassPhotoCommit = useRef(false)
   const pendingCloseButton = useRef(null)
   const bypassClose = useRef(false)
+  const photoPinchDistance = useRef(0)
 
   useEffect(() => {
     const refresh = (delay = 80) => {
@@ -191,10 +226,62 @@ export default function OperationalTasksLive() {
       })
     }
 
+    const continueExplicitSave = (label) => {
+      const drawer = activeTaskDrawer()
+      const button = buttonWithText(drawer, label)
+      if (!button?.isConnected) return
+      bypassPhotoCommit.current = true
+      button.click()
+      window.requestAnimationFrame(() => {
+        bypassPhotoCommit.current = false
+      })
+    }
+
+    const photoSaveGate = createTaskPhotoSaveGate({
+      getSnapshot: () => {
+        const drawer = activeTaskDrawer()
+        return {
+          localCount: localPhotoImages(drawer).length,
+          retryButtons: retryButtonsForLocalPhotos(drawer),
+        }
+      },
+      subscribe: (inspect) => {
+        const drawer = activeTaskDrawer()
+        if (!drawer) return () => {}
+        const observer = new MutationObserver(inspect)
+        observer.observe(drawer, {
+          subtree: true,
+          childList: true,
+          characterData: true,
+          attributes: true,
+          attributeFilter: ['disabled', 'class', 'src'],
+        })
+        return () => observer.disconnect()
+      },
+      setTimer: (callback, delay) => window.setTimeout(callback, delay),
+      clearTimer: (timer) => window.clearTimeout(timer),
+    })
+
+    const commitLocalPhotosBeforeSave = (button) => {
+      const drawer = activeTaskDrawer()
+      if (!drawer || !button || !localPhotoImages(drawer).length) return false
+      if (photoSaveGate.isInFlight()) return true
+      const label = String(button.textContent || '').includes('完成任务') ? '完成任务' : '保存进度'
+      photoSaveGate.commit().then((success) => {
+        if (success) continueExplicitSave(label)
+      })
+      return true
+    }
+
     function runCloseSave() {
       const drawer = activeTaskDrawer()
       const saveButton = buttonWithText(drawer, '保存进度')
       if (!drawer || !saveButton) return
+
+      if (localPhotoImages(drawer).length) {
+        commitLocalPhotosBeforeSave(saveButton)
+        return
+      }
 
       if (changeRevision.current <= savedRevision.current) {
         if (pendingCloseButton.current) closeAfterSave()
@@ -225,9 +312,19 @@ export default function OperationalTasksLive() {
       const target = event.target
       if (!(target instanceof Element)) return
 
+      const preview = photoForPreview(target)
+      if (preview) {
+        setPhotoScale(1)
+        photoPinchDistance.current = 0
+        setPhotoViewer(preview)
+        return
+      }
+
       const closeButton = target.closest('.chefops-drawer-header button[aria-label="Close"]')
       if (closeButton) {
-        if (bypassClose.current || changeRevision.current <= savedRevision.current) return
+        const drawer = activeTaskDrawer()
+        const hasLocalPhotos = localPhotoImages(drawer).length > 0
+        if (bypassClose.current || (!hasLocalPhotos && changeRevision.current <= savedRevision.current)) return
         event.preventDefault()
         event.stopPropagation()
         event.stopImmediatePropagation()
@@ -238,6 +335,13 @@ export default function OperationalTasksLive() {
 
       const manualButton = explicitSaveButton(target)
       if (manualButton) {
+        if (!bypassPhotoCommit.current && localPhotoImages(activeTaskDrawer()).length) {
+          event.preventDefault()
+          event.stopPropagation()
+          event.stopImmediatePropagation()
+          commitLocalPhotosBeforeSave(manualButton)
+          return
+        }
         const savingRevision = changeRevision.current
         observeSaveCompletion(manualButton, savingRevision)
         return
@@ -273,7 +377,8 @@ export default function OperationalTasksLive() {
     }
 
     const flushDirtyDraftOnce = () => {
-      if (changeRevision.current <= savedRevision.current) return
+      const drawer = activeTaskDrawer()
+      if (changeRevision.current <= savedRevision.current && !localPhotoImages(drawer).length) return
       runCloseSave()
     }
 
@@ -300,6 +405,7 @@ export default function OperationalTasksLive() {
     return () => {
       window.clearTimeout(refreshTimer.current)
       clearSaveObserver()
+      photoSaveGate.cancel()
       document.removeEventListener('input', onDraftInput, true)
       document.removeEventListener('change', onDraftChange, true)
       document.removeEventListener('click', onDrawerClick, true)
@@ -314,5 +420,72 @@ export default function OperationalTasksLive() {
     }
   }, [])
 
-  return <OperationalTasksV2 key={revision} />
+  return (
+    <>
+      <OperationalTasksV2 key={revision} />
+      {photoViewer ? (
+        <div
+          className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/95 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-label="Task photo preview"
+          onClick={() => setPhotoViewer(null)}
+        >
+          <div className="absolute right-3 top-3 z-10 flex gap-2" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-xl font-bold text-white"
+              onClick={() => setPhotoScale((value) => Math.max(1, Number((value - 0.5).toFixed(1))))}
+              aria-label="Zoom out"
+            >−</button>
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-xl font-bold text-white"
+              onClick={() => setPhotoScale((value) => Math.min(4, Number((value + 0.5).toFixed(1))))}
+              aria-label="Zoom in"
+            >+</button>
+            <button
+              type="button"
+              className="flex h-10 w-10 items-center justify-center rounded-full bg-white/15 text-xl font-bold text-white"
+              onClick={() => setPhotoViewer(null)}
+              aria-label="Close photo preview"
+            >×</button>
+          </div>
+          <div
+            className="h-full w-full overflow-auto touch-none"
+            onClick={(event) => event.stopPropagation()}
+            onWheel={(event) => {
+              event.preventDefault()
+              setPhotoScale((value) => Math.min(4, Math.max(1, Number((value + (event.deltaY < 0 ? 0.25 : -0.25)).toFixed(2)))))
+            }}
+            onTouchStart={(event) => {
+              photoPinchDistance.current = touchDistance(event)
+            }}
+            onTouchMove={(event) => {
+              const distance = touchDistance(event)
+              if (!distance || !photoPinchDistance.current) return
+              event.preventDefault()
+              const ratio = distance / photoPinchDistance.current
+              setPhotoScale((value) => Math.min(4, Math.max(1, Number((value * ratio).toFixed(2)))))
+              photoPinchDistance.current = distance
+            }}
+            onTouchEnd={(event) => {
+              if (event.touches.length < 2) photoPinchDistance.current = 0
+            }}
+          >
+            <div className="flex min-h-full min-w-full items-center justify-center p-4">
+              <img
+                src={photoViewer.src}
+                alt={photoViewer.alt}
+                className="max-h-[88dvh] max-w-[92vw] select-none object-contain transition-transform"
+                style={{ transform: `scale(${photoScale})`, transformOrigin: 'center' }}
+                onDoubleClick={() => setPhotoScale((value) => value > 1 ? 1 : 2)}
+                draggable={false}
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  )
 }

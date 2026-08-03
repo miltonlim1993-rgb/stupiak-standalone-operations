@@ -301,6 +301,36 @@ function assembleTask(task, template, config, photos) {
   }
 }
 
+export function buildTaskProgressPatch(task, state, action, user, timestamp = now()) {
+  const nextState = {
+    ...state,
+    responses: state.responses || {},
+  }
+  const patch = {}
+
+  if (action === 'start') {
+    nextState.started_at = nextState.started_at || timestamp
+    patch.status = 'in_progress'
+  } else if (action === 'save') {
+    nextState.started_at = nextState.started_at || timestamp
+    if (String(task.status || '').toLowerCase() === 'pending') patch.status = 'in_progress'
+  } else if (action === 'complete') {
+    patch.status = 'done'
+    patch.completed_date = timestamp
+    patch.completed_by_name = user.full_name || user.email
+    patch.completed_by_email = user.email
+    patch.completion_notes = nextState.completion_notes || ''
+  } else {
+    const error = new Error('Unsupported task action')
+    error.status = 400
+    error.code = 'invalid_task_action'
+    throw error
+  }
+
+  patch.notes = stateText(nextState)
+  return { patch, state: nextState }
+}
+
 export async function handleD1OperationalTaskAction(request, env, url) {
   if (url.pathname !== '/api/tasks/operational/action' || request.method !== 'POST') return null
   try {
@@ -368,38 +398,13 @@ export async function handleD1OperationalTaskAction(request, env, url) {
     }
 
     const photos = await d1TaskPhotos(env, task.outlet_id, task.id)
-    const state = parseState(task)
+    let state = parseState(task)
     if (Array.isArray(body.responses)) state.responses = normalizeResponses(config, body.responses)
     if (body.completion_notes !== undefined) state.completion_notes = String(body.completion_notes || '').slice(0, 3000)
 
-    const patch = {
-      ...task,
-      __realtime: undefined,
-      outlet_id: task.outlet_id,
-      notes: stateText(state),
-    }
-
-    if (action === 'start') {
-      state.started_at = state.started_at || now()
-      patch.notes = stateText(state)
-      patch.status = 'in_progress'
-    } else if (action === 'save') {
-      state.started_at = state.started_at || now()
-      patch.notes = stateText(state)
-      if (String(task.status || '').toLowerCase() === 'pending') patch.status = 'in_progress'
-    } else if (action === 'complete') {
-      validateCompletion(config, state, photos, task.due_date)
-      patch.status = 'done'
-      patch.completed_date = now()
-      patch.completed_by_name = user.full_name || user.email
-      patch.completed_by_email = user.email
-      patch.completion_notes = state.completion_notes
-    } else {
-      const error = new Error('Unsupported task action')
-      error.status = 400
-      error.code = 'invalid_task_action'
-      throw error
-    }
+    if (action === 'complete') validateCompletion(config, state, photos, task.due_date)
+    const progress = buildTaskProgressPatch(task, state, action, user)
+    state = progress.state
 
     const result = await mutate(request, env, {
       mutation_id: mutationId(request, body, action),
@@ -408,7 +413,7 @@ export async function handleD1OperationalTaskAction(request, env, url) {
       outlet_id: task.outlet_id,
       operation: 'update',
       expected_version: task.__realtime.version,
-      payload: patch,
+      payload: progress.patch,
     })
 
     return json(request, env, {
