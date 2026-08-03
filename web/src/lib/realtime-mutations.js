@@ -1,3 +1,10 @@
+import {
+  commitOptimisticTaskPhoto,
+  queueOptimisticTaskPhoto,
+  rejectOptimisticTaskPhoto,
+  trackOptimisticTaskPhoto,
+} from '@/lib/task-photo-optimistic'
+
 const configuredApiUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
 const API_BASE_URL = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:8787' : window.location.origin)).replace(/\/$/, '')
 const DATABASE_NAME = 'chefops-realtime-mutations'
@@ -72,6 +79,7 @@ function queuedResult(mutation) {
   const record = {
     ...(mutation.payload || {}),
     id: mutation.entity_id || mutation.payload?.id || '',
+    client_upload_state: mutation.entity === 'TaskPhoto' ? 'queued_offline' : undefined,
     __realtime: {
       mutation_id: mutation.mutation_id,
       outlet_id: mutation.outlet_id,
@@ -130,18 +138,25 @@ export async function submitRealtimeMutation(input, { queueOffline = true } = {}
     payload: input.payload || {},
   }
 
+  trackOptimisticTaskPhoto(mutation, 'uploading')
+
   try {
     const result = await postMutation(mutation)
     await removePending(mutation.mutation_id).catch(() => undefined)
+    commitOptimisticTaskPhoto(mutation, result)
     window.dispatchEvent(new CustomEvent('chefops:mutation-committed', { detail: result }))
     return result
   } catch (error) {
-    if (!queueOffline || !shouldQueue(error)) throw error
+    if (!queueOffline || !shouldQueue(error)) {
+      rejectOptimisticTaskPhoto(mutation, error.message || String(error))
+      throw error
+    }
     await savePending({
       ...mutation,
       attempts: Number(input.attempts || 0),
       last_error: error.message || String(error),
     })
+    queueOptimisticTaskPhoto(mutation, error.message || String(error))
     return queuedResult(mutation)
   }
 }
@@ -154,13 +169,16 @@ export async function flushRealtimeMutationQueue() {
     let flushed = 0
     for (const mutation of pending) {
       try {
+        trackOptimisticTaskPhoto(mutation, 'uploading')
         const result = await postMutation(mutation)
         await removePending(mutation.mutation_id)
+        commitOptimisticTaskPhoto(mutation, result)
         flushed += 1
         window.dispatchEvent(new CustomEvent('chefops:mutation-committed', { detail: result }))
       } catch (error) {
         if (!shouldQueue(error)) {
           await removePending(mutation.mutation_id)
+          rejectOptimisticTaskPhoto(mutation, error.message || String(error))
           window.dispatchEvent(new CustomEvent('chefops:mutation-rejected', {
             detail: {
               mutation,
@@ -177,6 +195,7 @@ export async function flushRealtimeMutationQueue() {
           last_error: error.message || String(error),
           last_attempt_at: new Date().toISOString(),
         })
+        queueOptimisticTaskPhoto(mutation, error.message || String(error))
         break
       }
     }
