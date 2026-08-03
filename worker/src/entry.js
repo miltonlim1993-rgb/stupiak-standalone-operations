@@ -25,12 +25,17 @@ import { processAttendanceRosterMirrorQueue } from './realtime-attendance-roster
 import { handleDutyRosterSourceUpload } from './realtime-attendance-roster-source.js'
 import { applyOperationalTaskPolicyResponse } from './operational-task-policy.js'
 import {
+  applyOperationalTaskAudienceResponse,
+  guardOperationalTaskAssignment,
+  guardOperationalTaskPhotoAssignment,
+} from './operational-task-audience.js'
+import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue,
 } from './realtime-store.js'
 
-const WORKER_REVISION = 'realtime-resilience-v19-duty-roster-d1'
+const WORKER_REVISION = 'realtime-resilience-v20-task-audience-assignment'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -211,6 +216,9 @@ export default {
       const completedTaskResponse = await guardCompletedOperationalTask(workflowRequest, runEnv, url)
       if (completedTaskResponse) return withApiHeaders(request, env, completedTaskResponse)
 
+      const taskAssignmentResponse = await guardOperationalTaskAssignment(workflowRequest, runEnv, url)
+      if (taskAssignmentResponse) return withApiHeaders(request, env, taskAssignmentResponse)
+
       const d1TaskResponse = url.pathname === '/api/tasks/operational/action'
         ? await withSubmissionLock(
             workflowRequest,
@@ -233,6 +241,9 @@ export default {
 
       const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
       if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
+
+      const taskPhotoAssignmentResponse = await guardOperationalTaskPhotoAssignment(request, runEnv, url)
+      if (taskPhotoAssignmentResponse) return withApiHeaders(request, env, taskPhotoAssignmentResponse)
 
       const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
       if (taskPhotoResponse) return withApiHeaders(request, env, taskPhotoResponse)
@@ -257,6 +268,7 @@ export default {
         : appResponse
       if (bootstrapRequest) {
         response = await applyOperationalTaskPolicyResponse(bootstrapRequest, url, response)
+        response = await applyOperationalTaskAudienceResponse(bootstrapRequest, url, runEnv, response)
       }
       if (url.pathname === '/api/health' && request.method === 'GET') {
         response = await augmentHealthResponse(response, runEnv)
