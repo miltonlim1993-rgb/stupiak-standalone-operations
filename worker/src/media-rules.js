@@ -1,5 +1,7 @@
 import { ensureEntitySheet, listRecords } from './sheets.js'
 
+const TEN_PHOTO_MODULES = new Set(['task', 'urgent_issue'])
+
 export const MEDIA_RULE_SEEDS = [
   {
     id: 'media-rule-task-global',
@@ -37,14 +39,17 @@ export async function ensureMediaRules(env) {
 
 export async function getMediaRule(env, moduleName, outletId = '') {
   await ensureMediaRules(env)
+  const normalizedModule = String(moduleName || '').toLowerCase()
   const rows = await listRecords(env, 'MediaRule', { sort: 'module,outlet_id', limit: 500 })
-  const moduleRows = (rows || []).filter((row) => isActive(row) && String(row.module || '').toLowerCase() === String(moduleName || '').toLowerCase())
+  const moduleRows = (rows || []).filter((row) => isActive(row) && String(row.module || '').toLowerCase() === normalizedModule)
   const selected = moduleRows.find((row) => String(row.outlet_id || '') === String(outletId || ''))
     || moduleRows.find((row) => !String(row.outlet_id || '').trim())
-    || MEDIA_RULE_SEEDS.find((row) => row.module === moduleName)
+    || MEDIA_RULE_SEEDS.find((row) => row.module === normalizedModule)
   return {
     ...(selected || {}),
-    max_files: Math.max(1, Number(selected?.max_files || 10)),
+    max_files: TEN_PHOTO_MODULES.has(normalizedModule)
+      ? 10
+      : Math.max(1, Number(selected?.max_files || 10)),
     max_file_mb: Math.max(1, Number(selected?.max_file_mb || 10)),
     allowed_media: String(selected?.allowed_media || 'IMAGE').toUpperCase(),
     capture_mode: String(selected?.capture_mode || 'CAMERA_AND_GALLERY').toUpperCase(),
