@@ -1,0 +1,11 @@
+.chefops-stock-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+@media (min-width: 700px) {
+  .chefops-stock-page {
+    display: grid;
+  }
+}

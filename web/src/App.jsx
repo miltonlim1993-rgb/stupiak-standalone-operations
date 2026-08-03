@@ -1,5 +1,6 @@
 import '@/ops-ui-refresh.css'
 import '@/stock-count-ui-polish.css'
+import '@/stock-count-layout-v2.css'
 import '@/sop-ui-refresh.css'
 import { lazy, Suspense } from 'react'
 import { Toaster } from '@/components/ui/toaster'

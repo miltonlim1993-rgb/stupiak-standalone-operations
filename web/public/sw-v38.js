@@ -1,5 +1,5 @@
-// Stupiak's Ops mandatory PWA refresh for the Stock Count UI release.
-const OPS_PWA_VERSION = 'stock-count-ui-pwa-v38'
+// Stupiak's Ops mandatory PWA refresh for the Stock Count layout refinement.
+const OPS_PWA_VERSION = 'stock-count-layout-pwa-v39'
 
 self.addEventListener('install', () => {
   self.skipWaiting()

@@ -3,12 +3,12 @@
   "apk_version": "4.5.22",
   "minimum_apk_version": "4.5.22",
   "force_update": true,
-  "pwa_version": "stock-count-ui-pwa-v38",
-  "minimum_pwa_version": "stock-count-ui-pwa-v38",
+  "pwa_version": "stock-count-layout-pwa-v39",
+  "minimum_pwa_version": "stock-count-layout-pwa-v39",
   "pwa_force_update": true,
   "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.22",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS PWA v38 Stock Count UI release. Improves the Stock Count desktop and tablet layout, changes Save to icon plus Save, strengthens progress and status presentation, and adds bilingual illustrated usage documentation. Worker v21, D1 schema, D1 data, Stock Count save flow and validation rules are unchanged.",
-  "release_trigger": "2026-08-03-stock-count-ui-pwa-v38"
+  "release_notes": "Mandatory OPS PWA v39 Stock Count layout refinement. Unifies the date and outlet controls, reduces the summary cards, separates search from section filters, and removes the heavy nested-card appearance. Worker, API, D1, Stock Count data and save validation are unchanged.",
+  "release_trigger": "2026-08-04-stock-count-layout-pwa-v39"
 }
