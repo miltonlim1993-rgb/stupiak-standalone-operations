@@ -81,8 +81,7 @@ function isTaskPhotoMutation(mutation = {}) {
   return String(mutation.entity || '') === 'TaskPhoto'
 }
 
-export function trackOptimisticTaskPhoto(mutation = {}, state = 'uploading', resultRecord = null) {
-  if (!isTaskPhotoMutation(mutation)) return null
+function storeTaskPhoto(mutation, state, resultRecord = null, error = '') {
   hydrate()
   const operation = String(mutation.operation || 'upsert').toLowerCase()
   const record = mutationRecord(mutation, state, resultRecord)
@@ -97,21 +96,23 @@ export function trackOptimisticTaskPhoto(mutation = {}, state = 'uploading', res
 
   records.set(record.id, record)
   persist()
-  announce(state, record)
+  announce(state, record, error)
   return record
+}
+
+export function trackOptimisticTaskPhoto(mutation = {}, state = 'uploading', resultRecord = null) {
+  if (!isTaskPhotoMutation(mutation)) return null
+  return storeTaskPhoto(mutation, state, resultRecord)
 }
 
 export function commitOptimisticTaskPhoto(mutation = {}, result = {}) {
   if (!isTaskPhotoMutation(mutation)) return null
-  const record = trackOptimisticTaskPhoto(mutation, 'committed', result.record || null)
-  return record
+  return storeTaskPhoto(mutation, 'committed', result.record || null)
 }
 
 export function queueOptimisticTaskPhoto(mutation = {}, error = '') {
   if (!isTaskPhotoMutation(mutation)) return null
-  const record = trackOptimisticTaskPhoto(mutation, 'queued_offline')
-  if (record) announce('queued_offline', record, error)
-  return record
+  return storeTaskPhoto(mutation, 'queued_offline', null, error)
 }
 
 export function rejectOptimisticTaskPhoto(mutation = {}, error = '') {
@@ -153,10 +154,11 @@ export function mergeOptimisticTaskPhotos(data = {}, { outletId = '' } = {}) {
   }
 
   if (changed) persist()
+  const rows = [...merged.values()]
   return {
     ...(data || {}),
-    task_photos: [...merged.values()],
-    optimistic_task_photo_count: [...merged.values()].filter((row) => row.client_upload_state).length,
+    task_photos: rows,
+    optimistic_task_photo_count: rows.filter((row) => row.client_upload_state).length,
   }
 }
 
