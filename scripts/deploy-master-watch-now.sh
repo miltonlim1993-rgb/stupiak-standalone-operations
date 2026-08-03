@@ -10,6 +10,9 @@ APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 MASTER_SPREADSHEET_ID="${GOOGLE_MASTER_SPREADSHEET_ID:-1sy-4AIbZssCmP9HQaq-K4OicXjdvOs2EXVNmvh4bSzM}"
+VERIFY_OUTLET_ID="${OPS_VERIFY_OUTLET_ID:-RR-KCH}"
+VERIFY_TEMPLATE_ID="${OPS_VERIFY_TEMPLATE_ID:-tmpl-prod-task-photo-test-v1}"
+MASTER_WATCH_RUN_SECRET="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 AUDIT_DIR="${OPS_RELEASE_AUDIT_DIR:-$ROOT_DIR/audit/master-watch-deploy-$STAMP}"
 
@@ -17,12 +20,14 @@ mkdir -p "$AUDIT_DIR"
 
 echo "============================================================"
 echo "Stupiak's OPS Master Data watcher deployment"
-echo "  Production:        $PRODUCTION_ORIGIN"
+echo "  Production:         $PRODUCTION_ORIGIN"
 echo "  Master spreadsheet: $MASTER_SPREADSHEET_ID"
-echo "  D1 migration:      NO"
-echo "  D1 backfill:       NO"
-echo "  D1 direct writes:  NO"
-echo "  Master watch cron: */2 * * * *"
+echo "  Verify outlet:      $VERIFY_OUTLET_ID"
+echo "  Verify template:    $VERIFY_TEMPLATE_ID"
+echo "  D1 migration:       NO"
+echo "  D1 backfill:        NO"
+echo "  D1 direct writes:   NO"
+echo "  Master watch cron:  */2 * * * *"
 echo "============================================================"
 
 echo "==> Requiring a clean tracked worktree"
@@ -67,42 +72,68 @@ npm run cf:render | tee "$AUDIT_DIR/04-render.txt"
 node <<'NODE'
 const fs = require('node:fs')
 const config = JSON.parse(fs.readFileSync('worker/wrangler.production.jsonc', 'utf8'))
-if (config.main !== 'src/entry-master-watch.js') {
-  throw new Error(`Unexpected production entry: ${config.main}`)
-}
+if (config.main !== 'src/entry-master-watch.js') throw new Error(`Unexpected production entry: ${config.main}`)
 const crons = new Set(config.triggers?.crons || [])
 if (!crons.has('*/2 * * * *')) throw new Error('Missing two-minute Master watcher cron')
 if (!crons.has('0 * * * *')) throw new Error('Missing hourly full-rebuild safety cron')
-if (config.d1_databases?.[0]?.database_name !== 'stupiaks-ops-realtime') {
-  throw new Error('Unexpected production D1 binding')
-}
+if (config.d1_databases?.[0]?.database_name !== 'stupiaks-ops-realtime') throw new Error('Unexpected production D1 binding')
 const expectedMasterId = String(process.env.GOOGLE_MASTER_SPREADSHEET_ID || '')
 const renderedMasterId = String(config.vars?.GOOGLE_MASTER_SPREADSHEET_ID || '')
-if (!expectedMasterId || renderedMasterId !== expectedMasterId) {
-  throw new Error('Production Master spreadsheet binding is missing or incorrect')
-}
+if (!expectedMasterId || renderedMasterId !== expectedMasterId) throw new Error('Production Master spreadsheet binding is missing or incorrect')
 console.log('PRODUCTION_ENTRY_VERIFIED=src/entry-master-watch.js')
 console.log('MASTER_SPREADSHEET_BINDING_VERIFIED=true')
 console.log('MASTER_WATCH_CRON_VERIFIED=true')
 console.log('HOURLY_SAFETY_CRON_VERIFIED=true')
 NODE
 
+echo "==> Installing one-time protected watcher-run secret"
+printf '%s' "$MASTER_WATCH_RUN_SECRET" | npx wrangler secret put MASTER_WATCH_RUN_SECRET --config worker/wrangler.production.jsonc \
+  > "$AUDIT_DIR/05-master-watch-run-secret.txt"
+
 echo "==> Recording current Cloudflare deployments"
 npx wrangler deployments list --config worker/wrangler.production.jsonc \
-  > "$AUDIT_DIR/05-deployments-before.txt" 2>&1 || true
+  > "$AUDIT_DIR/06-deployments-before.txt" 2>&1 || true
 
 echo "==> Deploying Worker and existing Web/PWA assets"
 echo "No D1 migration, backfill, import, database creation or historical rewrite will run."
 npx wrangler deploy --config worker/wrangler.production.jsonc \
-  | tee "$AUDIT_DIR/06-deploy.txt"
+  | tee "$AUDIT_DIR/07-deploy.txt"
 
-echo "==> Waiting for the first scheduled Master watcher publication"
-OPS_PRODUCTION_ORIGIN="$PRODUCTION_ORIGIN" node --input-type=module <<'NODE' \
-  | tee "$AUDIT_DIR/07-master-watch-health.txt"
+echo "==> Forcing one Master Template publication and verifying the Test Task"
+OPS_PRODUCTION_ORIGIN="$PRODUCTION_ORIGIN" \
+MASTER_WATCH_RUN_SECRET="$MASTER_WATCH_RUN_SECRET" \
+OPS_VERIFY_OUTLET_ID="$VERIFY_OUTLET_ID" \
+OPS_VERIFY_TEMPLATE_ID="$VERIFY_TEMPLATE_ID" \
+node --input-type=module <<'NODE' | tee "$AUDIT_DIR/08-master-watch-immediate-run.txt"
 const origin = String(process.env.OPS_PRODUCTION_ORIGIN || '').replace(/\/$/, '')
-const deadline = Date.now() + 4 * 60_000
-let last = null
+const secret = String(process.env.MASTER_WATCH_RUN_SECRET || '')
+const outletId = String(process.env.OPS_VERIFY_OUTLET_ID || '')
+const templateId = String(process.env.OPS_VERIFY_TEMPLATE_ID || '')
+const response = await fetch(`${origin}/api/internal/master-watch/run`, {
+  method: 'POST',
+  cache: 'no-store',
+  signal: AbortSignal.timeout(240_000),
+  headers: {
+    'Content-Type': 'application/json',
+    'Cache-Control': 'no-cache',
+    'X-ChefOps-Master-Watch-Secret': secret,
+  },
+  body: JSON.stringify({ outlet_id: outletId, template_id: templateId }),
+})
+const data = await response.json().catch(() => ({}))
+console.log(JSON.stringify(data, null, 2))
+if (!response.ok || data?.ok !== true) throw new Error(data?.error || `Immediate watcher run failed (${response.status})`)
+if (data?.verification?.verified !== true) throw new Error(`Template ${templateId} is not present in the published ${outletId} tasks module`)
+console.log('MASTER_WATCH_IMMEDIATE_RUN_VERIFIED=true')
+console.log('TEST_TASK_IN_PUBLISHED_PACK=true')
+NODE
 
+echo "==> Verifying persistent watcher health state"
+OPS_PRODUCTION_ORIGIN="$PRODUCTION_ORIGIN" node --input-type=module <<'NODE' \
+  | tee "$AUDIT_DIR/09-master-watch-health.txt"
+const origin = String(process.env.OPS_PRODUCTION_ORIGIN || '').replace(/\/$/, '')
+const deadline = Date.now() + 60_000
+let last = null
 while (Date.now() < deadline) {
   try {
     const response = await fetch(`${origin}/api/health?_=${Date.now()}`, {
@@ -116,14 +147,16 @@ while (Date.now() < deadline) {
     const hasOutlet = packs.some((pack) => String(pack?.outlet_id || '') === 'RR-KCH')
     if (
       response.ok
-      && watch?.policy === 'drive-modified-time-v1'
+      && watch?.policy === 'sheets-task-template-fingerprint-v1'
       && watch?.cron === '*/2 * * * *'
       && watch?.enabled === true
       && watch?.configured === true
       && watch?.state_available === true
       && Boolean(watch?.spreadsheet_id)
-      && Boolean(watch?.modified_time)
+      && Boolean(watch?.source_fingerprint)
+      && Boolean(watch?.checked_at)
       && Boolean(watch?.published_at)
+      && !watch?.last_error
       && hasOutlet
     ) {
       console.log(JSON.stringify(data, null, 2))
@@ -134,22 +167,23 @@ while (Date.now() < deadline) {
   } catch (error) {
     last = { error: String(error?.message || error) }
   }
-  await new Promise((resolve) => setTimeout(resolve, 10_000))
+  await new Promise((resolve) => setTimeout(resolve, 3000))
 }
-
 console.error(JSON.stringify(last, null, 2))
-throw new Error('Master watcher did not publish and report healthy state within four minutes')
+throw new Error('Master watcher did not report a successful Sheets fingerprint publication within one minute')
 NODE
 
 npx wrangler deployments list --config worker/wrangler.production.jsonc \
-  > "$AUDIT_DIR/08-deployments-after.txt" 2>&1 || true
+  > "$AUDIT_DIR/10-deployments-after.txt" 2>&1 || true
 
 cat <<RESULT
 
 VERIFIED_PRODUCTION_DEPLOYMENT=true
 MASTER_SPREADSHEET_BINDING_VERIFIED=true
 MASTER_WATCH_DEPLOYED=true
+MASTER_WATCH_IMMEDIATE_RUN_VERIFIED=true
 MASTER_WATCH_FIRST_PUBLISH_CONFIRMED=true
+TEST_TASK_IN_PUBLISHED_PACK=true
 D1_MIGRATION_RUN=false
 D1_BACKFILL_RUN=false
 D1_DIRECT_WRITE_RUN=false

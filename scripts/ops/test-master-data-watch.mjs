@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import { refreshAppPacksWhenMasterChanges } from '../../worker/src/master-data-watch.js'
 
+const STATE_KEY = 'chefops:master-data-watch:v1'
+
 function fakeKv() {
   const values = new Map()
   return {
@@ -20,12 +22,12 @@ const env = {
   APP_DATA_PACKS: fakeKv(),
 }
 
-let modifiedTime = '2026-08-03T12:00:00.000Z'
+let fingerprint = 'task-template-fingerprint-v1'
 let rebuildCount = 0
 const dependencies = {
-  readModifiedTime: async (_env, spreadsheetId) => {
+  readFingerprint: async (_env, spreadsheetId) => {
     assert.equal(spreadsheetId, 'master-sheet-test-id')
-    return modifiedTime
+    return { fingerprint, template_count: 29, photo_count: 2 }
   },
   rebuildPacks: async () => {
     rebuildCount += 1
@@ -39,29 +41,42 @@ const dependencies = {
 const first = await refreshAppPacksWhenMasterChanges(env, dependencies)
 assert.equal(first.changed, true)
 assert.equal(rebuildCount, 1)
+assert.equal(first.source, 'sheets-task-template-fingerprint-v1')
+assert.equal(first.source_fingerprint, fingerprint)
+assert.equal(first.template_count, 29)
 assert.equal(first.packs.length, 2)
 
 const unchanged = await refreshAppPacksWhenMasterChanges(env, dependencies)
 assert.equal(unchanged.changed, false)
 assert.equal(rebuildCount, 1)
-assert.equal(unchanged.modified_time, modifiedTime)
+assert.equal(unchanged.source_fingerprint, fingerprint)
+assert.ok(unchanged.checked_at)
 
-modifiedTime = '2026-08-03T12:02:00.000Z'
+fingerprint = 'task-template-fingerprint-v2'
 const changed = await refreshAppPacksWhenMasterChanges(env, dependencies)
 assert.equal(changed.changed, true)
 assert.equal(rebuildCount, 2)
 assert.equal(changed.packs.find((pack) => pack.outlet_id === 'RR-KCH')?.version, 'rr-v2')
 
+const forced = await refreshAppPacksWhenMasterChanges(env, { ...dependencies, force: true })
+assert.equal(forced.changed, true)
+assert.equal(rebuildCount, 3, 'immediate deploy verification must force one publication')
+
+const failedEnv = {
+  GOOGLE_MASTER_SPREADSHEET_ID: 'master-sheet-test-id',
+  APP_DATA_PACKS: fakeKv(),
+}
 await assert.rejects(
-  () => refreshAppPacksWhenMasterChanges(
-    { GOOGLE_MASTER_SPREADSHEET_ID: 'master-sheet-test-id', APP_DATA_PACKS: fakeKv() },
-    {
-      readModifiedTime: async () => '2026-08-03T12:04:00.000Z',
-      rebuildPacks: async () => [],
-    },
-  ),
+  () => refreshAppPacksWhenMasterChanges(failedEnv, {
+    readFingerprint: async () => ({ fingerprint: 'failed-publish-fingerprint' }),
+    rebuildPacks: async () => [],
+  }),
   (error) => error?.code === 'master_pack_publish_empty',
 )
+const failureState = await failedEnv.APP_DATA_PACKS.get(STATE_KEY, 'json')
+assert.equal(failureState.source, 'sheets-task-template-fingerprint-v1')
+assert.equal(failureState.last_error, 'master_pack_publish_empty')
+assert.ok(failureState.last_error_at)
 
 await assert.rejects(
   () => refreshAppPacksWhenMasterChanges(
@@ -71,4 +86,8 @@ await assert.rejects(
   (error) => error?.code === 'master_spreadsheet_not_configured',
 )
 
-console.log('Master data watcher tests passed')
+console.log('MASTER_DATA_WATCH_TEST_OK=true')
+console.log('MASTER_DATA_WATCH_SOURCE=sheets-task-template-fingerprint-v1')
+console.log('DRIVE_MODIFIED_TIME_REQUIRED=false')
+console.log('WATCH_FAILURE_STATE_PERSISTED=true')
+console.log('IMMEDIATE_FORCE_PUBLICATION_TESTED=true')

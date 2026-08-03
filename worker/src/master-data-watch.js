@@ -1,10 +1,17 @@
 import { rebuildAllAppPacks } from './app-pack.js'
-import { googleFetch } from './google.js'
+import { listRecords } from './sheets.js'
 
 const MASTER_WATCH_STATE_KEY = 'chefops:master-data-watch:v1'
+const MASTER_WATCH_SOURCE = 'sheets-task-template-fingerprint-v1'
 
 function masterSpreadsheetId(env) {
   return String(env.GOOGLE_MASTER_SPREADSHEET_ID || env.GOOGLE_SPREADSHEET_ID || '').trim()
+}
+
+async function sha256(value) {
+  const bytes = new TextEncoder().encode(value)
+  const digest = await crypto.subtle.digest('SHA-256', bytes)
+  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
 }
 
 async function readWatchState(env) {
@@ -22,19 +29,27 @@ async function writeWatchState(env, value) {
   await env.APP_DATA_PACKS.put(MASTER_WATCH_STATE_KEY, JSON.stringify(value))
 }
 
-async function readMasterModifiedTime(env, spreadsheetId) {
-  const url = new URL(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(spreadsheetId)}`)
-  url.searchParams.set('fields', 'id,modifiedTime')
-  const response = await googleFetch(env, url.toString())
-  const data = await response.json()
-  const modifiedTime = String(data.modifiedTime || '').trim()
-  if (!modifiedTime) {
-    const error = new Error('Google Drive did not return the Master spreadsheet modified time')
-    error.status = 502
-    error.code = 'master_modified_time_missing'
-    throw error
+async function readTaskTemplateFingerprint(env) {
+  const [templates, photos] = await Promise.all([
+    listRecords(env, 'TaskTemplate', { sort: 'id', limit: 3000 }),
+    listRecords(env, 'TaskTemplatePhoto', { sort: 'template_id,display_order,id', limit: 6000 }),
+  ])
+  const fingerprint = await sha256(JSON.stringify({
+    task_templates: templates || [],
+    task_template_photos: photos || [],
+  }))
+  return {
+    fingerprint,
+    template_count: (templates || []).length,
+    photo_count: (photos || []).length,
   }
-  return modifiedTime
+}
+
+function errorDetails(error) {
+  return {
+    last_error: String(error?.code || error?.message || error).slice(0, 500),
+    last_error_at: new Date().toISOString(),
+  }
 }
 
 export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
@@ -46,48 +61,78 @@ export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
     throw error
   }
 
-  const readModifiedTime = dependencies.readModifiedTime || readMasterModifiedTime
+  const readFingerprint = dependencies.readFingerprint || readTaskTemplateFingerprint
   const rebuildPacks = dependencies.rebuildPacks || rebuildAllAppPacks
-  const modifiedTime = await readModifiedTime(env, spreadsheetId)
+  const force = Boolean(dependencies.force)
+  const checkedAt = new Date().toISOString()
   const previous = await readWatchState(env)
 
-  if (String(previous?.modified_time || '') === modifiedTime && previous?.published_at) {
-    return {
-      ok: true,
-      changed: false,
-      modified_time: modifiedTime,
-      published_at: previous.published_at,
-      packs: previous.packs || [],
+  try {
+    const source = await readFingerprint(env, spreadsheetId)
+    const sourceFingerprint = String(source?.fingerprint || source || '').trim()
+    if (!sourceFingerprint) {
+      const error = new Error('Task Template fingerprint is empty')
+      error.status = 502
+      error.code = 'master_fingerprint_empty'
+      throw error
     }
-  }
 
-  const manifests = await rebuildPacks(env)
-  if (!Array.isArray(manifests) || !manifests.length) {
-    const error = new Error('No app data packs were published after the Master spreadsheet changed')
-    error.status = 502
-    error.code = 'master_pack_publish_empty'
+    if (!force && String(previous?.source_fingerprint || '') === sourceFingerprint && previous?.published_at) {
+      const next = {
+        ...previous,
+        spreadsheet_id: spreadsheetId,
+        source: MASTER_WATCH_SOURCE,
+        source_fingerprint: sourceFingerprint,
+        checked_at: checkedAt,
+        template_count: Number(source?.template_count || previous?.template_count || 0),
+        photo_count: Number(source?.photo_count || previous?.photo_count || 0),
+        last_error: '',
+        last_error_at: '',
+      }
+      await writeWatchState(env, next)
+      return { ok: true, changed: false, ...next }
+    }
+
+    const manifests = await rebuildPacks(env)
+    if (!Array.isArray(manifests) || !manifests.length) {
+      const error = new Error('No app data packs were published after Task Templates changed')
+      error.status = 502
+      error.code = 'master_pack_publish_empty'
+      throw error
+    }
+
+    const publishedAt = new Date().toISOString()
+    const packs = manifests.map((manifest) => ({
+      outlet_id: String(manifest.outlet_id || ''),
+      version: String(manifest.version || ''),
+      data_version: String(manifest.data_version || ''),
+    }))
+    const next = {
+      spreadsheet_id: spreadsheetId,
+      source: MASTER_WATCH_SOURCE,
+      source_fingerprint: sourceFingerprint,
+      checked_at: checkedAt,
+      published_at: publishedAt,
+      template_count: Number(source?.template_count || 0),
+      photo_count: Number(source?.photo_count || 0),
+      packs,
+      last_error: '',
+      last_error_at: '',
+    }
+    await writeWatchState(env, next)
+    return { ok: true, changed: true, ...next }
+  } catch (error) {
+    try {
+      await writeWatchState(env, {
+        ...(previous || {}),
+        spreadsheet_id: spreadsheetId,
+        source: MASTER_WATCH_SOURCE,
+        checked_at: checkedAt,
+        ...errorDetails(error),
+      })
+    } catch (stateError) {
+      console.error('Unable to persist Master watcher failure state', stateError)
+    }
     throw error
-  }
-
-  const publishedAt = new Date().toISOString()
-  const packs = manifests.map((manifest) => ({
-    outlet_id: String(manifest.outlet_id || ''),
-    version: String(manifest.version || ''),
-    data_version: String(manifest.data_version || ''),
-  }))
-
-  await writeWatchState(env, {
-    spreadsheet_id: spreadsheetId,
-    modified_time: modifiedTime,
-    published_at: publishedAt,
-    packs,
-  })
-
-  return {
-    ok: true,
-    changed: true,
-    modified_time: modifiedTime,
-    published_at: publishedAt,
-    packs,
   }
 }
