@@ -19,7 +19,7 @@ import { installMediaUiRepair } from '@/lib/media-ui'
 import { installViewportGeometry } from '@/lib/viewport-geometry'
 import { installOperationalTaskPolicy } from '@/lib/operational-task-policy'
 
-const SHELL_VERSION = 'stock-count-ui-pwa-v38'
+const SHELL_VERSION = 'stock-count-layout-pwa-v39'
 
 function isNativeAndroid() {
   const capacitor = window.Capacitor
