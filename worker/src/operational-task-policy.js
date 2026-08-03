@@ -43,14 +43,8 @@ function normalizeTask(task = {}) {
 }
 
 export function applyOperationalTaskPolicyPayload(payload = {}) {
-  const sourceTasks = Array.isArray(payload.tasks) ? payload.tasks : []
-  const hasRetainedTask = sourceTasks.some((task) => templateId(task) === RETAINED_TEMPLATE_ID)
-  const tasks = sourceTasks
-    .filter((task) => {
-      const id = templateId(task)
-      if (!RETIRED_TEMPLATE_IDS.has(id)) return true
-      return !hasRetainedTask ? false : false
-    })
+  const tasks = (Array.isArray(payload.tasks) ? payload.tasks : [])
+    .filter((task) => !RETIRED_TEMPLATE_IDS.has(templateId(task)))
     .map(normalizeTask)
 
   const taskIds = new Set(tasks.map((task) => String(task?.id || '')).filter(Boolean))
