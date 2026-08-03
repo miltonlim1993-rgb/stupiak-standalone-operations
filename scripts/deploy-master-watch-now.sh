@@ -9,6 +9,7 @@ OPS_DB_ID="${CLOUDFLARE_OPS_DB_ID:-080c13d7-e2f5-4c01-a1ca-aa00094d6fc0}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
+MASTER_SPREADSHEET_ID="${GOOGLE_MASTER_SPREADSHEET_ID:-1sy-4AIbZssCmP9HQaq-K4OicXjdvOs2EXVNmvh4bSzM}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 AUDIT_DIR="${OPS_RELEASE_AUDIT_DIR:-$ROOT_DIR/audit/master-watch-deploy-$STAMP}"
 
@@ -17,6 +18,7 @@ mkdir -p "$AUDIT_DIR"
 echo "============================================================"
 echo "Stupiak's OPS Master Data watcher deployment"
 echo "  Production:        $PRODUCTION_ORIGIN"
+echo "  Master spreadsheet: $MASTER_SPREADSHEET_ID"
 echo "  D1 migration:      NO"
 echo "  D1 backfill:       NO"
 echo "  D1 direct writes:  NO"
@@ -57,6 +59,7 @@ export CLOUDFLARE_APP_DATA_PACKS_ID="$APP_DATA_PACKS_ID"
 export CLOUDFLARE_OPS_DB_ID="$OPS_DB_ID"
 export CLOUDFLARE_SHEET_SYNC_QUEUE_NAME="$QUEUE_NAME"
 export CLOUDFLARE_SHEET_SYNC_DLQ_NAME="$DLQ_NAME"
+export GOOGLE_MASTER_SPREADSHEET_ID="$MASTER_SPREADSHEET_ID"
 
 echo "==> Rendering canonical production bindings"
 npm run cf:render | tee "$AUDIT_DIR/04-render.txt"
@@ -73,7 +76,13 @@ if (!crons.has('0 * * * *')) throw new Error('Missing hourly full-rebuild safety
 if (config.d1_databases?.[0]?.database_name !== 'stupiaks-ops-realtime') {
   throw new Error('Unexpected production D1 binding')
 }
+const expectedMasterId = String(process.env.GOOGLE_MASTER_SPREADSHEET_ID || '')
+const renderedMasterId = String(config.vars?.GOOGLE_MASTER_SPREADSHEET_ID || '')
+if (!expectedMasterId || renderedMasterId !== expectedMasterId) {
+  throw new Error('Production Master spreadsheet binding is missing or incorrect')
+}
 console.log('PRODUCTION_ENTRY_VERIFIED=src/entry-master-watch.js')
+console.log('MASTER_SPREADSHEET_BINDING_VERIFIED=true')
 console.log('MASTER_WATCH_CRON_VERIFIED=true')
 console.log('HOURLY_SAFETY_CRON_VERIFIED=true')
 NODE
@@ -112,6 +121,7 @@ while (Date.now() < deadline) {
       && watch?.enabled === true
       && watch?.configured === true
       && watch?.state_available === true
+      && Boolean(watch?.spreadsheet_id)
       && Boolean(watch?.modified_time)
       && Boolean(watch?.published_at)
       && hasOutlet
@@ -137,6 +147,7 @@ npx wrangler deployments list --config worker/wrangler.production.jsonc \
 cat <<RESULT
 
 VERIFIED_PRODUCTION_DEPLOYMENT=true
+MASTER_SPREADSHEET_BINDING_VERIFIED=true
 MASTER_WATCH_DEPLOYED=true
 MASTER_WATCH_FIRST_PUBLISH_CONFIRMED=true
 D1_MIGRATION_RUN=false
