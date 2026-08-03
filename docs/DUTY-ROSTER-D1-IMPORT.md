@@ -21,6 +21,7 @@ Duty Roster import now uses D1 as the only runtime commit:
 - endpoint: `POST /api/attendance/import`;
 - entity: `Attendance`;
 - operation: `roster_replace`;
+- imported row status: `scheduled`;
 - maximum rows: 500;
 - maximum selected dates: 14;
 - the reported weekly PDF contains 44 rows across 7 dates.
@@ -31,14 +32,14 @@ The Worker intercepts this endpoint before the legacy `index.js` Sheet handler.
 
 When `replace_existing` is enabled, one D1 batch performs all of the following:
 
-1. soft-archives active `Attendance` rows for only the requested outlet and PDF dates;
+1. soft-archives active `Attendance` rows with `status=scheduled` for only the requested outlet and PDF dates;
 2. upserts every normalized shift into `ops_records`;
 3. writes one idempotent `ops_mutations` journal record;
 4. writes one durable `sheet_sync_outbox` job.
 
 No physical `DELETE FROM ops_records` is used.
 
-Other outlets and dates outside the PDF are not modified.
+Non-scheduled Attendance records are preserved. Other outlets and dates outside the PDF are not modified.
 
 Each shift receives a deterministic ID derived from:
 
@@ -56,7 +57,7 @@ The current UI uploads the PDF before calling the import endpoint. For Duty Rost
 
 A Drive upload failure cannot block the D1 roster commit.
 
-After D1 commits, a dedicated Queue consumer mirrors the complete selected-date replacement to Google Sheets. Sheet failure leaves the outbox item pending for retry and does not convert a successful D1 commit into a user-facing 500.
+After D1 commits, a dedicated Queue consumer mirrors the complete selected-date scheduled-roster replacement to Google Sheets. Sheet failure leaves the outbox item pending for retry and does not convert a successful D1 commit into a user-facing 500.
 
 Other file-upload modules keep their existing synchronous behavior.
 
@@ -73,6 +74,7 @@ This change does not:
 - backfill historical Attendance;
 - import old Sheet rows into D1;
 - physically delete an Attendance record;
+- archive non-scheduled Attendance;
 - replace another outlet's roster;
 - replace a date that is not present in the uploaded PDF.
 
@@ -80,7 +82,7 @@ This change does not:
 
 Code rollback can restore the previous Worker revision. Existing D1 Attendance records remain available because rollback must not delete runtime data.
 
-Rows soft-archived by a replacement remain in `ops_records` with top-level `deleted_at` metadata. A targeted recovery can restore selected IDs after read-only verification; broad automatic rollback is not allowed.
+Scheduled rows soft-archived by a replacement remain in `ops_records` with top-level `deleted_at` metadata. A targeted recovery can restore selected IDs after read-only verification; broad automatic rollback is not allowed.
 
 ## Required verification
 
@@ -88,9 +90,9 @@ Rows soft-archived by a replacement remain in `ops_records` with top-level `dele
 2. Publish with replacement enabled.
 3. Confirm HTTP 201/200 reports `storage: d1`, `imported: 44`, and the expected dates.
 4. Open 03/08/2026 and confirm the roster appears without waiting for Google Sheet sync.
-5. Re-import the same PDF and confirm active row count does not increase beyond the 44 canonical shifts.
-6. Change one shift, re-import and confirm only the selected outlet/date set is replaced.
-7. Confirm another outlet and dates outside the PDF are unchanged.
+5. Re-import the same PDF and confirm active scheduled row count does not increase beyond the 44 canonical shifts.
+6. Change one shift, re-import and confirm only the selected outlet/date scheduled set is replaced.
+7. Confirm non-scheduled Attendance, another outlet and dates outside the PDF are unchanged.
 8. Confirm one `roster_replace` mutation and one outbox job exist for the import.
 9. Allow the Queue to run and confirm the Sheet mirror reaches `synced` or remains safely `pending` with an error.
 10. Confirm no migration or physical Attendance deletion occurred.
