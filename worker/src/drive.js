@@ -23,6 +23,18 @@ export function mediaPrimaryStorage(env) {
   return env.MEDIA_BUCKET?.put && env.MEDIA_BUCKET?.get ? 'cloudflare-r2' : 'google-drive'
 }
 
+export function driveBackupMode(env) {
+  const mode = String(env.GOOGLE_DRIVE_BACKUP_MODE || 'disabled').trim().toLowerCase()
+  return ['enabled', 'on', 'true', '1'].includes(mode) ? 'enabled' : 'disabled'
+}
+
+function driveBackupEnabled(env) {
+  const authMode = googleAuthMode(env, 'drive')
+  return driveBackupMode(env) === 'enabled'
+    && !['disabled', 'unconfigured'].includes(authMode)
+    && Boolean(String(env.GOOGLE_DRIVE_FOLDER_ID || '').trim())
+}
+
 function escapeDriveQuery(value) {
   return String(value).replaceAll('\\', '\\\\').replaceAll("'", "\\'")
 }
@@ -211,7 +223,7 @@ async function r2Media(env, mediaId) {
 }
 
 export async function backupR2MediaToDrive(env, mediaId) {
-  if (googleAuthMode(env, 'drive') === 'disabled' || googleAuthMode(env, 'drive') === 'unconfigured') {
+  if (!driveBackupEnabled(env)) {
     await writeDriveBackupState(env, mediaId, {
       status: 'disabled',
       updated_at: new Date().toISOString(),
@@ -263,6 +275,7 @@ export async function backupR2MediaToDrive(env, mediaId) {
 }
 
 function scheduleDriveBackup(env, mediaId) {
+  if (!driveBackupEnabled(env)) return
   const task = backupR2MediaToDrive(env, mediaId).catch((error) => {
     console.error('Asynchronous Drive backup failed; R2 remains canonical', mediaId, error)
   })
@@ -270,8 +283,7 @@ function scheduleDriveBackup(env, mediaId) {
 }
 
 export async function retryPendingDriveBackups(env, limit = 20) {
-  if (!env.MEDIA_BUCKET?.list) return []
-  if (googleAuthMode(env, 'drive') === 'disabled' || googleAuthMode(env, 'drive') === 'unconfigured') return []
+  if (!env.MEDIA_BUCKET?.list || !driveBackupEnabled(env)) return []
   const listing = await env.MEDIA_BUCKET.list({
     prefix: R2_MEDIA_PREFIX,
     limit: Math.max(1, Math.min(Number(limit) || 20, 100)),
@@ -399,10 +411,9 @@ export async function uploadDriveFile(request, env, user) {
       outlet_name: outletName,
       outlet_id: outletId,
     })
+    const backupStatus = driveBackupEnabled(env) ? 'pending' : 'disabled'
     await writeDriveBackupState(env, mediaId, {
-      status: googleAuthMode(env, 'drive') === 'unconfigured' || googleAuthMode(env, 'drive') === 'disabled'
-        ? 'disabled'
-        : 'pending',
+      status: backupStatus,
       updated_at: new Date().toISOString(),
       last_error: '',
     })
@@ -416,9 +427,7 @@ export async function uploadDriveFile(request, env, user) {
       file_url: `${apiOrigin}/api/files/${encodeURIComponent(mediaId)}`,
       storage: 'cloudflare-r2',
       primary_storage: 'cloudflare-r2',
-      drive_sync_status: googleAuthMode(env, 'drive') === 'unconfigured' || googleAuthMode(env, 'drive') === 'disabled'
-        ? 'disabled'
-        : 'pending',
+      drive_sync_status: backupStatus,
     }
   }
 
