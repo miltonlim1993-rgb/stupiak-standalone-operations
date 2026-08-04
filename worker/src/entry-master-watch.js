@@ -1,11 +1,16 @@
 import app, { OutletRealtimeHub } from './entry.js'
 import { getAppPackModule, getPublishedAppPack } from './app-pack.js'
+import { mediaPrimaryStorage, retryPendingDriveBackups } from './drive.js'
+import { googleAuthMode } from './google.js'
 import { refreshAppPacksWhenMasterChanges } from './master-data-watch.js'
 
 const MASTER_WATCH_CRON = '*/2 * * * *'
+const HOURLY_SAFETY_CRON = '0 * * * *'
 const MASTER_WATCH_STATE_KEY = 'chefops:master-data-watch:v1'
 const MASTER_WATCH_POLICY = 'sheets-task-template-fingerprint-v1'
 const MASTER_WATCH_RUN_PATH = '/api/internal/master-watch/run'
+const DEFAULT_STATVARA_BRIDGE_PORT = 8791
+const DEFAULT_STATVARA_API_PATH = '/api/ops/v1'
 
 function safeSecretEqual(left, right) {
   const a = String(left || '')
@@ -28,14 +33,16 @@ function internalJson(payload, status = 200) {
 
 async function masterWatchStatus(env) {
   const configured = Boolean(env.GOOGLE_MASTER_SPREADSHEET_ID || env.GOOGLE_SPREADSHEET_ID)
+  const authMode = googleAuthMode(env, 'data')
   if (!env.APP_DATA_PACKS?.get) {
-    return { configured, state_available: false }
+    return { configured, auth_mode: authMode, state_available: false }
   }
 
   try {
     const state = await env.APP_DATA_PACKS.get(MASTER_WATCH_STATE_KEY, 'json')
     return {
       configured,
+      auth_mode: authMode,
       state_available: Boolean(state),
       spreadsheet_id: String(state?.spreadsheet_id || ''),
       source: String(state?.source || ''),
@@ -52,9 +59,25 @@ async function masterWatchStatus(env) {
     console.error('Unable to read Master watcher health state', error)
     return {
       configured,
+      auth_mode: authMode,
       state_available: false,
       status_error: String(error?.message || error).slice(0, 300),
     }
+  }
+}
+
+function runtimeDependencyStatus(env) {
+  return {
+    google_data_auth: googleAuthMode(env, 'data'),
+    media_primary_storage: mediaPrimaryStorage(env),
+    drive_backup_auth: googleAuthMode(env, 'drive'),
+    drive_backup_mode: 'asynchronous_non_blocking',
+    statvara_bridge: {
+      reserved: true,
+      port: Number(env.STATVARA_OPS_BRIDGE_PORT || DEFAULT_STATVARA_BRIDGE_PORT),
+      api_path: String(env.STATVARA_OPS_API_PATH || DEFAULT_STATVARA_API_PATH),
+      blocks_store_execution: false,
+    },
   }
 }
 
@@ -141,6 +164,7 @@ export default {
             enabled: true,
             ...watch,
           },
+          runtime_dependencies: runtimeDependencyStatus(env),
         },
       }), {
         status: response.status,
@@ -168,9 +192,15 @@ export default {
       return
     }
 
-    if (typeof app.scheduled === 'function') {
-      return app.scheduled(event, env, ctx)
+    const jobs = []
+    if (String(event?.cron || '') === HOURLY_SAFETY_CRON) {
+      jobs.push(retryPendingDriveBackups(env, 25).catch((error) => {
+        console.error('Pending Drive backup retry failed; R2 remains canonical', error)
+        return []
+      }))
     }
+    if (typeof app.scheduled === 'function') jobs.push(app.scheduled(event, env, ctx))
+    return Promise.all(jobs)
   },
 }
 
