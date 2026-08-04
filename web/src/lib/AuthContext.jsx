@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { opsClient } from '@/api/opsClient'
+import { localAuthClient } from '@/api/localAuthClient'
 import { clearNativeSessionToken, saveNativeSessionToken } from '@/lib/native-session'
 import { parseOutletIds } from '@/lib/outlets'
 
@@ -23,7 +24,8 @@ function rememberOutlet(user) {
 function readCachedUser() {
   try {
     const parsed = JSON.parse(localStorage.getItem(CACHED_USER_KEY) || 'null')
-    return parsed && parsed.status === 'active' && parsed.google_sub ? parsed : null
+    const hasStableIdentity = Boolean(parsed?.id || parsed?.google_sub)
+    return parsed && parsed.status === 'active' && hasStableIdentity ? parsed : null
   } catch {
     return null
   }
@@ -103,15 +105,30 @@ export function AuthProvider({ children }) {
     checkUserAuth()
   }, [checkUserAuth])
 
-  const loginWithGoogle = useCallback(async (credential) => {
-    setAuthError(null)
-    const result = await opsClient.auth.loginWithGoogle(credential)
+  const applyLoginResult = useCallback((result) => {
     if (result?.session_token) saveNativeSessionToken(result.session_token)
-    applyUser(result.user)
+    applyUser(result?.user || null)
     setAuthChecked(true)
     setIsLoadingAuth(false)
-    return result.user
+    return result?.user || null
   }, [applyUser])
+
+  const loginLocal = useCallback(async ({ loginId, secret }) => {
+    setAuthError(null)
+    return applyLoginResult(await localAuthClient.login({ loginId, secret }))
+  }, [applyLoginResult])
+
+  const loginWithGoogle = useCallback(async (credential) => {
+    setAuthError(null)
+    return applyLoginResult(await opsClient.auth.loginWithGoogle(credential))
+  }, [applyLoginResult])
+
+  const registerLocal = useCallback((payload) => localAuthClient.register(payload), [])
+  const activateLocal = useCallback((payload) => localAuthClient.activate(payload), [])
+  const getAuthConfig = useCallback(() => localAuthClient.config(), [])
+  const getLocalCredential = useCallback(() => localAuthClient.summary(), [])
+  const setupLocalCredential = useCallback((payload) => localAuthClient.setup(payload), [])
+  const changeLocalCredential = useCallback((payload) => localAuthClient.change(payload), [])
 
   const updateProfile = useCallback(async (profile) => {
     const updated = await opsClient.auth.updateMe(profile)
@@ -152,13 +169,38 @@ export function AuthProvider({ children }) {
     isLoadingPublicSettings: false,
     authError,
     authChecked,
+    loginLocal,
     loginWithGoogle,
+    registerLocal,
+    activateLocal,
+    getAuthConfig,
+    getLocalCredential,
+    setupLocalCredential,
+    changeLocalCredential,
     logout,
     navigateToLogin,
     checkUserAuth,
     checkAppState: checkUserAuth,
     updateProfile,
-  }), [user, applyUser, isLoadingAuth, authError, authChecked, loginWithGoogle, logout, navigateToLogin, checkUserAuth, updateProfile])
+  }), [
+    user,
+    applyUser,
+    isLoadingAuth,
+    authError,
+    authChecked,
+    loginLocal,
+    loginWithGoogle,
+    registerLocal,
+    activateLocal,
+    getAuthConfig,
+    getLocalCredential,
+    setupLocalCredential,
+    changeLocalCredential,
+    logout,
+    navigateToLogin,
+    checkUserAuth,
+    updateProfile,
+  ])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
