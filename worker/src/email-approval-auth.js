@@ -29,6 +29,11 @@ import {
 
 const PENDING_COOKIE_NAME = 'chefops_pending_approval'
 const PENDING_SESSION_SECONDS = 48 * 60 * 60
+const EXISTING_SETUP_SESSION_SECONDS = 15 * 60
+const PENDING_AUTH_METHODS = new Set([
+  'pending_email_approval',
+  'existing_account_credential_setup',
+])
 
 function authError(message, code, status = 400) {
   const error = new Error(message)
@@ -85,16 +90,23 @@ function bearerToken(request) {
   return match ? match[1].trim() : ''
 }
 
-async function createPendingToken(user, env) {
+async function createPendingToken(
+  user,
+  env,
+  {
+    authMethod = 'pending_email_approval',
+    maxAge = PENDING_SESSION_SECONDS,
+  } = {},
+) {
   return new SignJWT({
     uid: String(user.id),
     email: String(user.email || '').toLowerCase(),
-    auth_method: 'pending_email_approval',
+    auth_method: authMethod,
   })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
     .setSubject(String(user.id))
     .setIssuedAt()
-    .setExpirationTime(`${PENDING_SESSION_SECONDS}s`)
+    .setExpirationTime(`${maxAge}s`)
     .sign(sessionKey(env))
 }
 
@@ -103,7 +115,7 @@ async function pendingPayload(request, env) {
   if (!token) throw authError('Approval waiting session was not found', 'pending_approval_session_missing', 401)
   try {
     const { payload } = await jwtVerify(token, sessionKey(env), { algorithms: ['HS256'] })
-    if (payload.auth_method !== 'pending_email_approval' || !payload.uid || !payload.email) {
+    if (!PENDING_AUTH_METHODS.has(String(payload.auth_method || '')) || !payload.uid || !payload.email) {
       throw new Error('Invalid pending session claims')
     }
     return payload
@@ -249,12 +261,31 @@ async function startEmailApproval(request, env) {
     })
   }
 
+  const setupToken = await createPendingToken(user, env, {
+    authMethod: 'existing_account_credential_setup',
+    maxAge: EXISTING_SETUP_SESSION_SECONDS,
+  })
+  await writeLocalAuthAudit(env, {
+    eventType: 'existing_account_first_credential_setup_issued',
+    userId: user.id,
+    loginIdHash: emailHash,
+    clientHash,
+    success: true,
+    details: { expires_in_seconds: EXISTING_SETUP_SESSION_SECONDS },
+  })
+  const credentialKind = credentialKindForRole(user.role)
   return json(request, env, {
     ok: true,
     status: 'credential_setup_required',
     email,
-    message: 'This existing approved account has no local credential. Use the temporary Google fallback once to verify the account.',
-  }, 409)
+    pending_token: setupToken,
+    credential_kind: credentialKind,
+    message: credentialKind === 'pin'
+      ? 'Existing approved account found. Create your six-digit PIN to enter OPS.'
+      : 'Existing approved account found. Create your password to enter OPS.',
+  }, 200, {
+    'Set-Cookie': pendingCookie(setupToken, request, EXISTING_SETUP_SESSION_SECONDS),
+  })
 }
 
 async function emailCredentialLogin(request, env) {
