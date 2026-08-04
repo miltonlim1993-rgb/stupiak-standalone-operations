@@ -19,13 +19,13 @@ fi
 PRODUCTION_ORIGIN="${OPS_PRODUCTION_ORIGIN:-https://stupiaks-ops.sporkburger19.workers.dev}"
 OPS_DB_ID="${CLOUDFLARE_OPS_DB_ID:-080c13d7-e2f5-4c01-a1ca-aa00094d6fc0}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
-MEDIA_BUCKET_NAME="${CLOUDFLARE_MEDIA_BUCKET_NAME:-stupiaks-ops-media}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 MASTER_SPREADSHEET_ID="${GOOGLE_MASTER_SPREADSHEET_ID:-1sy-4AIbZssCmP9HQaq-K4OicXjdvOs2EXVNmvh4bSzM}"
 STATVARA_BRIDGE_PORT="${STATVARA_OPS_BRIDGE_PORT:-8791}"
 STATVARA_API_PATH="${STATVARA_OPS_API_PATH:-/api/ops/v1}"
-CONFIG="worker/wrangler.production.jsonc"
+BASE_CONFIG="worker/wrangler.production.jsonc"
+CONFIG="worker/wrangler.local-auth-transition.jsonc"
 SECRETS_DIR="${OPS_LOCAL_AUTH_SECRET_DIR:-$HOME/.config/stupiaks-ops}"
 SECRETS_FILE="${OPS_LOCAL_AUTH_SECRET_FILE:-$SECRETS_DIR/local-auth-production.env}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -38,16 +38,19 @@ mkdir -p "$SECRETS_DIR"
 cat <<INFO
 ============================================================
 Stupiak's OPS local authentication production activation
-  Production:          $PRODUCTION_ORIGIN
-  D1 migration:        0002_local_auth.sql only
-  D1 backfill:         NO
-  User rewrite:        NO
-  History deletion:    NO
-  Task/TaskPhoto write:NO
-  Google login:        fallback remains enabled
-  Owner password:      not created by this script
-  Secret values:       never printed
-  Secret persistence:  $SECRETS_FILE
+  Production:              $PRODUCTION_ORIGIN
+  D1 migration:            0002_local_auth.sql only
+  D1 backfill:             NO
+  User rewrite:            NO
+  History deletion:        NO
+  Task/TaskPhoto write:    NO
+  Google employee login:   fallback remains enabled
+  Google Service Account:  NOT required for this phase
+  Cloudflare R2:           NOT required for this phase
+  Media runtime:           existing Google Drive/KV transition path
+  Owner password:          not created by this script
+  Secret values:           never printed
+  Secret persistence:      $SECRETS_FILE
 ============================================================
 INFO
 
@@ -70,14 +73,32 @@ npm run build | tee "$AUDIT_DIR/03-build.txt"
 
 export CLOUDFLARE_APP_DATA_PACKS_ID="$APP_DATA_PACKS_ID"
 export CLOUDFLARE_OPS_DB_ID="$OPS_DB_ID"
-export CLOUDFLARE_MEDIA_BUCKET_NAME="$MEDIA_BUCKET_NAME"
 export CLOUDFLARE_SHEET_SYNC_QUEUE_NAME="$QUEUE_NAME"
 export CLOUDFLARE_SHEET_SYNC_DLQ_NAME="$DLQ_NAME"
 export GOOGLE_MASTER_SPREADSHEET_ID="$MASTER_SPREADSHEET_ID"
 export STATVARA_OPS_BRIDGE_PORT="$STATVARA_BRIDGE_PORT"
 export STATVARA_OPS_API_PATH="$STATVARA_API_PATH"
 
-npm run cf:render | tee "$AUDIT_DIR/04-render.txt"
+npm run cf:render | tee "$AUDIT_DIR/04-render-base.txt"
+node scripts/render-wrangler-local-auth-transition.mjs | tee "$AUDIT_DIR/05-render-local-auth-transition.txt"
+
+node <<'NODE'
+const fs = require('node:fs')
+const config = JSON.parse(fs.readFileSync('worker/wrangler.local-auth-transition.jsonc', 'utf8'))
+if (config.main !== 'src/entry-master-watch.js') throw new Error(`Unexpected production entry: ${config.main}`)
+if (config.r2_buckets) throw new Error('Local-auth transition config must not bind R2')
+if (config.vars?.LOCAL_AUTH_MODE !== 'enabled') throw new Error('Local auth must be enabled')
+if (config.vars?.LOCAL_AUTH_REGISTRATION !== 'enabled') throw new Error('Local registration must be enabled')
+if (config.vars?.GOOGLE_LOGIN_MODE !== 'fallback') throw new Error('Google login fallback must remain enabled')
+if (config.vars?.GOOGLE_DATA_AUTH_MODE !== 'oauth_refresh_token') throw new Error('Transition must preserve existing Google data auth mode')
+if (config.vars?.GOOGLE_DRIVE_AUTH_MODE !== 'oauth_refresh_token') throw new Error('Transition must preserve existing Drive auth mode')
+if (String(config.vars?.STATVARA_OPS_BRIDGE_PORT) !== '8791') throw new Error('Statvara bridge port 8791 was not preserved')
+console.log('LOCAL_AUTH_TRANSITION_CONFIG_VERIFIED=true')
+console.log('R2_BINDING_INCLUDED=false')
+console.log('GOOGLE_SERVICE_ACCOUNT_REQUIRED=false')
+console.log('GOOGLE_LOGIN_FALLBACK_PRESERVED=true')
+console.log('STATVARA_OPS_BRIDGE_PORT_VERIFIED=8791')
+NODE
 
 schema_query() {
   local sql="$1"
@@ -155,10 +176,10 @@ trap - EXIT
 
 printf '%s' "$LOCAL_AUTH_PEPPER" \
   | npx wrangler secret put LOCAL_AUTH_PEPPER --config "$CONFIG" \
-  > "$AUDIT_DIR/05-local-auth-pepper-secret.txt"
+  > "$AUDIT_DIR/06-local-auth-pepper-secret.txt"
 printf '%s' "$LOCAL_AUTH_BOOTSTRAP_SECRET" \
   | npx wrangler secret put LOCAL_AUTH_BOOTSTRAP_SECRET --config "$CONFIG" \
-  > "$AUDIT_DIR/06-local-auth-bootstrap-secret.txt"
+  > "$AUDIT_DIR/07-local-auth-bootstrap-secret.txt"
 
 echo "LOCAL_AUTH_SECRETS_CONFIGURED=true"
 echo "LOCAL_AUTH_SECRETS_REUSED_OR_PERSISTED=true"
@@ -169,21 +190,23 @@ REQUIRED_TABLES_PROBE="$(schema_query "$REQUIRED_TABLES_SQL")"
 REQUIRED_TABLE_COUNT="$(printf '%s' "$REQUIRED_TABLES_PROBE" | json_first_value table_count)"
 
 if [[ "$REQUIRED_TABLE_COUNT" == "4" ]]; then
-  echo "LOCAL_AUTH_MIGRATION_ALREADY_APPLIED=true" | tee "$AUDIT_DIR/07-local-auth-migration.txt"
+  echo "LOCAL_AUTH_MIGRATION_ALREADY_APPLIED=true" | tee "$AUDIT_DIR/08-local-auth-migration.txt"
   MIGRATION_RESULT="already_applied"
 else
   APPROVE_LOCAL_AUTH_MIGRATION=YES \
     OPS_WRANGLER_CONFIG="$CONFIG" \
     bash scripts/ops/apply-local-auth-migration.sh \
-    | tee "$AUDIT_DIR/07-local-auth-migration.txt"
+    | tee "$AUDIT_DIR/08-local-auth-migration.txt"
   MIGRATION_RESULT="applied"
 fi
 
-bash scripts/deploy-master-watch-now.sh \
-  | tee "$AUDIT_DIR/08-production-deployment.txt"
+npx wrangler deployments list --config "$CONFIG" \
+  > "$AUDIT_DIR/09-deployments-before.txt" 2>&1 || true
+npx wrangler deploy --config "$CONFIG" \
+  | tee "$AUDIT_DIR/10-production-deployment.txt"
 
 OPS_PRODUCTION_ORIGIN="$PRODUCTION_ORIGIN" node --input-type=module <<'NODE' \
-  | tee "$AUDIT_DIR/09-local-auth-production-verification.txt"
+  | tee "$AUDIT_DIR/11-local-auth-production-verification.txt"
 const origin = String(process.env.OPS_PRODUCTION_ORIGIN || '').replace(/\/$/, '')
 const deadline = Date.now() + 180_000
 let last = null
@@ -211,7 +234,8 @@ while (Date.now() < deadline) {
       health,
       config,
     }
-    const local = health?.deployment?.runtime_dependencies?.local_auth
+    const runtime = health?.deployment?.runtime_dependencies
+    const local = runtime?.local_auth
     if (
       healthResponse.ok
       && configResponse.ok
@@ -222,6 +246,9 @@ while (Date.now() < deadline) {
       && local?.registration === 'enabled'
       && local?.google_login === 'fallback'
       && local?.owner_approval_required === true
+      && runtime?.media_primary_storage === 'google-drive'
+      && Number(runtime?.statvara_bridge?.port) === 8791
+      && runtime?.statvara_bridge?.blocks_store_execution === false
       && config?.local_enabled === true
       && config?.local_schema_ready === true
       && config?.local_secret_ready === true
@@ -229,11 +256,13 @@ while (Date.now() < deadline) {
       && config?.google_enabled === true
       && config?.owner_approval_required === true
     ) {
-      console.log(JSON.stringify({ local_auth: local, auth_config: config }, null, 2))
+      console.log(JSON.stringify({ local_auth: local, auth_config: config, media_primary_storage: runtime.media_primary_storage }, null, 2))
       console.log('LOCAL_AUTH_HEALTH_VERIFIED=true')
       console.log('LOCAL_AUTH_CONFIG_VERIFIED=true')
       console.log('GOOGLE_LOGIN_FALLBACK_VERIFIED=true')
       console.log('OWNER_APPROVAL_REQUIRED_VERIFIED=true')
+      console.log('R2_REQUIRED_FOR_LOCAL_AUTH=false')
+      console.log('GOOGLE_SERVICE_ACCOUNT_REQUIRED_FOR_LOCAL_AUTH=false')
       process.exit(0)
     }
   } catch (error) {
@@ -246,6 +275,9 @@ console.error(JSON.stringify(last, null, 2))
 throw new Error('Local authentication did not become production-ready within three minutes')
 NODE
 
+npx wrangler deployments list --config "$CONFIG" \
+  > "$AUDIT_DIR/12-deployments-after.txt" 2>&1 || true
+
 cat <<RESULT
 LOCAL_AUTH_PRODUCTION_READY=true
 LOCAL_AUTH_MIGRATION_RESULT=$MIGRATION_RESULT
@@ -256,6 +288,9 @@ OWNER_LOCAL_PASSWORD_SETUP_REQUIRED=true
 OWNER_PASSWORD_CREATED_BY_SCRIPT=false
 OWNER_APPROVAL_REQUIRED=true
 GOOGLE_LOGIN_FALLBACK_ACTIVE=true
+R2_REQUIRED_FOR_LOCAL_AUTH=false
+GOOGLE_SERVICE_ACCOUNT_REQUIRED_FOR_LOCAL_AUTH=false
+AUTONOMOUS_RUNTIME_DEPLOYED=false
 D1_BACKFILL_RUN=false
 D1_USER_RECORD_REWRITE=false
 D1_HISTORY_DELETE=false
