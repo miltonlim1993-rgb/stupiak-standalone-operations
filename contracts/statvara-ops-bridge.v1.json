@@ -1,0 +1,19 @@
+{
+  "contract_version": 1,
+  "name": "statvara-ops-bridge",
+  "reserved_port": 8791,
+  "local_origin": "http://localhost:8791",
+  "api_prefix": "/api/ops/v1",
+  "statvara_pwa_port": 5173,
+  "statvara_erpnext_port": 8080,
+  "direction": {
+    "configuration": "statvara_to_ops_versioned_publication",
+    "execution_summary": "ops_to_statvara_async"
+  },
+  "store_execution_blocking": false,
+  "ops_runtime_source": {
+    "records": "cloudflare-d1",
+    "media": "cloudflare-r2",
+    "configuration": "cloudflare-kv-last-published-package"
+  }
+}

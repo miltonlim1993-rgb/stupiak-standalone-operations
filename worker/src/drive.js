@@ -1,12 +1,38 @@
-import { googleFetch } from './google.js'
+import { googleAuthMode, googleFetch } from './google.js'
 import { allowedMediaKinds, getMediaRule, mediaKind } from './media-rules.js'
 import { assertOutletAccess } from './permissions.js'
 
 const MEDIA_CACHE_PREFIX = 'media:file:'
+const DRIVE_BACKUP_STATE_PREFIX = 'media:drive-backup:'
+const R2_MEDIA_PREFIX = 'media/r2/'
 const MAX_CACHE_BYTES = 20 * 1024 * 1024
 
 function mediaCacheKey(fileId) {
   return `${MEDIA_CACHE_PREFIX}${String(fileId || '').trim()}`
+}
+
+function driveBackupStateKey(fileId) {
+  return `${DRIVE_BACKUP_STATE_PREFIX}${String(fileId || '').trim()}`
+}
+
+function r2ObjectKey(fileId) {
+  return `${R2_MEDIA_PREFIX}${String(fileId || '').trim()}`
+}
+
+export function mediaPrimaryStorage(env) {
+  return env.MEDIA_BUCKET?.put && env.MEDIA_BUCKET?.get ? 'cloudflare-r2' : 'google-drive'
+}
+
+export function driveBackupMode(env) {
+  const mode = String(env.GOOGLE_DRIVE_BACKUP_MODE || 'disabled').trim().toLowerCase()
+  return ['enabled', 'on', 'true', '1'].includes(mode) ? 'enabled' : 'disabled'
+}
+
+function driveBackupEnabled(env) {
+  const authMode = googleAuthMode(env, 'drive')
+  return driveBackupMode(env) === 'enabled'
+    && !['disabled', 'unconfigured'].includes(authMode)
+    && Boolean(String(env.GOOGLE_DRIVE_FOLDER_ID || '').trim())
 }
 
 function escapeDriveQuery(value) {
@@ -44,6 +70,17 @@ async function createFolder(env, parentId, name) {
 
 async function ensureFolder(env, parentId, name) {
   return (await findFolder(env, parentId, name)) || createFolder(env, parentId, name)
+}
+
+async function findDriveBackup(env, mediaId) {
+  if (!mediaId) return null
+  const url = new URL('https://www.googleapis.com/drive/v3/files')
+  url.searchParams.set('q', `appProperties has { key='chefops_media_id' and value='${escapeDriveQuery(mediaId)}' } and trashed=false`)
+  url.searchParams.set('fields', 'files(id,name,mimeType,size,webViewLink)')
+  url.searchParams.set('pageSize', '2')
+  const response = await googleFetch(env, url.toString())
+  const data = await response.json()
+  return data.files?.[0] || null
 }
 
 async function cacheMedia(env, fileId, bytes, { mimeType = 'application/octet-stream', fileName = '' } = {}) {
@@ -97,14 +134,23 @@ async function cachedMedia(env, fileId) {
   }
 }
 
-async function uploadToDrive(env, file, folderType, outletName) {
+async function uploadToDrive(env, file, folderType, outletName, { sourceMediaId = '' } = {}) {
+  if (sourceMediaId) {
+    const existing = await findDriveBackup(env, sourceMediaId)
+    if (existing) return existing
+  }
+
   const year = String(new Date().getFullYear())
   const yearFolder = await ensureFolder(env, env.GOOGLE_DRIVE_FOLDER_ID, year)
   const outletFolder = await ensureFolder(env, yearFolder.id, outletName)
   const typeFolder = await ensureFolder(env, outletFolder.id, folderType)
 
   const boundary = `chefops_${crypto.randomUUID()}`
-  const metadata = JSON.stringify({ name: file.name, parents: [typeFolder.id] })
+  const metadata = JSON.stringify({
+    name: file.name,
+    parents: [typeFolder.id],
+    ...(sourceMediaId ? { appProperties: { chefops_media_id: sourceMediaId } } : {}),
+  })
   const body = new Blob([
     `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n`,
     `--${boundary}\r\nContent-Type: ${file.type || 'application/octet-stream'}\r\n\r\n`,
@@ -121,6 +167,141 @@ async function uploadToDrive(env, file, folderType, outletName) {
     },
   )
   return response.json()
+}
+
+async function writeDriveBackupState(env, mediaId, state) {
+  if (!env.APP_DATA_PACKS?.put) return
+  await env.APP_DATA_PACKS.put(driveBackupStateKey(mediaId), JSON.stringify({
+    media_id: mediaId,
+    ...state,
+  }), { expirationTtl: 90 * 24 * 60 * 60 })
+}
+
+async function readDriveBackupState(env, mediaId) {
+  if (!env.APP_DATA_PACKS?.get) return null
+  return env.APP_DATA_PACKS.get(driveBackupStateKey(mediaId), 'json')
+}
+
+async function putR2Media(env, mediaId, bytes, metadata) {
+  if (!env.MEDIA_BUCKET?.put) {
+    const error = new Error('Cloudflare R2 media binding is not configured')
+    error.status = 503
+    error.code = 'r2_media_not_configured'
+    throw error
+  }
+  await env.MEDIA_BUCKET.put(r2ObjectKey(mediaId), bytes, {
+    httpMetadata: {
+      contentType: metadata.mime_type || 'application/octet-stream',
+      contentDisposition: metadata.file_name
+        ? `inline; filename*=UTF-8''${encodeURIComponent(metadata.file_name)}`
+        : 'inline',
+    },
+    customMetadata: {
+      file_name: String(metadata.file_name || ''),
+      mime_type: String(metadata.mime_type || 'application/octet-stream'),
+      folder_type: String(metadata.folder_type || 'Attachments'),
+      outlet_name: String(metadata.outlet_name || 'General'),
+      outlet_id: String(metadata.outlet_id || ''),
+      uploaded_at: new Date().toISOString(),
+    },
+  })
+}
+
+async function r2Media(env, mediaId) {
+  if (!env.MEDIA_BUCKET?.get) return null
+  const object = await env.MEDIA_BUCKET.get(r2ObjectKey(mediaId))
+  if (!object) return null
+  const headers = new Headers()
+  object.writeHttpMetadata(headers)
+  headers.set('ETag', object.httpEtag)
+  headers.set('Cache-Control', 'private, max-age=86400, stale-while-revalidate=604800')
+  headers.set('X-ChefOps-Media-Source', 'cloudflare-r2')
+  if (!headers.get('Content-Type')) {
+    headers.set('Content-Type', object.customMetadata?.mime_type || 'application/octet-stream')
+  }
+  return new Response(object.body, { status: 200, headers })
+}
+
+export async function backupR2MediaToDrive(env, mediaId) {
+  if (!driveBackupEnabled(env)) {
+    await writeDriveBackupState(env, mediaId, {
+      status: 'disabled',
+      updated_at: new Date().toISOString(),
+      last_error: '',
+    })
+    return { media_id: mediaId, status: 'disabled' }
+  }
+
+  const object = await env.MEDIA_BUCKET?.get?.(r2ObjectKey(mediaId))
+  if (!object) {
+    const error = new Error('R2 media object was not found for Drive backup')
+    error.code = 'r2_media_not_found'
+    throw error
+  }
+
+  const metadata = object.customMetadata || {}
+  const bytes = await object.arrayBuffer()
+  const file = new File(
+    [bytes],
+    metadata.file_name || `${mediaId}.bin`,
+    { type: metadata.mime_type || 'application/octet-stream' },
+  )
+
+  try {
+    const uploaded = await uploadToDrive(
+      env,
+      file,
+      metadata.folder_type || 'Attachments',
+      metadata.outlet_name || metadata.outlet_id || 'General',
+      { sourceMediaId: mediaId },
+    )
+    const state = {
+      status: 'synced',
+      drive_file_id: String(uploaded?.id || ''),
+      drive_view_url: String(uploaded?.webViewLink || ''),
+      updated_at: new Date().toISOString(),
+      last_error: '',
+    }
+    await writeDriveBackupState(env, mediaId, state)
+    return { media_id: mediaId, ...state }
+  } catch (error) {
+    await writeDriveBackupState(env, mediaId, {
+      status: 'pending_retry',
+      updated_at: new Date().toISOString(),
+      last_error: String(error?.message || error).slice(0, 500),
+    })
+    throw error
+  }
+}
+
+function scheduleDriveBackup(env, mediaId) {
+  if (!driveBackupEnabled(env)) return
+  const task = backupR2MediaToDrive(env, mediaId).catch((error) => {
+    console.error('Asynchronous Drive backup failed; R2 remains canonical', mediaId, error)
+  })
+  if (env.__CHEFOPS_CTX?.waitUntil) env.__CHEFOPS_CTX.waitUntil(task)
+}
+
+export async function retryPendingDriveBackups(env, limit = 20) {
+  if (!env.MEDIA_BUCKET?.list || !driveBackupEnabled(env)) return []
+  const listing = await env.MEDIA_BUCKET.list({
+    prefix: R2_MEDIA_PREFIX,
+    limit: Math.max(1, Math.min(Number(limit) || 20, 100)),
+    include: ['customMetadata'],
+  })
+  const results = []
+  for (const object of listing.objects || []) {
+    const mediaId = String(object.key || '').slice(R2_MEDIA_PREFIX.length)
+    if (!mediaId) continue
+    const state = await readDriveBackupState(env, mediaId)
+    if (state?.status === 'synced') continue
+    try {
+      results.push(await backupR2MediaToDrive(env, mediaId))
+    } catch (error) {
+      results.push({ media_id: mediaId, status: 'pending_retry', error: String(error?.message || error) })
+    }
+  }
+  return results
 }
 
 async function publicDriveMedia(fileId) {
@@ -219,8 +400,38 @@ export async function uploadDriveFile(request, env, user) {
   }
 
   const apiOrigin = new URL(request.url).origin
-  const fallbackId = `kv_${crypto.randomUUID()}`
   const bytes = await file.arrayBuffer()
+
+  if (env.MEDIA_BUCKET?.put) {
+    const mediaId = `r2_${crypto.randomUUID()}`
+    await putR2Media(env, mediaId, bytes, {
+      file_name: file.name,
+      mime_type: file.type || 'application/octet-stream',
+      folder_type: folderType,
+      outlet_name: outletName,
+      outlet_id: outletId,
+    })
+    const backupStatus = driveBackupEnabled(env) ? 'pending' : 'disabled'
+    await writeDriveBackupState(env, mediaId, {
+      status: backupStatus,
+      updated_at: new Date().toISOString(),
+      last_error: '',
+    })
+    scheduleDriveBackup(env, mediaId)
+    return {
+      drive_file_id: mediaId,
+      file_name: file.name,
+      mime_type: file.type || 'application/octet-stream',
+      file_size: Number(file.size || bytes.byteLength),
+      view_url: '',
+      file_url: `${apiOrigin}/api/files/${encodeURIComponent(mediaId)}`,
+      storage: 'cloudflare-r2',
+      primary_storage: 'cloudflare-r2',
+      drive_sync_status: backupStatus,
+    }
+  }
+
+  const fallbackId = `kv_${crypto.randomUUID()}`
   const cacheEligible = String(file.type || '').startsWith('image/')
   const fallbackCached = cacheEligible
     ? await cacheMedia(env, fallbackId, bytes, { mimeType: file.type, fileName: file.name })
@@ -243,11 +454,12 @@ export async function uploadDriveFile(request, env, user) {
       view_url: uploaded.webViewLink || '',
       file_url: `${apiOrigin}/api/files/${encodeURIComponent(uploaded.id)}`,
       storage: cacheEligible ? 'drive+cloudflare-kv' : 'drive',
+      primary_storage: 'google-drive',
       drive_sync_status: 'synced',
     }
   } catch (error) {
     if (!fallbackCached) throw error
-    console.error('Google Drive upload deferred; Cloudflare media copy remains active', error)
+    console.error('Google Drive upload deferred; Cloudflare KV media copy remains active', error)
     return {
       drive_file_id: fallbackId,
       file_name: file.name,
@@ -256,6 +468,7 @@ export async function uploadDriveFile(request, env, user) {
       view_url: '',
       file_url: `${apiOrigin}/api/files/${encodeURIComponent(fallbackId)}`,
       storage: 'cloudflare-kv',
+      primary_storage: 'cloudflare-kv',
       drive_sync_status: 'deferred',
       drive_sync_error: String(error?.message || error).slice(0, 500),
     }
@@ -264,6 +477,16 @@ export async function uploadDriveFile(request, env, user) {
 
 export async function downloadDriveFile(env, fileId) {
   const id = String(fileId || '').trim()
+
+  if (id.startsWith('r2_')) {
+    const stored = await r2Media(env, id)
+    if (stored) return stored
+    const error = new Error('R2 media file was not found')
+    error.status = 404
+    error.code = 'media_not_found'
+    throw error
+  }
+
   const cached = await cachedMedia(env, id)
   if (cached) return cached
 
