@@ -10,6 +10,7 @@ import {
   validateActualName,
   verifyGoogleCredential,
 } from './auth.js'
+import { googleLoginMode } from './local-auth-crypto.js'
 import { saveDirectoryRecord } from './d1-directory-store.js'
 import { errorResponse, json, readJson } from './http.js'
 
@@ -27,6 +28,10 @@ function temporaryDirectoryError(error) {
   return error?.code === 'ops_database_unavailable'
     || error?.code === 'realtime_database_unavailable'
     || Number(error?.status || 0) >= 500
+}
+
+function userKvKeyById(userId) {
+  return `auth:user:id:${String(userId || '').trim()}`
 }
 
 function userKvKeyBySub(googleSub) {
@@ -54,14 +59,16 @@ function normalizeUserScope(user, env) {
 function authCacheEntries(user) {
   const payload = JSON.stringify({ user, cachedAt: Date.now() })
   const entries = []
+  if (user.id) entries.push([userKvKeyById(user.id), payload])
   if (user.google_sub) entries.push([userKvKeyBySub(user.google_sub), payload])
   if (user.email) entries.push([userKvKeyByEmail(user.email), payload])
   return entries
 }
 
-async function readCachedUser(env, { googleSub = '', email = '' } = {}) {
+async function readCachedUser(env, { userId = '', googleSub = '', email = '' } = {}) {
   if (!env.APP_DATA_PACKS?.get) return null
   const keys = []
+  if (userId) keys.push(userKvKeyById(userId))
   if (googleSub) keys.push(userKvKeyBySub(googleSub))
   if (email) keys.push(userKvKeyByEmail(email))
   for (const key of keys) {
@@ -126,7 +133,7 @@ async function bootstrapOwnerLogin(credential, env, originalError) {
     name_updated_at: cached?.name_updated_at || timestamp,
   }, env)
   const scopedUser = await cacheUser(env, user)
-  const token = await createSession(scopedUser, env)
+  const token = await createSession(scopedUser, env, { authMethod: 'google' })
   return { user: userWithProfileSetup(scopedUser), token, directory_fallback: 'bootstrap_owner_cache' }
 }
 
@@ -152,11 +159,17 @@ async function cachedGoogleLogin(credential, env) {
     last_login_at: timestamp,
   }, env)
   const scopedUser = await cacheUser(env, user)
-  const token = await createSession(scopedUser, env)
+  const token = await createSession(scopedUser, env, { authMethod: 'google' })
   return { user: userWithProfileSetup(scopedUser), token, directory_fallback: 'last_known_good_cache' }
 }
 
 async function googleLogin(request, env) {
+  if (googleLoginMode(env) === 'disabled') {
+    const error = new Error('Google sign-in has been disabled. Use your approved local account.')
+    error.status = 410
+    error.code = 'google_login_disabled'
+    throw error
+  }
   const { credential } = await readJson(request)
   let result
   try {
@@ -179,8 +192,11 @@ async function googleLogin(request, env) {
 async function cachedCurrentUser(request, env) {
   const payload = await sessionPayload(request, env)
   if (!payload?.sub) return null
+  const authMethod = String(payload.auth_method || 'google')
+  const userId = String(payload.uid || (authMethod === 'local' ? payload.sub : '') || '')
   const user = await readCachedUser(env, {
-    googleSub: String(payload.sub || ''),
+    userId,
+    googleSub: userId ? '' : String(payload.sub || ''),
     email: String(payload.email || ''),
   })
   if (!user) return null
