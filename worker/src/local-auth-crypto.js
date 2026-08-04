@@ -3,8 +3,7 @@ const ACTIVATION_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const COMMON_PINS = new Set([
   '000000', '111111', '222222', '333333', '444444',
   '555555', '666666', '777777', '888888', '999999',
-  '123456', '654321', '121212', '112233', '123123',
-  '101010', '010101', '696969', '520520', '131313',
+  '123456', '654321',
 ])
 
 function bytesToBase64Url(value) {
@@ -78,38 +77,21 @@ export function credentialKindForRole(role) {
     : 'pin'
 }
 
-export function validatePin(value, loginId = '') {
+export function validatePin(value) {
   const pin = String(value || '')
   if (!/^\d{6}$/.test(pin)) {
     throw authError('PIN must contain exactly 6 digits', 'local_pin_invalid')
   }
-  if (COMMON_PINS.has(pin) || /^(\d)\1{5}$/.test(pin)) {
-    throw authError('Choose a less predictable PIN', 'local_pin_too_common')
-  }
-  const ascending = '0123456789012345'
-  const descending = '9876543210987654'
-  if (ascending.includes(pin) || descending.includes(pin)) {
-    throw authError('Sequential PINs are not allowed', 'local_pin_sequential')
-  }
-  const loginDigits = normalizeLoginId(loginId).replace(/\D/g, '')
-  if (loginDigits.length >= 6 && loginDigits.endsWith(pin)) {
-    throw authError('PIN cannot match the end of your phone number', 'local_pin_matches_login')
+  if (COMMON_PINS.has(pin)) {
+    throw authError('Choose a PIN that is not repeated digits or 123456', 'local_pin_too_common')
   }
   return pin
 }
 
-export function validatePassword(value, loginId = '') {
+export function validatePassword(value) {
   const password = String(value || '')
-  if (password.length < 12 || password.length > 128) {
-    throw authError('Password must contain 12 to 128 characters', 'local_password_length')
-  }
-  if (!/[A-Za-z]/.test(password) || !/\d/.test(password) || !/[^A-Za-z0-9]/.test(password)) {
-    throw authError('Password must include letters, numbers and a symbol', 'local_password_complexity')
-  }
-  const comparableLogin = normalizeLoginId(loginId).replace(/[^a-z0-9]/g, '')
-  const comparablePassword = password.toLowerCase().replace(/[^a-z0-9]/g, '')
-  if (comparableLogin.length >= 4 && comparablePassword.includes(comparableLogin)) {
-    throw authError('Password cannot contain your login ID', 'local_password_contains_login')
+  if (password.length < 8 || password.length > 128 || password.trim().length < 8) {
+    throw authError('Password must contain at least 8 characters', 'local_password_length')
   }
   return password
 }
