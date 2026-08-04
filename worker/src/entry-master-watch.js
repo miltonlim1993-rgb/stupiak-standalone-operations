@@ -1,7 +1,13 @@
-import app, { OutletRealtimeHub } from './entry.js'
+import app, { OutletRealtimeHub } from './entry-local-auth.js'
 import { getAppPackModule, getPublishedAppPack } from './app-pack.js'
 import { driveBackupMode, mediaPrimaryStorage, retryPendingDriveBackups } from './drive.js'
 import { googleAuthMode } from './google.js'
+import {
+  googleLoginMode,
+  localAuthMode,
+  localRegistrationMode,
+} from './local-auth-crypto.js'
+import { localAuthSchemaReady } from './local-auth-store.js'
 import { refreshAppPacksWhenMasterChanges } from './master-data-watch.js'
 
 const MASTER_WATCH_CRON = '*/2 * * * *'
@@ -66,8 +72,10 @@ async function masterWatchStatus(env) {
   }
 }
 
-function runtimeDependencyStatus(env) {
+async function runtimeDependencyStatus(env) {
   const backupMode = driveBackupMode(env)
+  const schemaReady = await localAuthSchemaReady(env)
+  const pepperReady = String(env.LOCAL_AUTH_PEPPER || '').length >= 32
   return {
     google_data_auth: googleAuthMode(env, 'data'),
     media_primary_storage: mediaPrimaryStorage(env),
@@ -76,6 +84,15 @@ function runtimeDependencyStatus(env) {
     drive_backup_mode: backupMode === 'enabled'
       ? 'asynchronous_non_blocking'
       : 'disabled_non_blocking',
+    local_auth: {
+      mode: localAuthMode(env),
+      schema_ready: schemaReady,
+      secret_ready: pepperReady,
+      ready: localAuthMode(env) === 'enabled' && schemaReady && pepperReady,
+      registration: localRegistrationMode(env),
+      google_login: googleLoginMode(env),
+      owner_approval_required: true,
+    },
     statvara_bridge: {
       reserved: true,
       port: Number(env.STATVARA_OPS_BRIDGE_PORT || DEFAULT_STATVARA_BRIDGE_PORT),
@@ -155,7 +172,10 @@ export default {
 
     try {
       const payload = await response.clone().json()
-      const watch = await masterWatchStatus(env)
+      const [watch, dependencies] = await Promise.all([
+        masterWatchStatus(env),
+        runtimeDependencyStatus(env),
+      ])
       const headers = new Headers(response.headers)
       headers.set('Content-Type', 'application/json; charset=utf-8')
       return new Response(JSON.stringify({
@@ -168,7 +188,7 @@ export default {
             enabled: true,
             ...watch,
           },
-          runtime_dependencies: runtimeDependencyStatus(env),
+          runtime_dependencies: dependencies,
         },
       }), {
         status: response.status,
