@@ -18,7 +18,7 @@ fi
 TMP_DIR="$(mktemp -d)"
 trap 'rm -rf "$TMP_DIR"' EXIT
 
-node --input-type=module "$SERVICE_ACCOUNT_JSON" "$TMP_DIR" <<'NODE'
+node --input-type=module - "$SERVICE_ACCOUNT_JSON" "$TMP_DIR" <<'NODE'
 import fs from 'node:fs'
 const [jsonPath, outputDir] = process.argv.slice(2)
 const credentials = JSON.parse(fs.readFileSync(jsonPath, 'utf8'))
@@ -62,6 +62,7 @@ echo "Share the following Google spreadsheets with this service-account email as
 echo "  $SERVICE_ACCOUNT_EMAIL"
 echo "  Master: https://docs.google.com/spreadsheets/d/$MASTER_SHEET_ID/edit"
 echo "Also share the Operations, Training, and Label workbooks used by OPS."
+echo "Share the existing OPS Drive media root as Viewer so historical photos remain readable."
 echo
 read -r -p "After sharing the files, press Enter to deploy and verify the complete runtime... " _unused
 
