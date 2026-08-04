@@ -82,6 +82,17 @@ function entityRoute(pathname) {
   }
 }
 
+function assertOwnerApproval(actor, existing, patch) {
+  const previousStatus = String(existing?.status || 'pending').toLowerCase()
+  const nextStatus = String(patch?.status || previousStatus).toLowerCase()
+  if (previousStatus !== 'active' && nextStatus === 'active' && String(actor?.role || '').toLowerCase() !== 'owner') {
+    const error = new Error('Only the Owner may approve or restore an OPS account')
+    error.status = 403
+    error.code = 'owner_required'
+    throw error
+  }
+}
+
 async function applyUserSecurityBoundary(env, existing, record, reason = 'access_changed') {
   if (!record || !existing) return { revoked: false }
   rememberUser(record)
@@ -106,6 +117,7 @@ async function createEntity(request, env, entity) {
   const user = await getCurrentUser(request, env)
   assertCreatePermission(user, entity)
   const payload = await readJson(request)
+  if (entity === 'User') assertOwnerApproval(user, null, payload)
   const id = String(payload.id || crypto.randomUUID())
   const record = await saveDirectoryRecord(env, entity, id, payload, {
     actorEmail: user.email,
@@ -125,6 +137,7 @@ async function updateEntity(request, env, entity, id) {
     throw error
   }
   const patch = await readJson(request)
+  if (entity === 'User') assertOwnerApproval(user, existing, patch)
   assertUpdatePermission(user, entity, existing, patch)
   const record = await saveDirectoryRecord(env, entity, id, { ...existing, ...patch, __realtime: undefined }, {
     actorEmail: user.email,
@@ -176,6 +189,7 @@ async function updateUserAccess(request, env, userId) {
     outlet_id: String(body.primary_outlet_id || assigned[0] || existing.outlet_id || ''),
     outlet_ids: JSON.stringify(assigned.length ? assigned : [body.primary_outlet_id || existing.outlet_id].filter(Boolean)),
   }
+  assertOwnerApproval(actor, existing, patch)
   assertUpdatePermission(actor, 'User', existing, patch)
   const record = await saveDirectoryRecord(env, 'User', userId, { ...existing, ...patch, __realtime: undefined }, {
     actorEmail: actor.email,
