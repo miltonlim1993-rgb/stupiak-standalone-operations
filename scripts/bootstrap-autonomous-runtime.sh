@@ -7,6 +7,9 @@ cd "$ROOT_DIR"
 SERVICE_ACCOUNT_JSON="${GOOGLE_SERVICE_ACCOUNT_JSON:-}"
 MEDIA_BUCKET_NAME="${CLOUDFLARE_MEDIA_BUCKET_NAME:-stupiaks-ops-media}"
 MASTER_SHEET_ID="${GOOGLE_MASTER_SPREADSHEET_ID:-1sy-4AIbZssCmP9HQaq-K4OicXjdvOs2EXVNmvh4bSzM}"
+OPERATIONS_SHEET_ID="${GOOGLE_OPERATIONS_2026_SPREADSHEET_ID:-1bFkU_tFcuEz6UFFqz7ehw8F1ttY_MkzfmQKkk_pN9xw}"
+TRAINING_SHEET_ID="${GOOGLE_TRAINING_SPREADSHEET_ID:-1oljGV1NxJyGbFQoxkrzHeVBGCK7zs3r8x3jphe0HQAs}"
+LABEL_SHEET_ID="${GOOGLE_LABEL_SPREADSHEET_ID:-1zzAB7r7ZEvN_DgqAdKA8QQOGdVThhbR7xXWu_72IGEg}"
 STATVARA_PORT="${STATVARA_OPS_BRIDGE_PORT:-8791}"
 
 if [[ -z "$SERVICE_ACCOUNT_JSON" || ! -f "$SERVICE_ACCOUNT_JSON" ]]; then
@@ -35,9 +38,12 @@ cat <<INFO
 Stupiak's OPS autonomous runtime bootstrap
   Google Master auth: Service Account
   Master Sheet:       $MASTER_SHEET_ID
+  Operations 2026:    $OPERATIONS_SHEET_ID
+  Training Sheet:     $TRAINING_SHEET_ID
+  Label Sheet:        $LABEL_SHEET_ID
   R2 media bucket:    $MEDIA_BUCKET_NAME
   Statvara bridge:    port $STATVARA_PORT (reserved)
-  Google Drive:       optional async backup, disabled by default
+  Google Drive:       legacy reads only; backup writes disabled
   D1 migration:       NO
   D1 backfill:        NO
   Historical rewrite:NO
@@ -58,11 +64,15 @@ printf '%s' "$SERVICE_ACCOUNT_EMAIL" | npx wrangler secret put GOOGLE_SERVICE_AC
 cat "$TMP_DIR/private-key" | npx wrangler secret put GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY --name stupiaks-ops >/dev/null
 
 echo
-echo "Share the following Google spreadsheets with this service-account email as Editor:"
+echo "Share all four spreadsheets below with this service-account email as Editor:"
 echo "  $SERVICE_ACCOUNT_EMAIL"
-echo "  Master: https://docs.google.com/spreadsheets/d/$MASTER_SHEET_ID/edit"
-echo "Also share the Operations, Training, and Label workbooks used by OPS."
-echo "Share the existing OPS Drive media root as Viewer so historical photos remain readable."
+echo "  Master:          https://docs.google.com/spreadsheets/d/$MASTER_SHEET_ID/edit"
+echo "  Operations 2026: https://docs.google.com/spreadsheets/d/$OPERATIONS_SHEET_ID/edit"
+echo "  Training:        https://docs.google.com/spreadsheets/d/$TRAINING_SHEET_ID/edit"
+echo "  Label source:    https://docs.google.com/spreadsheets/d/$LABEL_SHEET_ID/edit"
+echo
+echo "For historical private photos, share the existing OPS Drive media root with the same email as Viewer."
+echo "New Task and Urgent Issue photos use R2 and do not wait for Google Drive."
 echo
 read -r -p "After sharing the files, press Enter to deploy and verify the complete runtime... " _unused
 
@@ -76,6 +86,8 @@ bash scripts/deploy-master-watch-now.sh
 cat <<RESULT
 AUTONOMOUS_RUNTIME_BOOTSTRAP_COMPLETE=true
 GOOGLE_DATA_AUTH=service_account
+LEGACY_DRIVE_READ_AUTH=service_account
+DRIVE_BACKUP_MODE=disabled
 MEDIA_PRIMARY_STORAGE=cloudflare-r2
 DRIVE_BACKUP_BLOCKS_TASKS=false
 STATVARA_OPS_BRIDGE_PORT=$STATVARA_PORT
