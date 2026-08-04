@@ -5,6 +5,7 @@ import {
   findDirectoryUser,
   saveDirectoryRecord,
 } from './d1-directory-store.js'
+import { assertLocalSessionVersion } from './local-auth-store.js'
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'))
 const COOKIE_NAME = 'chefops_session'
@@ -19,6 +20,10 @@ function booleanValue(value) {
   return value === true || String(value || '').toLowerCase() === 'true'
 }
 
+function userKvKeyById(userId) {
+  return `auth:user:id:${String(userId || '').trim()}`
+}
+
 function userKvKeyBySub(googleSub) {
   return `auth:user:sub:${String(googleSub || '').trim()}`
 }
@@ -27,9 +32,18 @@ function userKvKeyByEmail(email) {
   return `auth:user:email:${String(email || '').trim().toLowerCase()}`
 }
 
-async function cachedUserFromKv(env, { googleSub = '', email = '' } = {}) {
+function userCacheKeys(user = {}) {
+  const keys = []
+  if (user.id) keys.push(`id:${String(user.id)}`)
+  if (user.google_sub) keys.push(`sub:${String(user.google_sub)}`)
+  if (user.email) keys.push(`email:${String(user.email).toLowerCase()}`)
+  return keys
+}
+
+async function cachedUserFromKv(env, { userId = '', googleSub = '', email = '' } = {}) {
   if (!env.APP_DATA_PACKS?.get) return null
   const keys = []
+  if (userId) keys.push(userKvKeyById(userId))
   if (googleSub) keys.push(userKvKeyBySub(googleSub))
   if (email) keys.push(userKvKeyByEmail(email))
   for (const key of keys) {
@@ -76,8 +90,9 @@ export function confirmedActualName(user) {
 }
 
 export function rememberUser(user) {
-  if (!user?.google_sub) return user
-  USER_CACHE.set(String(user.google_sub), { user, cachedAt: Date.now() })
+  if (!user?.id && !user?.google_sub) return user
+  const cached = { user, cachedAt: Date.now() }
+  for (const key of userCacheKeys(user)) USER_CACHE.set(key, cached)
   return user
 }
 
@@ -87,27 +102,31 @@ async function rememberUserEverywhere(env, user) {
   return user
 }
 
-async function activeUserBySub(env, googleSub) {
-  const key = String(googleSub || '')
-  const cached = USER_CACHE.get(key)
+async function activeUser(env, { userId = '', googleSub = '', email = '' } = {}) {
+  const cacheKey = userId
+    ? `id:${userId}`
+    : googleSub
+      ? `sub:${googleSub}`
+      : `email:${String(email || '').toLowerCase()}`
+  const cached = USER_CACHE.get(cacheKey)
   if (cached && Date.now() - cached.cachedAt < USER_CACHE_TTL_MS) return cached.user
-  if (USER_INFLIGHT.has(key)) return USER_INFLIGHT.get(key)
+  if (USER_INFLIGHT.has(cacheKey)) return USER_INFLIGHT.get(cacheKey)
 
   const pending = (async () => {
     try {
-      const user = await findDirectoryUser(env, { googleSub: key })
+      const user = await findDirectoryUser(env, { id: userId, googleSub, email })
       if (!user) return null
       return rememberUserEverywhere(env, user)
     } catch (error) {
       console.error('D1 user lookup failed; checking last-known-good auth cache', error)
-      const fallback = await cachedUserFromKv(env, { googleSub: key })
+      const fallback = await cachedUserFromKv(env, { userId, googleSub, email })
       if (fallback) rememberUser(fallback)
       return fallback
     }
   })()
 
-  USER_INFLIGHT.set(key, pending)
-  try { return await pending } finally { if (USER_INFLIGHT.get(key) === pending) USER_INFLIGHT.delete(key) }
+  USER_INFLIGHT.set(cacheKey, pending)
+  try { return await pending } finally { if (USER_INFLIGHT.get(cacheKey) === pending) USER_INFLIGHT.delete(cacheKey) }
 }
 
 function sessionKey(env) {
@@ -140,10 +159,26 @@ export async function verifyGoogleCredential(credential, env) {
   }
 }
 
-export async function createSession(user, env) {
-  return new SignJWT({ email: user.email, role: user.role })
+export async function createSession(user, env, {
+  authMethod = 'google',
+  sessionVersion = 0,
+} = {}) {
+  const subject = String(user?.id || user?.google_sub || '').trim()
+  if (!subject) {
+    const error = new Error('User identity is incomplete')
+    error.status = 500
+    error.code = 'session_identity_missing'
+    throw error
+  }
+  return new SignJWT({
+    uid: String(user.id || ''),
+    email: user.email,
+    role: user.role,
+    auth_method: String(authMethod || 'google'),
+    sv: Number(sessionVersion || 0),
+  })
     .setProtectedHeader({ alg: 'HS256', typ: 'JWT' })
-    .setSubject(user.google_sub)
+    .setSubject(subject)
     .setIssuedAt()
     .setExpirationTime('7d')
     .sign(sessionKey(env))
@@ -192,12 +227,23 @@ export async function getCurrentUser(request, env, { optional = false } = {}) {
     error.code = 'auth_required'
     throw error
   }
-  const user = await activeUserBySub(env, payload.sub)
+
+  const authMethod = String(payload.auth_method || 'google')
+  const userId = String(payload.uid || (authMethod === 'local' ? payload.sub : '') || '').trim()
+  const googleSub = userId ? '' : String(payload.sub || '').trim()
+  const user = await activeUser(env, {
+    userId,
+    googleSub,
+    email: String(payload.email || ''),
+  })
   if (!user || String(user.status || '').toLowerCase() !== 'active') {
     const error = new Error(user?.status === 'pending' ? 'Your account is waiting for approval' : 'User account is inactive')
     error.status = 403
     error.code = user?.status === 'pending' ? 'user_pending' : 'user_inactive'
     throw error
+  }
+  if (authMethod === 'local') {
+    await assertLocalSessionVersion(env, user.id, Number(payload.sv || 0))
   }
   return user
 }
@@ -298,6 +344,6 @@ export async function loginWithGoogle(credential, env) {
     error.code = 'user_pending'
     throw error
   }
-  const token = await createSession(user, env)
+  const token = await createSession(user, env, { authMethod: 'google' })
   return { user: userWithProfileSetup(user), token }
 }
