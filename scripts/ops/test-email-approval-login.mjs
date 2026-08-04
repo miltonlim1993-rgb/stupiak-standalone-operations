@@ -59,7 +59,10 @@ assert.doesNotMatch(approvals, /issueActivation/)
 for (const table of ['local_credentials', 'local_auth_activations', 'local_auth_rate_limits', 'local_auth_audit']) {
   assert.match(migration, new RegExp(`CREATE TABLE IF NOT EXISTS ${table}`))
 }
-assert.equal(fs.readdirSync('worker/migrations').filter((name) => name.endsWith('.sql')).sort().at(-1), '0002_local_auth.sql')
+const migrations = fs.readdirSync('worker/migrations').filter((name) => name.endsWith('.sql'))
+assert.ok(migrations.includes('0002_local_auth.sql'))
+assert.equal(migrations.filter((name) => /email|approval/i.test(name)).length, 0)
+assert.doesNotMatch(emailAuth, /CREATE TABLE|ALTER TABLE|DROP TABLE/i)
 
 console.log('EMAIL_APPROVAL_LOGIN_TEST_OK=true')
 console.log('LOGIN_ENTRY=email_only')
