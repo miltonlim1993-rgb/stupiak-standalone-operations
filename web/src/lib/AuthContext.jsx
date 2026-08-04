@@ -124,6 +124,11 @@ export function AuthProvider({ children }) {
     return result
   }, [applyLoginResult])
 
+  const setupPendingEmailAccess = useCallback(async ({ secret }) => {
+    setAuthError(null)
+    return applyLoginResult(await localAuthClient.emailSetup({ secret }))
+  }, [applyLoginResult])
+
   const loginEmailAccess = useCallback(async ({ email, secret }) => {
     setAuthError(null)
     return applyLoginResult(await localAuthClient.emailLogin({ email, secret }))
@@ -192,6 +197,7 @@ export function AuthProvider({ children }) {
     authChecked,
     startEmailAccess,
     checkPendingEmailAccess,
+    setupPendingEmailAccess,
     loginEmailAccess,
     clearPendingEmailAccess,
     loginLocal,
@@ -215,6 +221,7 @@ export function AuthProvider({ children }) {
     authChecked,
     startEmailAccess,
     checkPendingEmailAccess,
+    setupPendingEmailAccess,
     loginEmailAccess,
     clearPendingEmailAccess,
     loginLocal,
