@@ -28,7 +28,8 @@ Stupiak's OPS autonomous production deployment
   Master spreadsheet: $MASTER_SPREADSHEET_ID
   Master auth:        Google Service Account
   Media primary:      Cloudflare R2 / $MEDIA_BUCKET_NAME
-  Drive backup:       asynchronous and non-blocking
+  Legacy Drive read:  Service Account
+  Drive backup:       disabled and non-blocking
   Statvara bridge:    $STATVARA_BRIDGE_PORT $STATVARA_API_PATH (reserved)
   Verify outlet:      $VERIFY_OUTLET_ID
   Verify template:    $VERIFY_TEMPLATE_ID
@@ -75,11 +76,16 @@ if (!crons.has('*/2 * * * *') || !crons.has('0 * * * *')) throw new Error('Requi
 if (config.d1_databases?.[0]?.database_name !== 'stupiaks-ops-realtime') throw new Error('Unexpected production D1 binding')
 if (config.r2_buckets?.[0]?.binding !== 'MEDIA_BUCKET') throw new Error('MEDIA_BUCKET R2 binding is missing')
 if (config.vars?.GOOGLE_DATA_AUTH_MODE !== 'service_account') throw new Error('Master data must use service_account auth')
+if (config.vars?.GOOGLE_DRIVE_AUTH_MODE !== 'service_account') throw new Error('Legacy Drive reads must use service_account auth')
+if (config.vars?.GOOGLE_DRIVE_BACKUP_MODE !== 'disabled') throw new Error('Drive backup must remain disabled until intentionally activated')
 if (config.vars?.MEDIA_PRIMARY_STORAGE !== 'cloudflare-r2') throw new Error('R2 must be canonical media storage')
 if (String(config.vars?.STATVARA_OPS_BRIDGE_PORT) !== '8791') throw new Error('Statvara OPS bridge port 8791 was not preserved')
 if (String(config.vars?.GOOGLE_MASTER_SPREADSHEET_ID || '') !== String(process.env.GOOGLE_MASTER_SPREADSHEET_ID || '')) throw new Error('Master spreadsheet binding is incorrect')
 console.log('PRODUCTION_ENTRY_VERIFIED=src/entry-master-watch.js')
+console.log('MASTER_SPREADSHEET_BINDING_VERIFIED=true')
 console.log('GOOGLE_SERVICE_ACCOUNT_MODE_VERIFIED=true')
+console.log('LEGACY_DRIVE_READ_AUTH_VERIFIED=service_account')
+console.log('DRIVE_BACKUP_MODE_VERIFIED=disabled')
 console.log('R2_MEDIA_BINDING_VERIFIED=true')
 console.log('STATVARA_OPS_BRIDGE_PORT_VERIFIED=8791')
 NODE
@@ -112,6 +118,8 @@ while (Date.now() < deadline) {
       && data?.deployment?.master_data_watch?.policy === 'sheets-task-template-fingerprint-v1'
       && runtime?.google_data_auth === 'service_account'
       && runtime?.media_primary_storage === 'cloudflare-r2'
+      && runtime?.drive_legacy_read_auth === 'service_account'
+      && runtime?.drive_backup_mode === 'disabled_non_blocking'
       && Number(runtime?.statvara_bridge?.port) === 8791
       && runtime?.statvara_bridge?.blocks_store_execution === false
     ) {
@@ -197,6 +205,8 @@ while (Date.now() < deadline) {
       && !watch?.last_error
       && packs.some((pack) => String(pack?.outlet_id || '') === 'RR-KCH')
       && runtime?.media_primary_storage === 'cloudflare-r2'
+      && runtime?.drive_legacy_read_auth === 'service_account'
+      && runtime?.drive_backup_mode === 'disabled_non_blocking'
     ) {
       console.log(JSON.stringify(data, null, 2))
       console.log('MASTER_WATCH_HEALTH_VERIFIED=true')
@@ -218,7 +228,10 @@ npx wrangler deployments list --config worker/wrangler.production.jsonc \
 cat <<RESULT
 VERIFIED_PRODUCTION_DEPLOYMENT=true
 AUTONOMOUS_RUNTIME_VERIFIED=true
+MASTER_SPREADSHEET_BINDING_VERIFIED=true
 GOOGLE_SERVICE_ACCOUNT_MODE_VERIFIED=true
+LEGACY_DRIVE_READ_AUTH_VERIFIED=service_account
+DRIVE_BACKUP_MODE_VERIFIED=disabled
 R2_MEDIA_PRIMARY_VERIFIED=true
 DRIVE_BACKUP_BLOCKS_TASKS=false
 MASTER_WATCH_IMMEDIATE_RUN_VERIFIED=true
