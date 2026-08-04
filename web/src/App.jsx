@@ -47,6 +47,13 @@ function RouteFallback() {
   return <div className="flex min-h-[40dvh] items-center justify-center"><div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-slate-800" /></div>
 }
 
+function OwnerOnly({ children }) {
+  const { user } = useAuth()
+  return String(user?.role || '').toLowerCase() === 'owner'
+    ? children
+    : <Navigate to="/" replace />
+}
+
 function AppRoutes() {
   const { isLoadingAuth, isAuthenticated, user } = useAuth()
   if (isLoadingAuth) {
@@ -79,7 +86,7 @@ function AppRoutes() {
               <Route path="/labels/settings" element={<LabelSettings />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
-              <Route path="/ops-control" element={<OpsControl />} />
+              <Route path="/ops-control" element={<OwnerOnly><OpsControl /></OwnerOnly>} />
               <Route path="/training" element={<Training />} />
               <Route path="/sop/:sopId" element={<GuidedSop />} />
             </Route>
