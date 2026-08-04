@@ -3,6 +3,7 @@ const API_BASE_URL = (
   configuredApiUrl
   || (import.meta.env.DEV ? 'http://localhost:8787' : window.location.origin)
 ).replace(/\/$/, '')
+const PENDING_TOKEN_KEY = 'chefops.auth.pending-approval-token'
 
 export class LocalAuthError extends Error {
   constructor(message, status, code, details) {
@@ -12,6 +13,17 @@ export class LocalAuthError extends Error {
     this.code = code
     this.details = details
   }
+}
+
+function pendingToken() {
+  try { return sessionStorage.getItem(PENDING_TOKEN_KEY) || '' } catch { return '' }
+}
+
+function savePendingToken(value) {
+  try {
+    if (value) sessionStorage.setItem(PENDING_TOKEN_KEY, value)
+    else sessionStorage.removeItem(PENDING_TOKEN_KEY)
+  } catch {}
 }
 
 async function request(path, { method = 'GET', body, headers: inputHeaders } = {}) {
@@ -44,6 +56,27 @@ async function request(path, { method = 'GET', body, headers: inputHeaders } = {
 
 export const localAuthClient = {
   config: () => request('/api/auth/config'),
+  startEmail: async ({ email }) => {
+    const result = await request('/api/auth/local/email/start', {
+      method: 'POST',
+      body: { email },
+    })
+    if (result?.pending_token) savePendingToken(result.pending_token)
+    return result
+  },
+  emailStatus: async () => {
+    const token = pendingToken()
+    const result = await request('/api/auth/local/email/status', {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    })
+    if (result?.status !== 'pending') savePendingToken('')
+    return result
+  },
+  emailLogin: ({ email, secret }) => request('/api/auth/local/email/login', {
+    method: 'POST',
+    body: { email, secret },
+  }),
+  clearPendingApproval: () => savePendingToken(''),
   login: ({ loginId, secret }) => request('/api/auth/local/login', {
     method: 'POST',
     body: { login_id: loginId, secret },
