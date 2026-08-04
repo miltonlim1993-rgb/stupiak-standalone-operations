@@ -57,24 +57,12 @@ async function request(path, { method = 'GET', body, headers: inputHeaders } = {
 export const localAuthClient = {
   config: () => request('/api/auth/config'),
   startEmail: async ({ email }) => {
-    try {
-      const result = await request('/api/auth/local/email/start', {
-        method: 'POST',
-        body: { email },
-      })
-      if (result?.pending_token) savePendingToken(result.pending_token)
-      return result
-    } catch (error) {
-      if (Number(error?.status || 0) === 409) {
-        return {
-          ok: true,
-          status: 'credential_setup_required',
-          email,
-          message: error.message,
-        }
-      }
-      throw error
-    }
+    const result = await request('/api/auth/local/email/start', {
+      method: 'POST',
+      body: { email },
+    })
+    if (result?.pending_token) savePendingToken(result.pending_token)
+    return result
   },
   emailStatus: async () => {
     const token = pendingToken()

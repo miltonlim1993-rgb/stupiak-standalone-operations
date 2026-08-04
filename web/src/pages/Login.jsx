@@ -263,8 +263,12 @@ export default function Login() {
         setStage('credential')
         setNotice(result.message || 'Enter your PIN or password.')
       } else if (result?.status === 'credential_setup_required') {
-        setError(result.message)
-        setShowGoogle(Boolean(config?.google_enabled))
+        setCredentialKind(result.credential_kind || 'password')
+        setSecret('')
+        setConfirmSecret('')
+        setNotice(result.message || 'Existing approved account found. Create your PIN or password to enter OPS.')
+        setShowGoogle(false)
+        setStage('setup')
       } else {
         setError(result?.message || 'This account is not available.')
       }
@@ -366,7 +370,7 @@ export default function Login() {
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Mail className="h-5 w-5" /></span>
                   <div>
                     <p className="text-sm font-semibold">One simple login</p>
-                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">New email: Owner approval, then create your login on the same page. Returning user: enter your PIN or password.</p>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Existing approved email without a local login: create your PIN or password immediately. New email: Owner approval first.</p>
                   </div>
                 </div>
               </div>
@@ -479,7 +483,7 @@ export default function Login() {
                 </button>
               ) : (
                 <div className="space-y-3">
-                  <p className="text-center text-xs leading-5 text-muted-foreground">Temporary fallback for existing accounts that have not configured a local PIN or password.</p>
+                  <p className="text-center text-xs leading-5 text-muted-foreground">Temporary fallback for account recovery only.</p>
                   <GoogleFallback clientId={clientId} loading={loading} onLoading={setLoading} onError={setError} onSuccess={googleSuccess} />
                 </div>
               )}
