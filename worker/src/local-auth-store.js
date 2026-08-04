@@ -3,6 +3,7 @@ import {
   generateActivationCode,
   hashLocalSecret,
   normalizeLoginId,
+  validateCredentialSecret,
   verifyLocalSecret,
 } from './local-auth-crypto.js'
 import { findDirectoryRecord } from './d1-directory-store.js'
@@ -287,8 +288,9 @@ export async function activateLocalCredential(env, {
     throw localAuthError('This account is not approved for access', 'local_user_not_active', 403)
   }
   const kind = credentialKindForRole(user.role)
+  const acceptedSecret = validateCredentialSecret(kind, secret, normalized)
   const derived = await hashLocalSecret({
-    secret,
+    secret: acceptedSecret,
     loginId: normalized,
     purpose: `credential:${kind}`,
     env,
@@ -360,8 +362,9 @@ export async function setLocalCredential(env, user, {
     throw localAuthError('That login ID is already assigned', 'local_login_id_in_use', 409)
   }
   const kind = credentialKindForRole(user.role)
+  const acceptedSecret = validateCredentialSecret(kind, secret, normalized)
   const derived = await hashLocalSecret({
-    secret,
+    secret: acceptedSecret,
     loginId: normalized,
     purpose: `credential:${kind}`,
     env,
