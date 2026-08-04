@@ -47,6 +47,10 @@ function loginErrorMessage(error) {
     local_email_invalid: 'Enter a valid email address.',
     local_login_invalid: 'Email, PIN or password is incorrect.',
     local_auth_locked: 'Too many attempts. Wait 15 minutes and try again.',
+    local_pin_invalid: 'PIN must contain exactly 6 digits.',
+    local_pin_too_common: 'Choose a PIN other than repeated digits, 123456 or 654321.',
+    local_password_length: 'Password must contain at least 8 characters.',
+    local_credential_exists: 'Your PIN or password is already configured. Return to sign in.',
     user_pending: 'Your account is still waiting for Owner approval.',
     user_inactive: 'This account is not active. Contact the Owner.',
     local_credential_missing: 'This account does not have a local PIN or password yet.',
@@ -60,7 +64,7 @@ function loginErrorMessage(error) {
   return messages[error?.code] || error?.message || 'Unable to continue'
 }
 
-function SecretInput({ value, onChange, kind = 'password' }) {
+function SecretInput({ value, onChange, kind = 'password', autoComplete = 'current-password', placeholder = '' }) {
   const [visible, setVisible] = useState(false)
   const pin = kind === 'pin'
   return (
@@ -69,8 +73,8 @@ function SecretInput({ value, onChange, kind = 'password' }) {
         type={visible ? 'text' : 'password'}
         value={value}
         onChange={(event) => onChange(pin ? event.target.value.replace(/\D/g, '').slice(0, 6) : event.target.value)}
-        placeholder={pin ? '6-digit PIN' : 'Password'}
-        autoComplete="current-password"
+        placeholder={placeholder || (pin ? '6-digit PIN' : 'Password')}
+        autoComplete={autoComplete}
         inputMode={pin ? 'numeric' : 'text'}
         className="h-11 w-full rounded-xl border border-input bg-background px-3 pr-11 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
         required
@@ -163,6 +167,7 @@ export default function Login() {
     isAuthenticated,
     startEmailAccess,
     checkPendingEmailAccess,
+    setupPendingEmailAccess,
     loginEmailAccess,
     clearPendingEmailAccess,
     loginWithGoogle,
@@ -171,6 +176,7 @@ export default function Login() {
   const [stage, setStage] = useState('email')
   const [email, setEmail] = useState('')
   const [secret, setSecret] = useState('')
+  const [confirmSecret, setConfirmSecret] = useState('')
   const [credentialKind, setCredentialKind] = useState('password')
   const [config, setConfig] = useState(null)
   const [configLoading, setConfigLoading] = useState(true)
@@ -205,6 +211,14 @@ export default function Login() {
       const result = await checkPendingEmailAccess()
       if (result?.status === 'active') {
         navigate(destination, { replace: true })
+        return
+      }
+      if (result?.status === 'credential_setup_required') {
+        setCredentialKind(result.credential_kind || 'password')
+        setSecret('')
+        setConfirmSecret('')
+        setNotice(result.message || 'Approved. Create your PIN or password to enter OPS.')
+        setStage('setup')
         return
       }
       if (result?.status === 'rejected' || result?.status === 'suspended') {
@@ -275,10 +289,29 @@ export default function Login() {
     }
   }
 
+  const submitSetup = async (event) => {
+    event.preventDefault()
+    setError('')
+    if (secret !== confirmSecret) {
+      setError(credentialKind === 'pin' ? 'PIN entries do not match.' : 'Password entries do not match.')
+      return
+    }
+    setLoading(true)
+    try {
+      await setupPendingEmailAccess({ secret })
+      navigate(destination, { replace: true })
+    } catch (setupError) {
+      setError(loginErrorMessage(setupError))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   const resetEmail = () => {
     clearPendingEmailAccess()
     setStage('email')
     setSecret('')
+    setConfirmSecret('')
     setError('')
     setNotice('')
   }
@@ -292,12 +325,16 @@ export default function Login() {
 
   const title = stage === 'pending'
     ? 'Waiting for Owner approval'
-    : stage === 'credential'
-      ? 'Welcome back'
-      : 'Enter Stupiak’s Ops'
+    : stage === 'setup'
+      ? (credentialKind === 'pin' ? 'Create your PIN' : 'Create your password')
+      : stage === 'credential'
+        ? 'Welcome back'
+        : 'Enter Stupiak’s Ops'
   const subtitle = stage === 'pending'
-    ? 'This page will open OPS automatically after approval'
-    : 'Use your work email. New accounts are sent to the Owner automatically.'
+    ? 'After approval, set your login here and enter OPS'
+    : stage === 'setup'
+      ? 'One quick setup. You will enter OPS immediately after saving.'
+      : 'Use your work email. New accounts are sent to the Owner automatically.'
 
   return (
     <AuthLayout
@@ -315,7 +352,7 @@ export default function Login() {
       ) : (
         <>
           {error ? <div className="mb-4 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
-          {notice && stage !== 'pending' ? (
+          {notice && !['pending'].includes(stage) ? (
             <div className="mb-4 flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{notice}</span>
@@ -329,7 +366,7 @@ export default function Login() {
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Mail className="h-5 w-5" /></span>
                   <div>
                     <p className="text-sm font-semibold">One simple login</p>
-                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">New email: sent to Owner approval. Approved email: continue with PIN or password.</p>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">New email: Owner approval, then create your login on the same page. Returning user: enter your PIN or password.</p>
                   </div>
                 </div>
               </div>
@@ -368,7 +405,7 @@ export default function Login() {
               <label className="block space-y-1.5">
                 <span className="text-sm font-medium text-foreground">{credentialKind === 'pin' ? 'PIN' : 'Password'}</span>
                 <SecretInput value={secret} onChange={setSecret} kind={credentialKind} />
-                <span className="block text-xs leading-5 text-muted-foreground">{credentialKind === 'pin' ? 'Staff use a six-digit PIN.' : 'Manager and Owner accounts use a strong password.'}</span>
+                <span className="block text-xs leading-5 text-muted-foreground">{credentialKind === 'pin' ? 'Enter your 6-digit PIN.' : 'Enter your password.'}</span>
               </label>
               <button
                 type="submit"
@@ -381,6 +418,36 @@ export default function Login() {
             </form>
           ) : null}
 
+          {stage === 'setup' ? (
+            <form onSubmit={submitSetup} className="space-y-4">
+              <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground">Approved account</p>
+                <p className="truncate text-sm font-semibold">{email}</p>
+              </div>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-foreground">{credentialKind === 'pin' ? 'Create a 6-digit PIN' : 'Create a password'}</span>
+                <SecretInput value={secret} onChange={setSecret} kind={credentialKind} autoComplete="new-password" placeholder={credentialKind === 'pin' ? '6 digits' : 'At least 8 characters'} />
+              </label>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-foreground">Confirm</span>
+                <SecretInput value={confirmSecret} onChange={setConfirmSecret} kind={credentialKind} autoComplete="new-password" placeholder={credentialKind === 'pin' ? 'Enter the PIN again' : 'Enter the password again'} />
+              </label>
+              <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs leading-5 text-muted-foreground">
+                {credentialKind === 'pin'
+                  ? 'Use any 6 digits except obvious choices such as 000000, repeated digits, 123456 or 654321.'
+                  : 'Use at least 8 characters. No symbol, uppercase or number combination is required.'}
+              </div>
+              <button
+                type="submit"
+                disabled={loading || !secret || !confirmSecret}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
+                Save and enter OPS
+              </button>
+            </form>
+          ) : null}
+
           {stage === 'pending' ? (
             <div className="space-y-4 text-center">
               <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
@@ -389,7 +456,7 @@ export default function Login() {
               <div>
                 <p className="text-sm font-semibold">Request sent to Ops Control</p>
                 <p className="mt-1 break-all text-xs text-muted-foreground">{email}</p>
-                <p className="mt-3 text-sm leading-6 text-muted-foreground">The Owner assigns your outlet and role. You do not need an activation code and you do not need to sign in again.</p>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">The Owner assigns your outlet and role. After approval, this page will ask you to create your PIN or password, then enter OPS immediately.</p>
               </div>
               <button
                 type="button"
@@ -404,7 +471,7 @@ export default function Login() {
             </div>
           ) : null}
 
-          {config?.google_enabled ? (
+          {config?.google_enabled && ['email', 'credential'].includes(stage) ? (
             <div className="mt-5 border-t border-border pt-4">
               {!showGoogle ? (
                 <button type="button" onClick={() => setShowGoogle(true)} className="w-full text-center text-xs text-muted-foreground hover:text-foreground">
