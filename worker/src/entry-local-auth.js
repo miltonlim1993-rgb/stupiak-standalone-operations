@@ -1,5 +1,6 @@
 import app, { OutletRealtimeHub } from './entry.js'
 import { getCurrentUser } from './auth.js'
+import { handleEmailApprovalAuth } from './email-approval-auth.js'
 import { corsHeaders, errorResponse } from './http.js'
 import { handleLocalAuth } from './local-auth.js'
 
@@ -52,9 +53,16 @@ export default {
     const ownerGuard = await enforceOwnerActivation(request, env, url)
     if (ownerGuard) return ownerGuard
 
-    const response = await handleLocalAuth(request, env, url)
-    if (response) return response
-    return app.fetch(request, env, ctx)
+    try {
+      const emailResponse = await handleEmailApprovalAuth(request, env, url)
+      if (emailResponse) return emailResponse
+
+      const response = await handleLocalAuth(request, env, url)
+      if (response) return response
+      return app.fetch(request, env, ctx)
+    } catch (error) {
+      return errorResponse(request, env, error)
+    }
   },
 }
 
