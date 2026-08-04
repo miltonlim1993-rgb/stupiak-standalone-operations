@@ -153,7 +153,7 @@ export default function OpsControlApprovals() {
         primary_outlet_id: item.outlet_id,
         assigned_outlet_ids: parseOutletIds(item).length ? parseOutletIds(item) : [item.outlet_id],
       })
-      setMessage(`${result.user.full_name || contactLine(result.user)} approved. Their waiting page will enter OPS automatically—no code and no second login.`)
+      setMessage(`${result.user.full_name || contactLine(result.user)} approved. Their waiting page will ask them to create a PIN or password, then enter OPS immediately.`)
     } catch (error) {
       setMessage(error.message || 'Unable to approve user')
     } finally {
@@ -197,8 +197,8 @@ export default function OpsControlApprovals() {
         <div className="flex gap-3">
           <ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" />
           <div>
-            <p className="font-semibold">One approval, automatic entry</p>
-            <p className="mt-0.5 text-xs leading-5">A new email appears here as Pending. Once approved, the same waiting page receives a signed OPS session automatically. No activation code is issued.</p>
+            <p className="font-semibold">One approval, one first-login setup</p>
+            <p className="mt-0.5 text-xs leading-5">A new email appears here as Pending. After approval, the same waiting page asks the user to create a simple PIN or password and then enters OPS. No activation code or second login is required.</p>
           </div>
         </div>
       </section>
@@ -379,9 +379,9 @@ function SelfLocalSetupForm({ user, onCancel, onDone }) {
 
   return <form onSubmit={submit} className="space-y-4">
     <div className="space-y-1.5"><Label>Owner login ID</Label><Input value={loginId} onChange={(event) => setLoginId(event.target.value)} autoComplete="username" required /></div>
-    <div className="space-y-1.5"><Label>Strong password</Label><Input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} autoComplete="new-password" required /></div>
+    <div className="space-y-1.5"><Label>Password</Label><Input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} autoComplete="new-password" required /></div>
     <div className="space-y-1.5"><Label>Confirm password</Label><Input type="password" value={confirmSecret} onChange={(event) => setConfirmSecret(event.target.value)} autoComplete="new-password" required /></div>
-    <p className="text-xs leading-5 text-muted-foreground">Use at least 12 characters with letters, numbers and a symbol.</p>
+    <p className="text-xs leading-5 text-muted-foreground">Use at least 8 characters. No symbol, uppercase or number combination is required.</p>
     {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
     <div className="grid grid-cols-2 gap-2"><Button type="button" variant="outline" onClick={onCancel} disabled={saving}>Cancel</Button><Button type="submit" disabled={saving || !loginId.trim() || !secret}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}Save login</Button></div>
   </form>

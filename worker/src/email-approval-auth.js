@@ -12,6 +12,7 @@ import {
 import { json, parseCookies, readJson } from './http.js'
 import {
   authFingerprint,
+  credentialKindForRole,
   localAuthMode,
   localRegistrationMode,
 } from './local-auth-crypto.js'
@@ -22,6 +23,7 @@ import {
   findCredentialByUserId,
   localAuthSchemaReady,
   noteRateLimitFailure,
+  setLocalCredential,
   writeLocalAuthAudit,
 } from './local-auth-store.js'
 
@@ -139,6 +141,15 @@ async function requireReady(env) {
   }
 }
 
+async function pendingUser(request, env) {
+  const payload = await pendingPayload(request, env)
+  const user = await findDirectoryUser(env, { id: String(payload.uid) })
+  if (!user || String(user.email || '').toLowerCase() !== String(payload.email || '').toLowerCase()) {
+    throw authError('Approval request was not found', 'pending_approval_user_missing', 404)
+  }
+  return { payload, user }
+}
+
 async function createPendingUser(env, email) {
   const id = crypto.randomUUID()
   const now = new Date().toISOString()
@@ -242,7 +253,7 @@ async function startEmailApproval(request, env) {
     ok: true,
     status: 'credential_setup_required',
     email,
-    message: 'This approved account has no local credential on this device. Use the temporary Google fallback or ask the Owner to reset local access.',
+    message: 'This existing approved account has no local credential. Use the temporary Google fallback once to verify the account.',
   }, 409)
 }
 
@@ -313,13 +324,9 @@ async function emailCredentialLogin(request, env) {
 
 async function emailApprovalStatus(request, env) {
   await requireReady(env)
-  const payload = await pendingPayload(request, env)
-  const user = await findDirectoryUser(env, { id: String(payload.uid) })
-  if (!user || String(user.email || '').toLowerCase() !== String(payload.email || '').toLowerCase()) {
-    throw authError('Approval request was not found', 'pending_approval_user_missing', 404)
-  }
-
+  const { user } = await pendingUser(request, env)
   const status = String(user.status || 'pending').toLowerCase()
+
   if (status === 'pending') {
     return json(request, env, {
       ok: true,
@@ -341,23 +348,35 @@ async function emailApprovalStatus(request, env) {
     })
   }
 
-  const token = await createSession(user, env, { authMethod: 'approved_email' })
   const credential = await findCredentialByUserId(env, user.id)
+  if (!credential || credential.disabled_at) {
+    return json(request, env, {
+      ok: true,
+      status: 'credential_setup_required',
+      email: user.email,
+      credential_kind: credentialKindForRole(user.role),
+      message: credentialKindForRole(user.role) === 'pin'
+        ? 'Approved. Create your six-digit PIN to enter OPS.'
+        : 'Approved. Create your password to enter OPS.',
+    })
+  }
+
+  const token = await createSession(user, env, {
+    authMethod: 'local',
+    sessionVersion: Number(credential.session_version || 1),
+  })
   await writeLocalAuthAudit(env, {
     eventType: 'email_approval_session_promoted',
     userId: user.id,
     loginIdHash: await authFingerprint(user.email, env, 'email-login'),
     clientHash: await authFingerprint(clientIdentity(request), env, 'client'),
     success: true,
-    details: { local_credential_ready: Boolean(credential && !credential.disabled_at) },
+    details: { local_credential_ready: true },
   })
   const response = {
     ok: true,
     status: 'active',
-    user: {
-      ...userWithProfileSetup(user),
-      requires_local_credential_setup: !credential || Boolean(credential.disabled_at),
-    },
+    user: userWithProfileSetup(user),
   }
   if (nativeRequest(request)) response.session_token = token
   return json(request, env, response, 200, {
@@ -366,6 +385,76 @@ async function emailApprovalStatus(request, env) {
       expiredPendingCookie(request),
     ].join(', '),
   })
+}
+
+async function emailCredentialSetup(request, env) {
+  await requireReady(env)
+  const { user } = await pendingUser(request, env)
+  const status = String(user.status || '').toLowerCase()
+  if (status !== 'active') {
+    throw authError(
+      status === 'pending' ? 'Your account is still waiting for Owner approval' : 'This account is not active',
+      status === 'pending' ? 'user_pending' : 'user_inactive',
+      403,
+    )
+  }
+
+  const existing = await findCredentialByUserId(env, user.id)
+  if (existing && !existing.disabled_at) {
+    throw authError('Local login is already configured. Sign in with your PIN or password.', 'local_credential_exists', 409)
+  }
+
+  const body = await readJson(request)
+  const secret = String(body.secret || body.pin || body.password || '')
+  const { emailHash, clientHash } = await fingerprints(request, user.email, env)
+  const bucket = `email-first-setup:${clientHash}`
+  await checkRateLimit(env, bucket)
+
+  try {
+    const credential = await setLocalCredential(env, user, {
+      loginId: user.email,
+      secret,
+    })
+    const token = await createSession(user, env, {
+      authMethod: 'local',
+      sessionVersion: Number(credential.session_version || 1),
+    })
+    await clearRateLimit(env, bucket)
+    await writeLocalAuthAudit(env, {
+      eventType: 'email_first_credential_setup',
+      userId: user.id,
+      loginIdHash: emailHash,
+      clientHash,
+      success: true,
+      details: { credential_kind: credential.credential_kind },
+    })
+    const response = {
+      ok: true,
+      status: 'active',
+      credential_kind: credential.credential_kind,
+      user: userWithProfileSetup(user),
+    }
+    if (nativeRequest(request)) response.session_token = token
+    return json(request, env, response, 200, {
+      'Set-Cookie': [
+        sessionCookie(token, request),
+        expiredPendingCookie(request),
+      ].join(', '),
+    })
+  } catch (error) {
+    await Promise.allSettled([
+      noteRateLimitFailure(env, bucket, 6),
+      writeLocalAuthAudit(env, {
+        eventType: 'email_first_credential_setup_failed',
+        userId: user.id,
+        loginIdHash: emailHash,
+        clientHash,
+        success: false,
+        details: { code: String(error?.code || '') },
+      }),
+    ])
+    throw error
+  }
 }
 
 export async function handleEmailApprovalAuth(request, env, url = new URL(request.url)) {
@@ -378,6 +467,9 @@ export async function handleEmailApprovalAuth(request, env, url = new URL(reques
   }
   if (path === '/api/auth/local/email/status' && request.method === 'GET') {
     return emailApprovalStatus(request, env)
+  }
+  if (path === '/api/auth/local/email/setup' && request.method === 'POST') {
+    return emailCredentialSetup(request, env)
   }
   return null
 }

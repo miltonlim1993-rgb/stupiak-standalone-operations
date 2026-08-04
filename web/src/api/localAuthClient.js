@@ -81,7 +81,17 @@ export const localAuthClient = {
     const result = await request('/api/auth/local/email/status', {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     })
-    if (result?.status !== 'pending') savePendingToken('')
+    if (!['pending', 'credential_setup_required'].includes(result?.status)) savePendingToken('')
+    return result
+  },
+  emailSetup: async ({ secret }) => {
+    const token = pendingToken()
+    const result = await request('/api/auth/local/email/setup', {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: { secret },
+    })
+    if (result?.status === 'active') savePendingToken('')
     return result
   },
   emailLogin: ({ email, secret }) => request('/api/auth/local/email/login', {
