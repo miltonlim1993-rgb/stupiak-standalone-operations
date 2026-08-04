@@ -1,12 +1,17 @@
 import app, { OutletRealtimeHub } from './entry.js'
-import { corsHeaders } from './http.js'
+import { getCurrentUser } from './auth.js'
+import { corsHeaders, errorResponse } from './http.js'
 import { handleLocalAuth } from './local-auth.js'
+
+function isLocalAccessPath(pathname) {
+  return /^\/api\/users\/[^/]+\/local-access$/.test(pathname)
+}
 
 function isLocalAuthPath(pathname) {
   return pathname === '/api/auth/config'
     || pathname.startsWith('/api/auth/local/')
     || pathname === '/api/internal/local-auth/bootstrap-owner'
-    || /^\/api\/users\/[^/]+\/local-access$/.test(pathname)
+    || isLocalAccessPath(pathname)
 }
 
 function localAuthPreflight(request, env) {
@@ -20,6 +25,22 @@ function localAuthPreflight(request, env) {
   return new Response(null, { status: 204, headers })
 }
 
+async function enforceOwnerActivation(request, env, url) {
+  if (!isLocalAccessPath(url.pathname)) return null
+  try {
+    const actor = await getCurrentUser(request, env)
+    if (String(actor?.role || '').toLowerCase() !== 'owner') {
+      const error = new Error('Only the Owner may issue or reset local login access')
+      error.status = 403
+      error.code = 'owner_required'
+      throw error
+    }
+    return null
+  } catch (error) {
+    return errorResponse(request, env, error)
+  }
+}
+
 export default {
   ...app,
 
@@ -27,6 +48,9 @@ export default {
     const url = new URL(request.url)
     if (!isLocalAuthPath(url.pathname)) return app.fetch(request, env, ctx)
     if (request.method === 'OPTIONS') return localAuthPreflight(request, env)
+
+    const ownerGuard = await enforceOwnerActivation(request, env, url)
+    if (ownerGuard) return ownerGuard
 
     const response = await handleLocalAuth(request, env, url)
     if (response) return response
