@@ -1,5 +1,6 @@
 import app, { OutletRealtimeHub } from './entry.js'
 import { getCurrentUser } from './auth.js'
+import { handleEmailApprovalAuth } from './email-approval-auth.js'
 import { corsHeaders, errorResponse } from './http.js'
 import { handleLocalAuth } from './local-auth.js'
 
@@ -23,6 +24,21 @@ function localAuthPreflight(request, env) {
   headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
   headers.set('Access-Control-Max-Age', '600')
   return new Response(null, { status: 204, headers })
+}
+
+function preservePromotedSessionCookie(response) {
+  const raw = String(response?.headers?.get('Set-Cookie') || '')
+  const marker = ', chefops_pending_approval='
+  const markerIndex = raw.indexOf(marker)
+  if (markerIndex < 0) return response
+
+  const headers = new Headers(response.headers)
+  headers.set('Set-Cookie', raw.slice(0, markerIndex))
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
 }
 
 async function enforceOwnerActivation(request, env, url) {
@@ -52,9 +68,16 @@ export default {
     const ownerGuard = await enforceOwnerActivation(request, env, url)
     if (ownerGuard) return ownerGuard
 
-    const response = await handleLocalAuth(request, env, url)
-    if (response) return response
-    return app.fetch(request, env, ctx)
+    try {
+      const emailResponse = await handleEmailApprovalAuth(request, env, url)
+      if (emailResponse) return preservePromotedSessionCookie(emailResponse)
+
+      const response = await handleLocalAuth(request, env, url)
+      if (response) return response
+      return app.fetch(request, env, ctx)
+    } catch (error) {
+      return errorResponse(request, env, error)
+    }
   },
 }
 

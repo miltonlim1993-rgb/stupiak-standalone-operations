@@ -1,14 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import {
+  ArrowLeft,
   CheckCircle2,
   Eye,
   EyeOff,
-  KeyRound,
   Loader2,
+  LockKeyhole,
   LogIn,
+  Mail,
+  RefreshCw,
   ShieldCheck,
-  UserPlus,
 } from 'lucide-react'
 import AuthLayout from '@/components/AuthLayout'
 import { useAuth } from '@/lib/AuthContext'
@@ -42,44 +44,34 @@ function isNativeAndroid() {
 
 function loginErrorMessage(error) {
   const messages = {
-    local_login_invalid: 'Login ID, PIN or password is incorrect.',
+    local_email_invalid: 'Enter a valid email address.',
+    local_login_invalid: 'Email, PIN or password is incorrect.',
     local_auth_locked: 'Too many attempts. Wait 15 minutes and try again.',
     user_pending: 'Your account is still waiting for Owner approval.',
     user_inactive: 'This account is not active. Contact the Owner.',
-    local_activation_invalid: 'Activation code is invalid or expired.',
+    local_credential_missing: 'This account does not have a local PIN or password yet.',
+    pending_approval_session_missing: 'This waiting session has expired. Enter your email again.',
+    pending_approval_session_invalid: 'This waiting session has expired. Enter your email again.',
     local_auth_migration_required: 'Local login is not active on the server yet.',
     local_auth_not_configured: 'Local login is not configured on the server yet.',
-    local_pin_too_common: 'Choose a less predictable six-digit PIN.',
-    local_pin_sequential: 'Sequential PINs are not allowed.',
-    local_pin_matches_login: 'PIN cannot match the end of your phone number.',
-    local_password_length: 'Management passwords must contain at least 12 characters.',
-    local_password_complexity: 'Management passwords need letters, numbers and a symbol.',
-    google_login_disabled: 'Google sign-in has been retired. Use your local OPS account.',
+    google_login_disabled: 'Google sign-in has been retired. Use your OPS email.',
     sheets_rate_limited: 'The operations sheet is busy. Please try again shortly.',
   }
   return messages[error?.code] || error?.message || 'Unable to continue'
 }
 
-function Field({ label, children, hint }) {
-  return (
-    <label className="block space-y-1.5">
-      <span className="text-sm font-medium text-foreground">{label}</span>
-      {children}
-      {hint ? <span className="block text-xs leading-5 text-muted-foreground">{hint}</span> : null}
-    </label>
-  )
-}
-
-function SecretInput({ value, onChange, placeholder = 'PIN or password', autoComplete = 'current-password' }) {
+function SecretInput({ value, onChange, kind = 'password' }) {
   const [visible, setVisible] = useState(false)
+  const pin = kind === 'pin'
   return (
     <div className="relative">
       <input
         type={visible ? 'text' : 'password'}
         value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        autoComplete={autoComplete}
+        onChange={(event) => onChange(pin ? event.target.value.replace(/\D/g, '').slice(0, 6) : event.target.value)}
+        placeholder={pin ? '6-digit PIN' : 'Password'}
+        autoComplete="current-password"
+        inputMode={pin ? 'numeric' : 'text'}
         className="h-11 w-full rounded-xl border border-input bg-background px-3 pr-11 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
         required
       />
@@ -149,25 +141,18 @@ function GoogleFallback({ clientId, loading, onLoading, onError, onSuccess }) {
     }
   }
 
-  return (
-    <div className="space-y-2 rounded-2xl border border-dashed border-border bg-muted/30 p-3.5">
-      <p className="text-xs leading-5 text-muted-foreground">
-        Temporary migration fallback for accounts that have not activated a local OPS login yet.
-      </p>
-      {nativeAndroid ? (
-        <button
-          type="button"
-          disabled={loading || !clientId}
-          onClick={nativeSignIn}
-          className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 text-sm font-medium text-[#1f1f1f] shadow-sm transition hover:bg-[#f8fafd] disabled:pointer-events-none disabled:opacity-50"
-        >
-          <span className="flex h-5 w-5 items-center justify-center rounded-full text-base font-bold text-[#4285F4]">G</span>
-          Continue with Google
-        </button>
-      ) : (
-        <div ref={buttonRef} className={loading ? 'pointer-events-none flex w-full justify-center opacity-40' : 'flex w-full justify-center'} />
-      )}
-    </div>
+  return nativeAndroid ? (
+    <button
+      type="button"
+      disabled={loading || !clientId}
+      onClick={nativeSignIn}
+      className="flex h-11 w-full items-center justify-center gap-3 rounded-xl border border-[#747775] bg-white px-4 text-sm font-medium text-[#1f1f1f] shadow-sm transition hover:bg-[#f8fafd] disabled:pointer-events-none disabled:opacity-50"
+    >
+      <span className="flex h-5 w-5 items-center justify-center rounded-full text-base font-bold text-[#4285F4]">G</span>
+      Continue with Google
+    </button>
+  ) : (
+    <div ref={buttonRef} className={loading ? 'pointer-events-none flex w-full justify-center opacity-40' : 'flex w-full justify-center'} />
   )
 }
 
@@ -176,23 +161,26 @@ export default function Login() {
   const location = useLocation()
   const {
     isAuthenticated,
-    loginLocal,
+    startEmailAccess,
+    checkPendingEmailAccess,
+    loginEmailAccess,
+    clearPendingEmailAccess,
     loginWithGoogle,
-    registerLocal,
-    activateLocal,
     getAuthConfig,
   } = useAuth()
-  const [mode, setMode] = useState('login')
+  const [stage, setStage] = useState('email')
+  const [email, setEmail] = useState('')
+  const [secret, setSecret] = useState('')
+  const [credentialKind, setCredentialKind] = useState('password')
   const [config, setConfig] = useState(null)
   const [configLoading, setConfigLoading] = useState(true)
   const [loading, setLoading] = useState(false)
+  const [checking, setChecking] = useState(false)
   const [error, setError] = useState('')
   const [notice, setNotice] = useState('')
   const [showGoogle, setShowGoogle] = useState(false)
-  const [login, setLogin] = useState({ loginId: '', secret: '' })
-  const [registration, setRegistration] = useState({ fullName: '', phone: '', email: '', department: '' })
-  const [activation, setActivation] = useState({ loginId: '', activationCode: '', secret: '' })
   const clientId = import.meta.env.VITE_GOOGLE_LOGIN_CLIENT_ID
+  const destination = location.state?.from || '/'
 
   useEffect(() => {
     let active = true
@@ -211,40 +199,74 @@ export default function Login() {
     return () => { active = false }
   }, [getAuthConfig])
 
-  const destination = location.state?.from || '/'
-  const localReady = Boolean(config?.local_enabled)
-  const googleReady = Boolean(config?.google_enabled && clientId)
-
-  const modeMeta = useMemo(() => ({
-    login: {
-      title: 'Welcome to Stupiak’s Ops',
-      subtitle: 'Sign in with your Owner-approved local account',
-      icon: LogIn,
-    },
-    register: {
-      title: 'Request OPS access',
-      subtitle: 'The Owner must approve every new account',
-      icon: UserPlus,
-    },
-    activate: {
-      title: 'Activate local login',
-      subtitle: 'Use the one-time code issued by the Owner',
-      icon: KeyRound,
-    },
-  }), [])
-  const CurrentIcon = modeMeta[mode].icon
-
-  const resetMessages = () => {
-    setError('')
-    setNotice('')
+  const checkApproval = async ({ quiet = false } = {}) => {
+    if (!quiet) setChecking(true)
+    try {
+      const result = await checkPendingEmailAccess()
+      if (result?.status === 'active') {
+        navigate(destination, { replace: true })
+        return
+      }
+      if (result?.status === 'rejected' || result?.status === 'suspended') {
+        setStage('email')
+        setError(result.message || 'This request was not approved.')
+        clearPendingEmailAccess()
+      }
+    } catch (approvalError) {
+      if (!quiet || Number(approvalError?.status || 0) === 401) {
+        setError(loginErrorMessage(approvalError))
+      }
+      if (Number(approvalError?.status || 0) === 401) {
+        setStage('email')
+        clearPendingEmailAccess()
+      }
+    } finally {
+      if (!quiet) setChecking(false)
+    }
   }
 
-  const submitLogin = async (event) => {
+  useEffect(() => {
+    if (stage !== 'pending') return undefined
+    const timer = window.setInterval(() => {
+      if (document.visibilityState === 'visible') checkApproval({ quiet: true })
+    }, 3000)
+    return () => window.clearInterval(timer)
+  }, [stage])
+
+  const submitEmail = async (event) => {
     event.preventDefault()
     setLoading(true)
-    resetMessages()
+    setError('')
+    setNotice('')
     try {
-      await loginLocal(login)
+      const result = await startEmailAccess({ email })
+      if (result?.status === 'pending') {
+        setStage('pending')
+        setNotice(result.message || 'Waiting for Owner approval.')
+      } else if (result?.status === 'credential_required') {
+        setCredentialKind(result.credential_kind || 'password')
+        setSecret('')
+        setStage('credential')
+        setNotice(result.message || 'Enter your PIN or password.')
+      } else if (result?.status === 'credential_setup_required') {
+        setError(result.message)
+        setShowGoogle(Boolean(config?.google_enabled))
+      } else {
+        setError(result?.message || 'This account is not available.')
+      }
+    } catch (startError) {
+      setError(loginErrorMessage(startError))
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const submitCredential = async (event) => {
+    event.preventDefault()
+    setLoading(true)
+    setError('')
+    try {
+      await loginEmailAccess({ email, secret })
       navigate(destination, { replace: true })
     } catch (loginError) {
       setError(loginErrorMessage(loginError))
@@ -253,35 +275,12 @@ export default function Login() {
     }
   }
 
-  const submitRegistration = async (event) => {
-    event.preventDefault()
-    setLoading(true)
-    resetMessages()
-    try {
-      const result = await registerLocal(registration)
-      setNotice(result?.message || 'Request received. Wait for Owner approval.')
-      setActivation((current) => ({ ...current, loginId: registration.phone }))
-    } catch (registrationError) {
-      setError(loginErrorMessage(registrationError))
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const submitActivation = async (event) => {
-    event.preventDefault()
-    setLoading(true)
-    resetMessages()
-    try {
-      const result = await activateLocal(activation)
-      setLogin({ loginId: activation.loginId, secret: '' })
-      setNotice(result?.message || 'Local login activated. Sign in now.')
-      setMode('login')
-    } catch (activationError) {
-      setError(loginErrorMessage(activationError))
-    } finally {
-      setLoading(false)
-    }
+  const resetEmail = () => {
+    clearPendingEmailAccess()
+    setStage('email')
+    setSecret('')
+    setError('')
+    setNotice('')
   }
 
   const googleSuccess = async (credential) => {
@@ -291,199 +290,131 @@ export default function Login() {
 
   if (isAuthenticated) return <Navigate to="/" replace />
 
+  const title = stage === 'pending'
+    ? 'Waiting for Owner approval'
+    : stage === 'credential'
+      ? 'Welcome back'
+      : 'Enter Stupiak’s Ops'
+  const subtitle = stage === 'pending'
+    ? 'This page will open OPS automatically after approval'
+    : 'Use your work email. New accounts are sent to the Owner automatically.'
+
   return (
     <AuthLayout
-      title={modeMeta[mode].title}
-      subtitle={modeMeta[mode].subtitle}
+      title={title}
+      subtitle={subtitle}
       footer={(
         <span className="inline-flex items-center gap-1">
           <ShieldCheck className="h-3.5 w-3.5" />
-          Access, role and outlet are controlled by the Owner.
+          Role and outlet access are controlled by the Owner.
         </span>
       )}
     >
-      <div className="mb-4 flex items-center gap-3 rounded-2xl bg-muted/50 p-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
-          <CurrentIcon className="h-5 w-5" />
-        </span>
-        <div className="min-w-0">
-          <p className="text-sm font-semibold">No personal Google account required</p>
-          <p className="text-xs leading-5 text-muted-foreground">Approved staff use a six-digit PIN. Management uses a strong password.</p>
-        </div>
-      </div>
-
-      <div className="mb-4 grid grid-cols-3 rounded-xl bg-muted p-1">
-        {[
-          ['login', 'Sign in'],
-          ['register', 'Request'],
-          ['activate', 'Activate'],
-        ].map(([value, label]) => (
-          <button
-            key={value}
-            type="button"
-            onClick={() => { setMode(value); resetMessages() }}
-            className={`h-9 rounded-lg text-xs font-semibold transition ${mode === value ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
       {configLoading ? (
-        <div className="flex min-h-36 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+        <div className="flex min-h-44 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
       ) : (
         <>
           {error ? <div className="mb-4 rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
-          {notice ? (
+          {notice && stage !== 'pending' ? (
             <div className="mb-4 flex items-start gap-2 rounded-xl bg-emerald-50 p-3 text-sm text-emerald-800">
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{notice}</span>
             </div>
           ) : null}
 
-          {mode === 'login' ? (
-            <form onSubmit={submitLogin} className="space-y-4">
-              <Field label="Phone number or login ID">
+          {stage === 'email' ? (
+            <form onSubmit={submitEmail} className="space-y-4">
+              <div className="rounded-2xl bg-muted/50 p-3.5">
+                <div className="flex gap-3">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Mail className="h-5 w-5" /></span>
+                  <div>
+                    <p className="text-sm font-semibold">One simple login</p>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">New email: sent to Owner approval. Approved email: continue with PIN or password.</p>
+                  </div>
+                </div>
+              </div>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-foreground">Email</span>
                 <input
-                  value={login.loginId}
-                  onChange={(event) => setLogin({ ...login, loginId: event.target.value })}
-                  placeholder="e.g. 0123456789 or staff ID"
-                  autoComplete="username"
-                  inputMode="text"
+                  type="email"
+                  value={email}
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="name@example.com"
+                  autoComplete="email"
                   className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
                   required
                 />
-              </Field>
-              <Field label="PIN or password" hint="Staff: 6-digit PIN. Manager / Owner: strong password.">
-                <SecretInput value={login.secret} onChange={(secret) => setLogin({ ...login, secret })} />
-              </Field>
+              </label>
               <button
                 type="submit"
-                disabled={loading || !localReady}
+                disabled={loading || !config?.local_enabled}
                 className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
               >
                 {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />}
+                Continue
+              </button>
+            </form>
+          ) : null}
+
+          {stage === 'credential' ? (
+            <form onSubmit={submitCredential} className="space-y-4">
+              <button type="button" onClick={resetEmail} className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground hover:text-foreground">
+                <ArrowLeft className="h-3.5 w-3.5" /> Change email
+              </button>
+              <div className="rounded-xl border border-border bg-muted/30 px-3 py-2.5">
+                <p className="text-xs text-muted-foreground">Signing in as</p>
+                <p className="truncate text-sm font-semibold">{email}</p>
+              </div>
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium text-foreground">{credentialKind === 'pin' ? 'PIN' : 'Password'}</span>
+                <SecretInput value={secret} onChange={setSecret} kind={credentialKind} />
+                <span className="block text-xs leading-5 text-muted-foreground">{credentialKind === 'pin' ? 'Staff use a six-digit PIN.' : 'Manager and Owner accounts use a strong password.'}</span>
+              </label>
+              <button
+                type="submit"
+                disabled={loading || !secret}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+              >
+                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <LockKeyhole className="h-4 w-4" />}
                 Sign in
               </button>
-              {!localReady ? (
-                <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800">
-                  Local login is prepared but not activated on production yet. Existing approved accounts may use the temporary Google fallback below.
-                </p>
-              ) : null}
             </form>
           ) : null}
 
-          {mode === 'register' ? (
-            <form onSubmit={submitRegistration} className="space-y-3.5">
-              <Field label="Actual name">
-                <input
-                  value={registration.fullName}
-                  onChange={(event) => setRegistration({ ...registration, fullName: event.target.value })}
-                  placeholder="Name used at work"
-                  autoComplete="name"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  required
-                />
-              </Field>
-              <Field label="Mobile phone">
-                <input
-                  value={registration.phone}
-                  onChange={(event) => setRegistration({ ...registration, phone: event.target.value })}
-                  placeholder="0123456789"
-                  autoComplete="tel"
-                  inputMode="tel"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  required
-                />
-              </Field>
-              <Field label="Email (optional)">
-                <input
-                  type="email"
-                  value={registration.email}
-                  onChange={(event) => setRegistration({ ...registration, email: event.target.value })}
-                  placeholder="Used only for staff records"
-                  autoComplete="email"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-              </Field>
-              <Field label="Department / position (optional)">
-                <input
-                  value={registration.department}
-                  onChange={(event) => setRegistration({ ...registration, department: event.target.value })}
-                  placeholder="e.g. Kitchen, Cashier"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                />
-              </Field>
+          {stage === 'pending' ? (
+            <div className="space-y-4 text-center">
+              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-50 text-amber-600">
+                <Loader2 className="h-8 w-8 animate-spin" />
+              </div>
+              <div>
+                <p className="text-sm font-semibold">Request sent to Ops Control</p>
+                <p className="mt-1 break-all text-xs text-muted-foreground">{email}</p>
+                <p className="mt-3 text-sm leading-6 text-muted-foreground">The Owner assigns your outlet and role. You do not need an activation code and you do not need to sign in again.</p>
+              </div>
               <button
-                type="submit"
-                disabled={loading || !config?.registration_enabled}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
+                type="button"
+                disabled={checking}
+                onClick={() => checkApproval()}
+                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-border bg-background px-4 text-sm font-semibold hover:bg-muted disabled:opacity-50"
               >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserPlus className="h-4 w-4" />}
-                Send approval request
+                {checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                Check approval now
               </button>
-            </form>
+              <button type="button" onClick={resetEmail} className="text-xs font-medium text-muted-foreground hover:text-foreground">Use another email</button>
+            </div>
           ) : null}
 
-          {mode === 'activate' ? (
-            <form onSubmit={submitActivation} className="space-y-4">
-              <Field label="Phone number or login ID">
-                <input
-                  value={activation.loginId}
-                  onChange={(event) => setActivation({ ...activation, loginId: event.target.value })}
-                  placeholder="The login ID approved by the Owner"
-                  autoComplete="username"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 text-sm outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  required
-                />
-              </Field>
-              <Field label="One-time activation code" hint="Codes expire after 48 hours and can only be used once.">
-                <input
-                  value={activation.activationCode}
-                  onChange={(event) => setActivation({ ...activation, activationCode: event.target.value.toUpperCase().replace(/\s+/g, '') })}
-                  placeholder="8-character code"
-                  autoComplete="one-time-code"
-                  className="h-11 w-full rounded-xl border border-input bg-background px-3 font-mono text-sm uppercase tracking-[0.18em] outline-none transition focus:border-primary focus:ring-2 focus:ring-primary/20"
-                  required
-                />
-              </Field>
-              <Field label="Create PIN or password" hint="Staff use a non-obvious 6-digit PIN. Manager / Owner passwords require 12+ characters, letters, numbers and a symbol.">
-                <SecretInput
-                  value={activation.secret}
-                  onChange={(secret) => setActivation({ ...activation, secret })}
-                  placeholder="Create your credential"
-                  autoComplete="new-password"
-                />
-              </Field>
-              <button
-                type="submit"
-                disabled={loading || !localReady}
-                className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:pointer-events-none disabled:opacity-50"
-              >
-                {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />}
-                Activate local login
-              </button>
-            </form>
-          ) : null}
-
-          {googleReady ? (
+          {config?.google_enabled ? (
             <div className="mt-5 border-t border-border pt-4">
               {!showGoogle ? (
-                <button
-                  type="button"
-                  onClick={() => setShowGoogle(true)}
-                  className="w-full text-center text-xs font-medium text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
-                >
+                <button type="button" onClick={() => setShowGoogle(true)} className="w-full text-center text-xs text-muted-foreground hover:text-foreground">
                   Use temporary Google migration fallback
                 </button>
               ) : (
-                <GoogleFallback
-                  clientId={clientId}
-                  loading={loading}
-                  onLoading={setLoading}
-                  onError={setError}
-                  onSuccess={googleSuccess}
-                />
+                <div className="space-y-3">
+                  <p className="text-center text-xs leading-5 text-muted-foreground">Temporary fallback for existing accounts that have not configured a local PIN or password.</p>
+                  <GoogleFallback clientId={clientId} loading={loading} onLoading={setLoading} onError={setError} onSuccess={googleSuccess} />
+                </div>
               )}
             </div>
           ) : null}

@@ -46,11 +46,19 @@ function phoneLogin(value) {
   return `+${digits}`
 }
 
+function emailLogin(value) {
+  const email = String(value || '').trim().toLowerCase()
+  if (!email || email.length > 254 || /\s/.test(email)) return ''
+  return /^[^@]+@[^@]+\.[^@]+$/.test(email) ? email : ''
+}
+
 export function normalizeLoginId(value) {
   const raw = String(value || '').trim()
   if (!raw) return ''
   const phone = phoneLogin(raw)
   if (phone) return phone
+  const email = emailLogin(raw)
+  if (email) return email
   const normalized = raw.toLowerCase().replace(/\s+/g, '')
   if (!/^[a-z0-9][a-z0-9._-]{2,63}$/.test(normalized)) return ''
   return normalized
