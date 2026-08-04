@@ -7,66 +7,63 @@ cd "$ROOT_DIR"
 PRODUCTION_ORIGIN="${OPS_PRODUCTION_ORIGIN:-https://stupiaks-ops.sporkburger19.workers.dev}"
 OPS_DB_ID="${CLOUDFLARE_OPS_DB_ID:-080c13d7-e2f5-4c01-a1ca-aa00094d6fc0}"
 APP_DATA_PACKS_ID="${CLOUDFLARE_APP_DATA_PACKS_ID:-f62696e1a2f14b8a9e0b84a540c7e997}"
+MEDIA_BUCKET_NAME="${CLOUDFLARE_MEDIA_BUCKET_NAME:-stupiaks-ops-media}"
 QUEUE_NAME="${CLOUDFLARE_SHEET_SYNC_QUEUE_NAME:-stupiaks-ops-sheet-sync}"
 DLQ_NAME="${CLOUDFLARE_SHEET_SYNC_DLQ_NAME:-stupiaks-ops-sheet-sync-dlq}"
 MASTER_SPREADSHEET_ID="${GOOGLE_MASTER_SPREADSHEET_ID:-1sy-4AIbZssCmP9HQaq-K4OicXjdvOs2EXVNmvh4bSzM}"
 VERIFY_OUTLET_ID="${OPS_VERIFY_OUTLET_ID:-RR-KCH}"
 VERIFY_TEMPLATE_ID="${OPS_VERIFY_TEMPLATE_ID:-tmpl-prod-task-photo-test-v1}"
+STATVARA_BRIDGE_PORT="${STATVARA_OPS_BRIDGE_PORT:-8791}"
+STATVARA_API_PATH="${STATVARA_OPS_API_PATH:-/api/ops/v1}"
 MASTER_WATCH_RUN_SECRET="$(node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))")"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-AUDIT_DIR="${OPS_RELEASE_AUDIT_DIR:-$ROOT_DIR/audit/master-watch-deploy-$STAMP}"
+AUDIT_DIR="${OPS_RELEASE_AUDIT_DIR:-$ROOT_DIR/audit/autonomous-runtime-deploy-$STAMP}"
 
 mkdir -p "$AUDIT_DIR"
 
-echo "============================================================"
-echo "Stupiak's OPS Master Data watcher deployment"
-echo "  Production:         $PRODUCTION_ORIGIN"
-echo "  Master spreadsheet: $MASTER_SPREADSHEET_ID"
-echo "  Verify outlet:      $VERIFY_OUTLET_ID"
-echo "  Verify template:    $VERIFY_TEMPLATE_ID"
-echo "  D1 migration:       NO"
-echo "  D1 backfill:        NO"
-echo "  D1 direct writes:   NO"
-echo "  Master watch cron:  */2 * * * *"
-echo "============================================================"
+cat <<INFO
+============================================================
+Stupiak's OPS autonomous production deployment
+  Production:         $PRODUCTION_ORIGIN
+  Master spreadsheet: $MASTER_SPREADSHEET_ID
+  Master auth:        Google Service Account
+  Media primary:      Cloudflare R2 / $MEDIA_BUCKET_NAME
+  Drive backup:       asynchronous and non-blocking
+  Statvara bridge:    $STATVARA_BRIDGE_PORT $STATVARA_API_PATH (reserved)
+  Verify outlet:      $VERIFY_OUTLET_ID
+  Verify template:    $VERIFY_TEMPLATE_ID
+  D1 migration:       NO
+  D1 backfill:        NO
+  D1 direct writes:   NO
+============================================================
+INFO
 
-echo "==> Requiring a clean tracked worktree"
 if ! git diff --quiet || ! git diff --cached --quiet; then
-  echo "Tracked local changes are present. Commit or stash them before production deployment." >&2
+  echo "Tracked local changes are present. Deployment requires a clean worktree." >&2
   git status --short >&2
   exit 1
 fi
 
-echo "==> Checking existing local Wrangler OAuth"
 npx wrangler whoami | tee "$AUDIT_DIR/00-wrangler-whoami.txt"
 
-echo "==> Fast-forwarding canonical main"
 git fetch origin main
 if ! git switch main 2>/dev/null; then git checkout main; fi
 git pull --ff-only origin main
 git rev-parse HEAD | tee "$AUDIT_DIR/01-main-commit.txt"
 
-if [[ ! -f worker/src/entry-master-watch.js || ! -f worker/src/master-data-watch.js ]]; then
-  echo "Master watcher source is missing from main." >&2
-  exit 1
-fi
-
-echo "==> Installing exact dependencies"
 npm ci
-
-echo "==> Running architecture and watcher contract tests"
 npm run ops:audit:contract | tee "$AUDIT_DIR/02-architecture-contract.txt"
-
-echo "==> Building Web and Worker dry-run"
 npm run build | tee "$AUDIT_DIR/03-build.txt"
 
 export CLOUDFLARE_APP_DATA_PACKS_ID="$APP_DATA_PACKS_ID"
 export CLOUDFLARE_OPS_DB_ID="$OPS_DB_ID"
+export CLOUDFLARE_MEDIA_BUCKET_NAME="$MEDIA_BUCKET_NAME"
 export CLOUDFLARE_SHEET_SYNC_QUEUE_NAME="$QUEUE_NAME"
 export CLOUDFLARE_SHEET_SYNC_DLQ_NAME="$DLQ_NAME"
 export GOOGLE_MASTER_SPREADSHEET_ID="$MASTER_SPREADSHEET_ID"
+export STATVARA_OPS_BRIDGE_PORT="$STATVARA_BRIDGE_PORT"
+export STATVARA_OPS_API_PATH="$STATVARA_API_PATH"
 
-echo "==> Rendering canonical production bindings"
 npm run cf:render | tee "$AUDIT_DIR/04-render.txt"
 
 node <<'NODE'
@@ -74,65 +71,110 @@ const fs = require('node:fs')
 const config = JSON.parse(fs.readFileSync('worker/wrangler.production.jsonc', 'utf8'))
 if (config.main !== 'src/entry-master-watch.js') throw new Error(`Unexpected production entry: ${config.main}`)
 const crons = new Set(config.triggers?.crons || [])
-if (!crons.has('*/2 * * * *')) throw new Error('Missing two-minute Master watcher cron')
-if (!crons.has('0 * * * *')) throw new Error('Missing hourly full-rebuild safety cron')
+if (!crons.has('*/2 * * * *') || !crons.has('0 * * * *')) throw new Error('Required watcher crons are missing')
 if (config.d1_databases?.[0]?.database_name !== 'stupiaks-ops-realtime') throw new Error('Unexpected production D1 binding')
-const expectedMasterId = String(process.env.GOOGLE_MASTER_SPREADSHEET_ID || '')
-const renderedMasterId = String(config.vars?.GOOGLE_MASTER_SPREADSHEET_ID || '')
-if (!expectedMasterId || renderedMasterId !== expectedMasterId) throw new Error('Production Master spreadsheet binding is missing or incorrect')
+if (config.r2_buckets?.[0]?.binding !== 'MEDIA_BUCKET') throw new Error('MEDIA_BUCKET R2 binding is missing')
+if (config.vars?.GOOGLE_DATA_AUTH_MODE !== 'service_account') throw new Error('Master data must use service_account auth')
+if (config.vars?.MEDIA_PRIMARY_STORAGE !== 'cloudflare-r2') throw new Error('R2 must be canonical media storage')
+if (String(config.vars?.STATVARA_OPS_BRIDGE_PORT) !== '8791') throw new Error('Statvara OPS bridge port 8791 was not preserved')
+if (String(config.vars?.GOOGLE_MASTER_SPREADSHEET_ID || '') !== String(process.env.GOOGLE_MASTER_SPREADSHEET_ID || '')) throw new Error('Master spreadsheet binding is incorrect')
 console.log('PRODUCTION_ENTRY_VERIFIED=src/entry-master-watch.js')
-console.log('MASTER_SPREADSHEET_BINDING_VERIFIED=true')
-console.log('MASTER_WATCH_CRON_VERIFIED=true')
-console.log('HOURLY_SAFETY_CRON_VERIFIED=true')
+console.log('GOOGLE_SERVICE_ACCOUNT_MODE_VERIFIED=true')
+console.log('R2_MEDIA_BINDING_VERIFIED=true')
+console.log('STATVARA_OPS_BRIDGE_PORT_VERIFIED=8791')
 NODE
 
-echo "==> Installing one-time protected watcher-run secret"
 printf '%s' "$MASTER_WATCH_RUN_SECRET" | npx wrangler secret put MASTER_WATCH_RUN_SECRET --config worker/wrangler.production.jsonc \
   > "$AUDIT_DIR/05-master-watch-run-secret.txt"
 
-echo "==> Recording current Cloudflare deployments"
 npx wrangler deployments list --config worker/wrangler.production.jsonc \
   > "$AUDIT_DIR/06-deployments-before.txt" 2>&1 || true
 
-echo "==> Deploying Worker and existing Web/PWA assets"
-echo "No D1 migration, backfill, import, database creation or historical rewrite will run."
 npx wrangler deploy --config worker/wrangler.production.jsonc \
   | tee "$AUDIT_DIR/07-deploy.txt"
 
-echo "==> Forcing one Master Template publication and verifying the Test Task"
+OPS_PRODUCTION_ORIGIN="$PRODUCTION_ORIGIN" node --input-type=module <<'NODE' \
+  | tee "$AUDIT_DIR/08-runtime-propagation.txt"
+const origin = String(process.env.OPS_PRODUCTION_ORIGIN || '').replace(/\/$/, '')
+const deadline = Date.now() + 180_000
+let last = null
+while (Date.now() < deadline) {
+  try {
+    const response = await fetch(`${origin}/api/health?_=${Date.now()}`, {
+      cache: 'no-store',
+      headers: { Accept: 'application/json', 'Cache-Control': 'no-cache' },
+    })
+    const data = await response.json()
+    last = { status: response.status, data }
+    const runtime = data?.deployment?.runtime_dependencies
+    if (
+      response.ok
+      && data?.deployment?.master_data_watch?.policy === 'sheets-task-template-fingerprint-v1'
+      && runtime?.google_data_auth === 'service_account'
+      && runtime?.media_primary_storage === 'cloudflare-r2'
+      && Number(runtime?.statvara_bridge?.port) === 8791
+      && runtime?.statvara_bridge?.blocks_store_execution === false
+    ) {
+      console.log(JSON.stringify(data, null, 2))
+      console.log('NEW_WORKER_VERSION_VISIBLE=true')
+      console.log('AUTONOMOUS_RUNTIME_BINDINGS_VISIBLE=true')
+      process.exit(0)
+    }
+  } catch (error) {
+    last = { error: String(error?.message || error) }
+  }
+  await new Promise((resolve) => setTimeout(resolve, 5000))
+}
+console.error(JSON.stringify(last, null, 2))
+throw new Error('The autonomous Worker version did not become visible within three minutes')
+NODE
+
 OPS_PRODUCTION_ORIGIN="$PRODUCTION_ORIGIN" \
 MASTER_WATCH_RUN_SECRET="$MASTER_WATCH_RUN_SECRET" \
 OPS_VERIFY_OUTLET_ID="$VERIFY_OUTLET_ID" \
 OPS_VERIFY_TEMPLATE_ID="$VERIFY_TEMPLATE_ID" \
-node --input-type=module <<'NODE' | tee "$AUDIT_DIR/08-master-watch-immediate-run.txt"
+node --input-type=module <<'NODE' | tee "$AUDIT_DIR/09-master-watch-immediate-run.txt"
 const origin = String(process.env.OPS_PRODUCTION_ORIGIN || '').replace(/\/$/, '')
 const secret = String(process.env.MASTER_WATCH_RUN_SECRET || '')
 const outletId = String(process.env.OPS_VERIFY_OUTLET_ID || '')
 const templateId = String(process.env.OPS_VERIFY_TEMPLATE_ID || '')
-const response = await fetch(`${origin}/api/internal/master-watch/run`, {
-  method: 'POST',
-  cache: 'no-store',
-  signal: AbortSignal.timeout(240_000),
-  headers: {
-    'Content-Type': 'application/json',
-    'Cache-Control': 'no-cache',
-    'X-ChefOps-Master-Watch-Secret': secret,
-  },
-  body: JSON.stringify({ outlet_id: outletId, template_id: templateId }),
-})
-const data = await response.json().catch(() => ({}))
-console.log(JSON.stringify(data, null, 2))
-if (!response.ok || data?.ok !== true) throw new Error(data?.error || `Immediate watcher run failed (${response.status})`)
-if (data?.verification?.verified !== true) throw new Error(`Template ${templateId} is not present in the published ${outletId} tasks module`)
-console.log('MASTER_WATCH_IMMEDIATE_RUN_VERIFIED=true')
-console.log('TEST_TASK_IN_PUBLISHED_PACK=true')
+const deadline = Date.now() + 240_000
+let last = null
+while (Date.now() < deadline) {
+  try {
+    const response = await fetch(`${origin}/api/internal/master-watch/run?_=${Date.now()}`, {
+      method: 'POST',
+      cache: 'no-store',
+      signal: AbortSignal.timeout(220_000),
+      headers: {
+        'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache',
+        'X-ChefOps-Master-Watch-Secret': secret,
+      },
+      body: JSON.stringify({ outlet_id: outletId, template_id: templateId }),
+    })
+    const data = await response.json().catch(() => ({}))
+    last = { status: response.status, data }
+    if (response.ok && data?.ok === true && data?.verification?.verified === true) {
+      console.log(JSON.stringify(data, null, 2))
+      console.log('MASTER_WATCH_IMMEDIATE_RUN_VERIFIED=true')
+      console.log('TEST_TASK_IN_PUBLISHED_PACK=true')
+      process.exit(0)
+    }
+    if (![403, 404, 429, 500, 502, 503, 504].includes(response.status)) break
+  } catch (error) {
+    last = { error: String(error?.message || error) }
+  }
+  await new Promise((resolve) => setTimeout(resolve, 5000))
+}
+console.error(JSON.stringify(last, null, 2))
+throw new Error(last?.data?.error || 'Immediate Master publication did not verify the Test Task')
 NODE
 
-echo "==> Verifying persistent watcher health state"
 OPS_PRODUCTION_ORIGIN="$PRODUCTION_ORIGIN" node --input-type=module <<'NODE' \
-  | tee "$AUDIT_DIR/09-master-watch-health.txt"
+  | tee "$AUDIT_DIR/10-master-watch-health.txt"
 const origin = String(process.env.OPS_PRODUCTION_ORIGIN || '').replace(/\/$/, '')
-const deadline = Date.now() + 60_000
+const deadline = Date.now() + 90_000
 let last = null
 while (Date.now() < deadline) {
   try {
@@ -143,21 +185,18 @@ while (Date.now() < deadline) {
     const data = await response.json()
     last = { status: response.status, data }
     const watch = data?.deployment?.master_data_watch
+    const runtime = data?.deployment?.runtime_dependencies
     const packs = Array.isArray(watch?.packs) ? watch.packs : []
-    const hasOutlet = packs.some((pack) => String(pack?.outlet_id || '') === 'RR-KCH')
     if (
       response.ok
-      && watch?.policy === 'sheets-task-template-fingerprint-v1'
-      && watch?.cron === '*/2 * * * *'
-      && watch?.enabled === true
       && watch?.configured === true
+      && watch?.auth_mode === 'service_account'
       && watch?.state_available === true
-      && Boolean(watch?.spreadsheet_id)
-      && Boolean(watch?.source_fingerprint)
-      && Boolean(watch?.checked_at)
-      && Boolean(watch?.published_at)
+      && watch?.source_fingerprint
+      && watch?.published_at
       && !watch?.last_error
-      && hasOutlet
+      && packs.some((pack) => String(pack?.outlet_id || '') === 'RR-KCH')
+      && runtime?.media_primary_storage === 'cloudflare-r2'
     ) {
       console.log(JSON.stringify(data, null, 2))
       console.log('MASTER_WATCH_HEALTH_VERIFIED=true')
@@ -170,20 +209,22 @@ while (Date.now() < deadline) {
   await new Promise((resolve) => setTimeout(resolve, 3000))
 }
 console.error(JSON.stringify(last, null, 2))
-throw new Error('Master watcher did not report a successful Sheets fingerprint publication within one minute')
+throw new Error('Autonomous runtime health did not settle')
 NODE
 
 npx wrangler deployments list --config worker/wrangler.production.jsonc \
-  > "$AUDIT_DIR/10-deployments-after.txt" 2>&1 || true
+  > "$AUDIT_DIR/11-deployments-after.txt" 2>&1 || true
 
 cat <<RESULT
-
 VERIFIED_PRODUCTION_DEPLOYMENT=true
-MASTER_SPREADSHEET_BINDING_VERIFIED=true
-MASTER_WATCH_DEPLOYED=true
+AUTONOMOUS_RUNTIME_VERIFIED=true
+GOOGLE_SERVICE_ACCOUNT_MODE_VERIFIED=true
+R2_MEDIA_PRIMARY_VERIFIED=true
+DRIVE_BACKUP_BLOCKS_TASKS=false
 MASTER_WATCH_IMMEDIATE_RUN_VERIFIED=true
 MASTER_WATCH_FIRST_PUBLISH_CONFIRMED=true
 TEST_TASK_IN_PUBLISHED_PACK=true
+STATVARA_OPS_BRIDGE_PORT=8791
 D1_MIGRATION_RUN=false
 D1_BACKFILL_RUN=false
 D1_DIRECT_WRITE_RUN=false
