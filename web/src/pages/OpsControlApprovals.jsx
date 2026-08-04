@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
+  Bell,
   CheckCircle2,
+  Filter,
   KeyRound,
   Loader2,
   Search,
@@ -17,6 +19,7 @@ import MobileSheet from '@/components/MobileSheet'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import { useAuth } from '@/lib/AuthContext'
 import { outletLabel, parseOutletIds } from '@/lib/outlets'
 
@@ -28,10 +31,27 @@ const STATUS_TABS = [
   { value: 'rejected', label: 'Rejected' },
   { value: 'all', label: 'All' },
 ]
+const PAGE_OPTIONS = [
+  { value: '/', label: 'Home' },
+  { value: '/tasks', label: 'Tasks' },
+  { value: '/urgent', label: 'Issues' },
+  { value: '/stock', label: 'Stock Count' },
+  { value: '/inventory', label: 'Inventory' },
+  { value: '/close-up', label: 'Close Up' },
+  { value: '/receipts', label: 'Receipts & OCR' },
+  { value: '/labels', label: 'Food Labels' },
+  { value: '/attendance', label: 'Duty Roster' },
+  { value: '/install', label: 'Install / Update App' },
+]
 
 function normalizeStatus(value) {
   const status = String(value || 'pending').toLowerCase()
   return ['active', 'suspended', 'rejected'].includes(status) ? status : 'pending'
+}
+
+function includesOutlet(user, outletId) {
+  if (!outletId) return true
+  return parseOutletIds(user).includes(String(outletId))
 }
 
 function contactLine(item) {
@@ -51,7 +71,11 @@ export default function OpsControlApprovals() {
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState('')
   const [statusFilter, setStatusFilter] = useState('pending')
+  const [roleFilter, setRoleFilter] = useState('all')
+  const [outletFilter, setOutletFilter] = useState('')
   const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState(new Set())
+  const [pushOpen, setPushOpen] = useState(false)
   const [accessUser, setAccessUser] = useState(null)
   const [selfSetupOpen, setSelfSetupOpen] = useState(false)
   const [message, setMessage] = useState('')
@@ -85,13 +109,24 @@ export default function OpsControlApprovals() {
     return users.filter((item) => {
       const status = normalizeStatus(item.status)
       if (statusFilter !== 'all' && status !== statusFilter) return false
+      if (roleFilter !== 'all' && String(item.role || 'staff') !== roleFilter) return false
+      if (!includesOutlet(item, outletFilter)) return false
       const haystack = `${item.full_name || ''} ${item.email || ''} ${item.phone || ''}`.toLowerCase()
       return !term || haystack.includes(term)
     })
-  }, [users, statusFilter, search])
+  }, [users, statusFilter, roleFilter, outletFilter, search])
 
   const setDraftField = (id, key, value) => {
     setUsers((current) => current.map((row) => row.id === id ? { ...row, [key]: value } : row))
+  }
+
+  const toggleSelected = (id) => {
+    setSelected((current) => {
+      const next = new Set(current)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
   }
 
   const saveAccess = async (item, patch) => {
@@ -132,7 +167,7 @@ export default function OpsControlApprovals() {
     try {
       const result = await saveAccess(item, { status })
       setMessage(status === 'active'
-        ? `${result.user.full_name || contactLine(result.user)} restored.`
+        ? `${result.user.full_name || contactLine(result.user)} restored. The user can request access again from the login page.`
         : `${result.user.full_name || contactLine(result.user)} is now ${status}. Existing local sessions were revoked.`)
     } catch (error) {
       setMessage(error.message || 'Unable to update user')
@@ -146,11 +181,16 @@ export default function OpsControlApprovals() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="flex items-center gap-2 text-xl font-heading font-bold"><ShieldCheck className="h-5 w-5" /> Access Approvals</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">Approve email requests and assign each user’s role and outlet.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Approve email requests, assign outlets, manage access, and notify users.</p>
         </div>
-        <Button size="sm" variant="outline" className="h-9 rounded-xl px-3" onClick={() => setSelfSetupOpen(true)}>
-          <KeyRound className="mr-1 h-4 w-4" /> My local login
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="outline" className="h-9 rounded-xl px-3" onClick={() => setSelfSetupOpen(true)}>
+            <KeyRound className="mr-1 h-4 w-4" /> My local login
+          </Button>
+          <Button size="sm" variant="outline" className="h-9 rounded-xl px-3" disabled={!selected.size} onClick={() => setPushOpen(true)}>
+            <Bell className="mr-1 h-4 w-4" /> Push {selected.size || ''}
+          </Button>
+        </div>
       </div>
 
       <section className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3.5 text-sm text-emerald-900">
@@ -171,10 +211,23 @@ export default function OpsControlApprovals() {
         ))}
       </div>
 
-      <section className="rounded-2xl border border-border bg-card p-3">
+      <section className="space-y-2.5 rounded-2xl border border-border bg-card p-3">
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name or email" className="h-10 rounded-xl pl-9" />
+          <Input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search name, email or phone" className="h-10 rounded-xl pl-9" />
+        </div>
+        <div className="grid grid-cols-2 gap-2.5">
+          <label className="relative">
+            <Filter className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)} className="h-10 w-full rounded-xl border border-input bg-background pl-9 pr-2 text-sm">
+              <option value="all">All roles</option>
+              {ROLE_OPTIONS.map((role) => <option key={role} value={role}>{role}</option>)}
+            </select>
+          </label>
+          <select value={outletFilter} onChange={(event) => setOutletFilter(event.target.value)} className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm">
+            <option value="">All outlets</option>
+            {outlets.map((outlet) => <option key={outlet.id} value={outlet.id}>{outletLabel(outlet, outlet.id)}</option>)}
+          </select>
         </div>
       </section>
 
@@ -191,6 +244,7 @@ export default function OpsControlApprovals() {
             return (
               <article key={item.id} className="rounded-2xl border border-border bg-card p-3.5">
                 <div className="flex items-start gap-3">
+                  <input type="checkbox" checked={selected.has(item.id)} onChange={() => toggleSelected(item.id)} className="mt-1 h-4 w-4 rounded border-input accent-primary" />
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-muted text-sm font-bold">{String(item.full_name || contactLine(item) || '?').slice(0, 1).toUpperCase()}</span>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-start justify-between gap-2">
@@ -220,6 +274,7 @@ export default function OpsControlApprovals() {
                       {status === 'active' ? <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" disabled={savingId === item.id} onClick={() => changeStatus(item, 'suspended')}>Suspend</Button> : null}
                       {['suspended', 'rejected'].includes(status) ? <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs text-emerald-600" disabled={savingId === item.id} onClick={() => changeStatus(item, 'active')}><CheckCircle2 className="mr-1 h-3.5 w-3.5" /> Restore</Button> : null}
                       <Button size="sm" variant="outline" className="h-8 rounded-lg text-xs" onClick={() => setAccessUser(item)}><Settings2 className="mr-1 h-3.5 w-3.5" /> Access</Button>
+                      <Button size="sm" variant="ghost" className="h-8 rounded-lg text-xs" onClick={() => { setSelected(new Set([item.id])); setPushOpen(true) }}><Bell className="mr-1 h-3.5 w-3.5" /> Notify</Button>
                     </div>
                   </div>
                 </div>
@@ -230,17 +285,21 @@ export default function OpsControlApprovals() {
       )}
 
       <MobileSheet open={Boolean(accessUser)} onClose={() => setAccessUser(null)} title="User access" description="Assign role, status and every outlet this user may access.">
-        {accessUser ? <AccessForm user={accessUser} outlets={outlets} onCancel={() => setAccessUser(null)} onDone={(updated) => { setUsers((current) => mergeRow(current, updated)); setAccessUser(null); setMessage(`Access updated for ${updated.full_name || contactLine(updated)}.`) }} /> : null}
+        {accessUser ? <AccessForm user={accessUser} outlets={outlets} currentRole={user?.role} onCancel={() => setAccessUser(null)} onDone={(updated) => { setUsers((current) => mergeRow(current, updated)); setAccessUser(null); setMessage(`Access updated for ${updated.full_name || contactLine(updated)}.`) }} /> : null}
       </MobileSheet>
 
       <MobileSheet open={selfSetupOpen} onClose={() => setSelfSetupOpen(false)} title="My local login" description="Create your Owner password before Google fallback is retired.">
         {selfSetupOpen ? <SelfLocalSetupForm user={user} onCancel={() => setSelfSetupOpen(false)} onDone={(result) => { setSelfSetupOpen(false); setMessage(`Local ${result.credential_kind} login configured for ${result.login_id}.`) }} /> : null}
       </MobileSheet>
+
+      <MobileSheet open={pushOpen} onClose={() => setPushOpen(false)} title="Push notification" description={`Send to ${selected.size} selected user ID${selected.size === 1 ? '' : 's'}.`}>
+        <PushForm recipientIds={[...selected]} onCancel={() => setPushOpen(false)} onDone={(count) => { setPushOpen(false); setSelected(new Set()); setMessage(`Notification pushed to ${count} user${count === 1 ? '' : 's'}.`) }} />
+      </MobileSheet>
     </div>
   )
 }
 
-function AccessForm({ user, outlets, onCancel, onDone }) {
+function AccessForm({ user, outlets, currentRole, onCancel, onDone }) {
   const [role, setRole] = useState(user.role || 'staff')
   const [primaryOutlet, setPrimaryOutlet] = useState(user.outlet_id || '')
   const [outletIds, setOutletIds] = useState(() => new Set(parseOutletIds(user)))
@@ -285,7 +344,7 @@ function AccessForm({ user, outlets, onCancel, onDone }) {
     <section className="rounded-2xl border border-border bg-card p-4">
       <p className="font-semibold">{user.full_name || 'New email request'}</p><p className="text-xs text-muted-foreground">{contactLine(user)}</p>
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
-        <div className="space-y-1.5"><Label>Role</Label><select value={role} onChange={(event) => setRole(event.target.value)} className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm">{ROLE_OPTIONS.map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
+        <div className="space-y-1.5"><Label>Role</Label><select value={role} onChange={(event) => setRole(event.target.value)} className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm">{ROLE_OPTIONS.filter((value) => currentRole === 'owner' || value !== 'owner').map((value) => <option key={value} value={value}>{value}</option>)}</select></div>
         <div className="space-y-1.5"><Label>Status</Label><select value={status} onChange={(event) => setStatus(event.target.value)} className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm"><option value="active">Approved</option><option value="pending">Pending</option><option value="suspended">Suspended</option><option value="rejected">Rejected</option></select></div>
       </div>
     </section>
@@ -299,7 +358,7 @@ function AccessForm({ user, outlets, onCancel, onDone }) {
 }
 
 function SelfLocalSetupForm({ user, onCancel, onDone }) {
-  const [loginId, setLoginId] = useState(user?.email || '')
+  const [loginId, setLoginId] = useState(user?.email || user?.phone || '')
   const [secret, setSecret] = useState('')
   const [confirmSecret, setConfirmSecret] = useState('')
   const [saving, setSaving] = useState(false)
@@ -319,11 +378,60 @@ function SelfLocalSetupForm({ user, onCancel, onDone }) {
   }
 
   return <form onSubmit={submit} className="space-y-4">
-    <div className="space-y-1.5"><Label>Owner login ID</Label><Input value={loginId} onChange={(event) => setLoginId(event.target.value)} required /></div>
+    <div className="space-y-1.5"><Label>Owner login ID</Label><Input value={loginId} onChange={(event) => setLoginId(event.target.value)} autoComplete="username" required /></div>
     <div className="space-y-1.5"><Label>Strong password</Label><Input type="password" value={secret} onChange={(event) => setSecret(event.target.value)} autoComplete="new-password" required /></div>
     <div className="space-y-1.5"><Label>Confirm password</Label><Input type="password" value={confirmSecret} onChange={(event) => setConfirmSecret(event.target.value)} autoComplete="new-password" required /></div>
     <p className="text-xs leading-5 text-muted-foreground">Use at least 12 characters with letters, numbers and a symbol.</p>
     {error ? <p className="rounded-xl bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p> : null}
     <div className="grid grid-cols-2 gap-2"><Button type="button" variant="outline" onClick={onCancel} disabled={saving}>Cancel</Button><Button type="submit" disabled={saving || !loginId.trim() || !secret}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <KeyRound className="mr-2 h-4 w-4" />}Save login</Button></div>
+  </form>
+}
+
+function PushForm({ recipientIds, onCancel, onDone }) {
+  const [form, setForm] = useState({ title: '', message: '', target_page: '/', action_label: 'Open', priority: 'normal' })
+  const [publishDataPatch, setPublishDataPatch] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+
+  const submit = async (event) => {
+    event.preventDefault()
+    setSaving(true)
+    setError('')
+    try {
+      let packRelease = null
+      if (publishDataPatch) packRelease = await opsClient.app.rebuildAllPacks()
+      const result = await opsClient.notifications.push({
+        ...form,
+        recipient_user_ids: recipientIds,
+        metadata: {
+          invalidate: [form.target_page],
+          data_pack_update: publishDataPatch,
+          data_pack_released_at: packRelease?.generated_at || '',
+          data_pack_versions: packRelease?.packs || [],
+        },
+      })
+      onDone(Number(result?.created || recipientIds.length))
+    } catch (err) {
+      setError(err.message || 'Unable to push notification')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return <form onSubmit={submit} className="space-y-3">
+    <section className="space-y-3 rounded-2xl border border-border bg-card p-3.5">
+      <div className="space-y-1.5"><Label>Title</Label><Input className="h-10 rounded-xl" value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="e.g. New checklist published" required autoFocus /></div>
+      <div className="space-y-1.5"><Label>Message</Label><Textarea className="min-h-20 rounded-xl" value={form.message} onChange={(event) => setForm({ ...form, message: event.target.value })} placeholder="What changed and what should the user do?" required /></div>
+      <div className="grid grid-cols-2 gap-2.5">
+        <div className="space-y-1.5"><Label>Target page</Label><select className="h-10 w-full rounded-xl border border-input bg-background px-3 text-sm" value={form.target_page} onChange={(event) => setForm({ ...form, target_page: event.target.value })}>{PAGE_OPTIONS.map((page) => <option key={page.value} value={page.value}>{page.label}</option>)}</select></div>
+        <div className="space-y-1.5"><Label>Button label</Label><Input className="h-10 rounded-xl" value={form.action_label} onChange={(event) => setForm({ ...form, action_label: event.target.value })} /></div>
+      </div>
+      <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-border bg-muted/40 p-3">
+        <input type="checkbox" checked={publishDataPatch} onChange={(event) => setPublishDataPatch(event.target.checked)} className="mt-0.5 h-4 w-4 rounded border-input accent-primary" />
+        <span><span className="block text-sm font-medium">Publish latest data patch first</span><span className="mt-0.5 block text-xs leading-5 text-muted-foreground">Builds one shared JSON patch, then selected staff receive the notification and download changed modules.</span></span>
+      </label>
+    </section>
+    {error ? <p className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p> : null}
+    <div className="grid grid-cols-[0.8fr_1.2fr] gap-2.5"><Button type="button" variant="outline" className="h-11 rounded-xl" onClick={onCancel} disabled={saving}>Cancel</Button><Button type="submit" className="h-11 rounded-xl" disabled={saving || !recipientIds.length}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Bell className="mr-2 h-4 w-4" />}{saving ? 'Pushing…' : 'Push now'}</Button></div>
   </form>
 }
