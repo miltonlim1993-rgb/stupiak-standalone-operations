@@ -1,6 +1,6 @@
 import app, { OutletRealtimeHub } from './entry.js'
 import { getAppPackModule, getPublishedAppPack } from './app-pack.js'
-import { mediaPrimaryStorage, retryPendingDriveBackups } from './drive.js'
+import { driveBackupMode, mediaPrimaryStorage, retryPendingDriveBackups } from './drive.js'
 import { googleAuthMode } from './google.js'
 import { refreshAppPacksWhenMasterChanges } from './master-data-watch.js'
 
@@ -67,11 +67,15 @@ async function masterWatchStatus(env) {
 }
 
 function runtimeDependencyStatus(env) {
+  const backupMode = driveBackupMode(env)
   return {
     google_data_auth: googleAuthMode(env, 'data'),
     media_primary_storage: mediaPrimaryStorage(env),
+    drive_legacy_read_auth: googleAuthMode(env, 'drive'),
     drive_backup_auth: googleAuthMode(env, 'drive'),
-    drive_backup_mode: 'asynchronous_non_blocking',
+    drive_backup_mode: backupMode === 'enabled'
+      ? 'asynchronous_non_blocking'
+      : 'disabled_non_blocking',
     statvara_bridge: {
       reserved: true,
       port: Number(env.STATVARA_OPS_BRIDGE_PORT || DEFAULT_STATVARA_BRIDGE_PORT),
