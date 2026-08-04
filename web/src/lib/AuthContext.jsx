@@ -113,6 +113,26 @@ export function AuthProvider({ children }) {
     return result?.user || null
   }, [applyUser])
 
+  const startEmailAccess = useCallback((payload) => {
+    setAuthError(null)
+    return localAuthClient.startEmail(payload)
+  }, [])
+
+  const checkPendingEmailAccess = useCallback(async () => {
+    const result = await localAuthClient.emailStatus()
+    if (result?.status === 'active' && result?.user) applyLoginResult(result)
+    return result
+  }, [applyLoginResult])
+
+  const loginEmailAccess = useCallback(async ({ email, secret }) => {
+    setAuthError(null)
+    return applyLoginResult(await localAuthClient.emailLogin({ email, secret }))
+  }, [applyLoginResult])
+
+  const clearPendingEmailAccess = useCallback(() => {
+    localAuthClient.clearPendingApproval()
+  }, [])
+
   const loginLocal = useCallback(async ({ loginId, secret }) => {
     setAuthError(null)
     return applyLoginResult(await localAuthClient.login({ loginId, secret }))
@@ -141,6 +161,7 @@ export function AuthProvider({ children }) {
       await opsClient.auth.logout()
     } finally {
       clearNativeSessionToken()
+      localAuthClient.clearPendingApproval()
       persistUser(null)
       try {
         navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
@@ -169,6 +190,10 @@ export function AuthProvider({ children }) {
     isLoadingPublicSettings: false,
     authError,
     authChecked,
+    startEmailAccess,
+    checkPendingEmailAccess,
+    loginEmailAccess,
+    clearPendingEmailAccess,
     loginLocal,
     loginWithGoogle,
     registerLocal,
@@ -188,6 +213,10 @@ export function AuthProvider({ children }) {
     isLoadingAuth,
     authError,
     authChecked,
+    startEmailAccess,
+    checkPendingEmailAccess,
+    loginEmailAccess,
+    clearPendingEmailAccess,
     loginLocal,
     loginWithGoogle,
     registerLocal,
