@@ -1,0 +1,91 @@
+const configuredApiUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
+const API_BASE_URL = (
+  configuredApiUrl
+  || (import.meta.env.DEV ? 'http://localhost:8787' : window.location.origin)
+).replace(/\/$/, '')
+
+export class LocalAuthError extends Error {
+  constructor(message, status, code, details) {
+    super(message)
+    this.name = 'LocalAuthError'
+    this.status = status
+    this.code = code
+    this.details = details
+  }
+}
+
+async function request(path, { method = 'GET', body, headers: inputHeaders } = {}) {
+  const headers = new Headers(inputHeaders || {})
+  const init = {
+    method,
+    headers,
+    credentials: 'include',
+    cache: 'no-store',
+  }
+  if (body !== undefined) {
+    headers.set('Content-Type', 'application/json')
+    init.body = JSON.stringify(body)
+  }
+  const response = await fetch(`${API_BASE_URL}${path}`, init)
+  const contentType = String(response.headers.get('content-type') || '')
+  const data = contentType.includes('application/json')
+    ? await response.json()
+    : await response.text()
+  if (!response.ok) {
+    throw new LocalAuthError(
+      data?.error || data?.message || `Request failed (${response.status})`,
+      response.status,
+      data?.code,
+      data?.details,
+    )
+  }
+  return data
+}
+
+export const localAuthClient = {
+  config: () => request('/api/auth/config'),
+  login: ({ loginId, secret }) => request('/api/auth/local/login', {
+    method: 'POST',
+    body: { login_id: loginId, secret },
+  }),
+  register: ({ fullName, phone, email = '', department = '' }) => request('/api/auth/local/register', {
+    method: 'POST',
+    body: {
+      full_name: fullName,
+      phone,
+      email,
+      department,
+    },
+  }),
+  activate: ({ loginId, activationCode, secret }) => request('/api/auth/local/activate', {
+    method: 'POST',
+    body: {
+      login_id: loginId,
+      activation_code: activationCode,
+      secret,
+    },
+  }),
+  setup: ({ loginId, secret }) => request('/api/auth/local/setup', {
+    method: 'POST',
+    body: { login_id: loginId, secret },
+  }),
+  change: ({ currentSecret, newSecret, loginId = '' }) => request('/api/auth/local/change', {
+    method: 'POST',
+    body: {
+      current_secret: currentSecret,
+      new_secret: newSecret,
+      login_id: loginId,
+    },
+  }),
+  summary: () => request('/api/auth/local/summary'),
+  issueActivation: (userId, { loginId = '', revokeExisting = true } = {}) => request(
+    `/api/users/${encodeURIComponent(userId)}/local-access`,
+    {
+      method: 'POST',
+      body: {
+        login_id: loginId,
+        revoke_existing: revokeExisting,
+      },
+    },
+  ),
+}

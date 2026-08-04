@@ -1,4 +1,4 @@
-import { getCurrentUser } from './auth.js'
+import { getCurrentUser, rememberUser } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import {
   assertCreatePermission,
@@ -11,6 +11,10 @@ import {
   listDirectoryRecords,
   saveDirectoryRecord,
 } from './d1-directory-store.js'
+import {
+  localCredentialMustReset,
+  revokeLocalCredential,
+} from './local-auth-admin.js'
 
 const DIRECTORY_ENTITIES = new Set(['User', 'Outlet'])
 
@@ -78,6 +82,27 @@ function entityRoute(pathname) {
   }
 }
 
+function assertOwnerApproval(actor, existing, patch) {
+  const previousStatus = String(existing?.status || 'pending').toLowerCase()
+  const nextStatus = String(patch?.status || previousStatus).toLowerCase()
+  if (previousStatus !== 'active' && nextStatus === 'active' && String(actor?.role || '').toLowerCase() !== 'owner') {
+    const error = new Error('Only the Owner may approve or restore an OPS account')
+    error.status = 403
+    error.code = 'owner_required'
+    throw error
+  }
+}
+
+async function applyUserSecurityBoundary(env, existing, record, reason = 'access_changed') {
+  if (!record || !existing) return { revoked: false }
+  rememberUser(record)
+  if (!localCredentialMustReset(existing, record)) return { revoked: false }
+  return revokeLocalCredential(env, record.id, {
+    reason,
+    disable: true,
+  })
+}
+
 async function listEntity(request, env, url, entity) {
   const user = await getCurrentUser(request, env)
   assertReadPermission(user, entity)
@@ -92,11 +117,13 @@ async function createEntity(request, env, entity) {
   const user = await getCurrentUser(request, env)
   assertCreatePermission(user, entity)
   const payload = await readJson(request)
+  if (entity === 'User') assertOwnerApproval(user, null, payload)
   const id = String(payload.id || crypto.randomUUID())
   const record = await saveDirectoryRecord(env, entity, id, payload, {
     actorEmail: user.email,
     operation: 'create',
   })
+  if (entity === 'User') rememberUser(record)
   return json(request, env, record, 201)
 }
 
@@ -110,11 +137,15 @@ async function updateEntity(request, env, entity, id) {
     throw error
   }
   const patch = await readJson(request)
+  if (entity === 'User') assertOwnerApproval(user, existing, patch)
   assertUpdatePermission(user, entity, existing, patch)
   const record = await saveDirectoryRecord(env, entity, id, { ...existing, ...patch, __realtime: undefined }, {
     actorEmail: user.email,
     operation: 'update',
   })
+  if (entity === 'User') {
+    await applyUserSecurityBoundary(env, existing, record, 'directory_user_updated')
+  }
   return json(request, env, record)
 }
 
@@ -132,6 +163,10 @@ async function deleteEntity(request, env, entity, id) {
     actorEmail: user.email,
     operation: 'delete',
   })
+  if (entity === 'User') {
+    rememberUser({ ...record, status: 'deleted' })
+    await revokeLocalCredential(env, id, { reason: 'directory_user_deleted', disable: true })
+  }
   return json(request, env, record)
 }
 
@@ -154,12 +189,26 @@ async function updateUserAccess(request, env, userId) {
     outlet_id: String(body.primary_outlet_id || assigned[0] || existing.outlet_id || ''),
     outlet_ids: JSON.stringify(assigned.length ? assigned : [body.primary_outlet_id || existing.outlet_id].filter(Boolean)),
   }
+  assertOwnerApproval(actor, existing, patch)
   assertUpdatePermission(actor, 'User', existing, patch)
   const record = await saveDirectoryRecord(env, 'User', userId, { ...existing, ...patch, __realtime: undefined }, {
     actorEmail: actor.email,
     operation: 'update',
   })
-  return json(request, env, { ok: true, user: record })
+  const security = await applyUserSecurityBoundary(
+    env,
+    existing,
+    record,
+    String(record.status || '').toLowerCase() !== 'active'
+      ? `access_status_${String(record.status || '').toLowerCase()}`
+      : 'credential_kind_changed',
+  )
+  return json(request, env, {
+    ok: true,
+    user: record,
+    local_session_revoked: Boolean(security?.revoked),
+    local_credential_reset_required: localCredentialMustReset(existing, record),
+  })
 }
 
 export async function handleD1DirectoryApi(request, env, url) {

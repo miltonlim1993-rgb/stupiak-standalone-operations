@@ -15,6 +15,9 @@
     "GOOGLE_DRIVE_AUTH_MODE": "service_account",
     "GOOGLE_DRIVE_BACKUP_MODE": "disabled",
     "MEDIA_PRIMARY_STORAGE": "cloudflare-r2",
+    "LOCAL_AUTH_MODE": "enabled",
+    "LOCAL_AUTH_REGISTRATION": "enabled",
+    "GOOGLE_LOGIN_MODE": "fallback",
     "STATVARA_OPS_BRIDGE_PORT": "__STATVARA_OPS_BRIDGE_PORT__",
     "STATVARA_OPS_API_PATH": "__STATVARA_OPS_API_PATH__"
   },

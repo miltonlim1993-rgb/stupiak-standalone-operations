@@ -1,11 +1,16 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "chefops-api-local",
-  "main": "src/entry.js",
+  "main": "src/entry-local-auth.js",
   "compatibility_date": "2026-07-25",
   "dev": {
     "port": 8787,
     "local_protocol": "http"
+  },
+  "vars": {
+    "LOCAL_AUTH_MODE": "enabled",
+    "LOCAL_AUTH_REGISTRATION": "enabled",
+    "GOOGLE_LOGIN_MODE": "fallback"
   },
   "kv_namespaces": [
     {

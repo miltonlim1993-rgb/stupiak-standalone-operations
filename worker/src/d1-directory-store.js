@@ -98,6 +98,7 @@ function cleanRecord(entity, payload, existing, entityId, actorEmail, operation)
 function authKvEntries(user) {
   const payload = JSON.stringify({ user, cachedAt: Date.now() })
   const entries = []
+  if (user?.id) entries.push([`auth:user:id:${String(user.id).trim()}`, payload])
   if (user?.google_sub) entries.push([`auth:user:sub:${String(user.google_sub).trim()}`, payload])
   if (user?.email) entries.push([`auth:user:email:${String(user.email).trim().toLowerCase()}`, payload])
   return entries
