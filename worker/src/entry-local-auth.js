@@ -26,6 +26,21 @@ function localAuthPreflight(request, env) {
   return new Response(null, { status: 204, headers })
 }
 
+function preservePromotedSessionCookie(response) {
+  const raw = String(response?.headers?.get('Set-Cookie') || '')
+  const marker = ', chefops_pending_approval='
+  const markerIndex = raw.indexOf(marker)
+  if (markerIndex < 0) return response
+
+  const headers = new Headers(response.headers)
+  headers.set('Set-Cookie', raw.slice(0, markerIndex))
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  })
+}
+
 async function enforceOwnerActivation(request, env, url) {
   if (!isLocalAccessPath(url.pathname)) return null
   try {
@@ -55,7 +70,7 @@ export default {
 
     try {
       const emailResponse = await handleEmailApprovalAuth(request, env, url)
-      if (emailResponse) return emailResponse
+      if (emailResponse) return preservePromotedSessionCookie(emailResponse)
 
       const response = await handleLocalAuth(request, env, url)
       if (response) return response
