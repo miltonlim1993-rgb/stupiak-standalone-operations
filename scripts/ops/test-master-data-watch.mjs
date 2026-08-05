@@ -59,8 +59,11 @@ assert.equal(rebuildCount, 2)
 assert.equal(changed.packs.find((pack) => pack.outlet_id === 'RR-KCH')?.version, 'rr-v2')
 
 const forced = await refreshAppPacksWhenMasterChanges(env, { ...dependencies, force: true })
-assert.equal(forced.changed, true)
-assert.equal(rebuildCount, 3, 'immediate deploy verification must force one publication')
+assert.equal(forced.changed, false)
+assert.equal(forced.verified_existing_publication, true)
+assert.equal(forced.force_verified, true)
+assert.equal(rebuildCount, 2, 'duplicate deploy verification must not rewrite an already current publication')
+assert.equal(forced.packs.find((pack) => pack.outlet_id === 'RR-KCH')?.version, 'rr-v2')
 
 const failedEnv = {
   GOOGLE_MASTER_SPREADSHEET_ID: 'master-sheet-test-id',
@@ -91,3 +94,4 @@ console.log('MASTER_DATA_WATCH_SOURCE=sheets-task-template-fingerprint-v1')
 console.log('DRIVE_MODIFIED_TIME_REQUIRED=false')
 console.log('WATCH_FAILURE_STATE_PERSISTED=true')
 console.log('IMMEDIATE_FORCE_PUBLICATION_TESTED=true')
+console.log('DUPLICATE_FORCE_REUSES_CURRENT_PUBLICATION=true')
