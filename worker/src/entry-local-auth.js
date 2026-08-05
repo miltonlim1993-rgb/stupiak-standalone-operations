@@ -41,6 +41,25 @@ function preservePromotedSessionCookie(response) {
   })
 }
 
+function withLocalSetupDiagnostic(error, url) {
+  if (url.pathname !== '/api/auth/local/email/setup') return error
+  const status = Number(error?.status || 500)
+  if (status < 500) return error
+
+  const reference = crypto.randomUUID()
+  console.error('Local credential setup failed', {
+    reference,
+    path: url.pathname,
+    code: String(error?.code || ''),
+    message: String(error?.message || error),
+    stack: String(error?.stack || ''),
+  })
+
+  error.code = String(error?.code || 'local_credential_setup_failed')
+  error.publicMessage = `Unable to save your password right now. Reference: ${reference.slice(0, 8)}`
+  return error
+}
+
 async function enforceOwnerActivation(request, env, url) {
   if (!isLocalAccessPath(url.pathname)) return null
   try {
@@ -76,7 +95,7 @@ export default {
       if (response) return response
       return app.fetch(request, env, ctx)
     } catch (error) {
-      return errorResponse(request, env, error)
+      return errorResponse(request, env, withLocalSetupDiagnostic(error, url))
     }
   },
 }
