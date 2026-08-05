@@ -44,9 +44,6 @@ async function readMasterEntity(env, spreadsheetId, entity, options) {
 }
 
 async function readTaskTemplateFingerprint(env, spreadsheetId = masterSpreadsheetId(env)) {
-  // Keep the reads separate. Promise.all previously collapsed every Google 403
-  // into one generic error, making it impossible to know whether TaskTemplates
-  // or TaskTemplatePhotos (and therefore which sheet/range) was denied.
   const templates = await readMasterEntity(env, spreadsheetId, 'TaskTemplate', {
     sort: 'id',
     limit: 3000,
@@ -74,6 +71,15 @@ function errorDetails(error) {
   }
 }
 
+function hasCurrentPublication(previous, sourceFingerprint) {
+  return Boolean(
+    previous?.published_at
+    && String(previous?.source_fingerprint || '') === sourceFingerprint
+    && Array.isArray(previous?.packs)
+    && previous.packs.length > 0,
+  )
+}
+
 export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
   const spreadsheetId = masterSpreadsheetId(env)
   if (!spreadsheetId) {
@@ -99,7 +105,11 @@ export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
       throw error
     }
 
-    if (!force && String(previous?.source_fingerprint || '') === sourceFingerprint && previous?.published_at) {
+    // A deploy can race the 2-minute watcher. When the current Worker has already
+    // published this exact fingerprint and the published pack list is present,
+    // a second force request is a verification, not a reason to rewrite every KV
+    // key again. Reuse the proven publication and clear any stale failure state.
+    if (hasCurrentPublication(previous, sourceFingerprint)) {
       const next = {
         ...previous,
         spreadsheet_id: spreadsheetId,
@@ -111,9 +121,10 @@ export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
         last_error: '',
         last_error_message: '',
         last_error_at: '',
+        force_verified: force,
       }
       await writeWatchState(env, next)
-      return { ok: true, changed: false, ...next }
+      return { ok: true, changed: false, verified_existing_publication: force, ...next }
     }
 
     const manifests = await rebuildPacks(env)
@@ -142,6 +153,7 @@ export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
       last_error: '',
       last_error_message: '',
       last_error_at: '',
+      force_verified: false,
     }
     await writeWatchState(env, next)
     return { ok: true, changed: true, ...next }
