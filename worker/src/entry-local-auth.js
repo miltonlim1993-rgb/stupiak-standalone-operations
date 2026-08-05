@@ -47,17 +47,21 @@ function withLocalSetupDiagnostic(error, url) {
   if (status < 500) return error
 
   const reference = crypto.randomUUID()
+  const code = String(error?.code || 'local_credential_setup_failed')
+  const originalMessage = String(error?.message || error)
   console.error('Local credential setup failed', {
     reference,
     path: url.pathname,
-    code: String(error?.code || ''),
-    message: String(error?.message || error),
+    code,
+    message: originalMessage,
     stack: String(error?.stack || ''),
   })
 
-  error.code = String(error?.code || 'local_credential_setup_failed')
-  error.publicMessage = `Unable to save your password right now. Reference: ${reference.slice(0, 8)}`
-  return error
+  const diagnostic = new Error(originalMessage)
+  diagnostic.status = status
+  diagnostic.code = code
+  diagnostic.publicMessage = `Unable to save your password right now. Reference: ${reference.slice(0, 8)}`
+  return diagnostic
 }
 
 async function enforceOwnerActivation(request, env, url) {

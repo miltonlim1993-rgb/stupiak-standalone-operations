@@ -1,4 +1,5 @@
 const DEFAULT_ITERATIONS = 210_000
+const PEPPERED_HMAC_PREFIX = 'ph1:'
 const ACTIVATION_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
 const COMMON_PINS = new Set([
   '000000', '111111', '222222', '333333', '444444',
@@ -110,7 +111,7 @@ function pepper(env) {
   return value
 }
 
-async function deriveSecret({ secret, loginId, purpose, salt, iterations, env }) {
+async function deriveLegacyPbkdf2({ secret, loginId, purpose, salt, iterations, env }) {
   const normalizedLogin = normalizeLoginId(loginId)
   const material = new TextEncoder().encode(
     `${String(purpose || 'credential')}\u0000${normalizedLogin}\u0000${String(secret || '')}\u0000${pepper(env)}`,
@@ -125,20 +126,34 @@ async function deriveSecret({ secret, loginId, purpose, salt, iterations, env })
   return new Uint8Array(bits)
 }
 
+async function derivePepperedHmac({ secret, loginId, purpose, salt, env }) {
+  const normalizedLogin = normalizeLoginId(loginId)
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(pepper(env)),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  )
+  const message = new TextEncoder().encode(
+    `${String(purpose || 'credential')}\u0000${normalizedLogin}\u0000${String(secret || '')}\u0000${bytesToBase64Url(salt)}`,
+  )
+  const signature = await crypto.subtle.sign('HMAC', key, message)
+  return new Uint8Array(signature)
+}
+
 export async function hashLocalSecret({
   secret,
   loginId,
   purpose = 'credential',
-  iterations = DEFAULT_ITERATIONS,
   salt = randomBytes(16),
   env,
 }) {
-  const rounds = Math.max(120_000, Number(iterations) || DEFAULT_ITERATIONS)
-  const derived = await deriveSecret({ secret, loginId, purpose, salt, iterations: rounds, env })
+  const derived = await derivePepperedHmac({ secret, loginId, purpose, salt, env })
   return {
-    hash: bytesToBase64Url(derived),
+    hash: `${PEPPERED_HMAC_PREFIX}${bytesToBase64Url(derived)}`,
     salt: bytesToBase64Url(salt),
-    iterations: rounds,
+    iterations: DEFAULT_ITERATIONS,
   }
 }
 
@@ -160,7 +175,19 @@ export async function verifyLocalSecret({
 }) {
   try {
     const saltBytes = base64UrlToBytes(salt)
-    const actual = await deriveSecret({
+    const stored = String(expectedHash || '')
+    if (stored.startsWith(PEPPERED_HMAC_PREFIX)) {
+      const actual = await derivePepperedHmac({
+        secret,
+        loginId,
+        purpose,
+        salt: saltBytes,
+        env,
+      })
+      return constantTimeEqual(actual, base64UrlToBytes(stored.slice(PEPPERED_HMAC_PREFIX.length)))
+    }
+
+    const actual = await deriveLegacyPbkdf2({
       secret,
       loginId,
       purpose,
@@ -168,7 +195,7 @@ export async function verifyLocalSecret({
       iterations: Math.max(120_000, Number(iterations) || DEFAULT_ITERATIONS),
       env,
     })
-    return constantTimeEqual(actual, base64UrlToBytes(expectedHash))
+    return constantTimeEqual(actual, base64UrlToBytes(stored))
   } catch {
     return false
   }
@@ -205,4 +232,4 @@ export function localRegistrationMode(env) {
     : 'enabled'
 }
 
-export { authError, DEFAULT_ITERATIONS }
+export { authError, DEFAULT_ITERATIONS, PEPPERED_HMAC_PREFIX }
