@@ -153,7 +153,7 @@ export async function hashLocalSecret({
   return {
     hash: `${PEPPERED_HMAC_PREFIX}${bytesToBase64Url(derived)}`,
     salt: bytesToBase64Url(salt),
-    iterations: 1,
+    iterations: DEFAULT_ITERATIONS,
   }
 }
 
