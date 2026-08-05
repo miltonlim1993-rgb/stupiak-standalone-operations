@@ -1,3 +1,5 @@
+import { createSession } from './auth.js'
+import { findDirectoryUser } from './d1-directory-store.js'
 import { json, readJson } from './http.js'
 import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
@@ -21,13 +23,6 @@ function safeEqual(left, right) {
   return mismatch === 0
 }
 
-function unauthorized(message = 'Invalid Statvara OPS token') {
-  const error = new Error(message)
-  error.status = 401
-  error.code = 'statvara_unauthorized'
-  throw error
-}
-
 function bearer(request) {
   const value = String(request.headers.get('Authorization') || '')
   return value.replace(/^Bearer\s+/i, '').trim()
@@ -41,21 +36,57 @@ function requireStatvara(request, env) {
     error.code = 'statvara_token_unconfigured'
     throw error
   }
-  if (!safeEqual(expected, bearer(request))) unauthorized()
+  if (!safeEqual(expected, bearer(request))) {
+    const error = new Error('Invalid Statvara OPS token')
+    error.status = 401
+    error.code = 'statvara_unauthorized'
+    throw error
+  }
 }
 
-function internalRequest(request, pathname, body) {
+async function approvedActor(env, request, body = {}) {
+  const email = String(
+    request.headers.get('X-Statvara-Actor-Email') || body.actor_email || '',
+  ).trim().toLowerCase()
+  if (!email) {
+    const error = new Error('X-Statvara-Actor-Email or actor_email is required for OPS mutations')
+    error.status = 400
+    error.code = 'statvara_actor_required'
+    throw error
+  }
+  const user = await findDirectoryUser(env, { email })
+  if (!user || String(user.status || '').toLowerCase() !== 'active') {
+    const error = new Error('Statvara actor is not an active OPS user')
+    error.status = 403
+    error.code = 'statvara_actor_inactive'
+    throw error
+  }
+  if (!['manager', 'owner'].includes(String(user.role || '').toLowerCase())) {
+    const error = new Error('Statvara mutations require an active manager or owner identity')
+    error.status = 403
+    error.code = 'statvara_actor_manager_required'
+    throw error
+  }
+  return user
+}
+
+async function internalRequest(request, env, pathname, body) {
+  const actor = await approvedActor(env, request, body)
+  const token = await createSession(actor, env, { authMethod: 'statvara', sessionVersion: 0 })
   const url = new URL(request.url)
   url.pathname = pathname
   url.search = ''
   const headers = new Headers(request.headers)
   headers.set('Content-Type', 'application/json')
+  headers.set('Authorization', `Bearer ${token}`)
   headers.set('X-ChefOps-Statvara', '1')
   headers.delete('Content-Length')
+  const payload = { ...(body || {}) }
+  delete payload.actor_email
   return new Request(url, {
     method: 'POST',
     headers,
-    body: JSON.stringify(body || {}),
+    body: JSON.stringify(payload),
   })
 }
 
@@ -104,7 +135,7 @@ async function readRecords(env, url) {
   }))
 }
 
-async function proxyResponse(response) {
+function proxyResponse(response) {
   const headers = new Headers(response.headers)
   headers.set('X-ChefOps-Statvara-Bridge', 'd1-primary-v1')
   return new Response(response.body, {
@@ -125,6 +156,7 @@ export async function handleStatvaraOpsApi(request, env, url) {
       canonical_database: 'cloudflare-d1',
       canonical_media: 'cloudflare-r2',
       sheet_role: 'asynchronous_backup_record_only',
+      mutation_actor_policy: 'active_manager_or_owner',
       capabilities: {
         read_records: [...READABLE_ENTITIES],
         task_action: true,
@@ -141,45 +173,40 @@ export async function handleStatvaraOpsApi(request, env, url) {
     return json(request, env, { records, count: records.length, source: 'cloudflare-d1' })
   }
 
+  const body = await readJson(request)
+
   if (url.pathname === `${API_PREFIX}/tasks/action` && request.method === 'POST') {
+    const target = '/api/tasks/operational/action'
     return proxyResponse(await handleD1OperationalTaskAction(
-      internalRequest(request, '/api/tasks/operational/action', await readJson(request)),
-      env,
-      new URL('/api/tasks/operational/action', request.url),
+      await internalRequest(request, env, target, body), env, new URL(target, request.url),
     ))
   }
 
   if (url.pathname === `${API_PREFIX}/stock-counts/batch` && request.method === 'POST') {
+    const target = '/api/stock-counts/batch'
     return proxyResponse(await handleJsonAtomicStockCountBatch(
-      internalRequest(request, '/api/stock-counts/batch', await readJson(request)),
-      env,
-      new URL('/api/stock-counts/batch', request.url),
+      await internalRequest(request, env, target, body), env, new URL(target, request.url),
     ))
   }
 
   if (url.pathname === `${API_PREFIX}/close-up/upsert` && request.method === 'POST') {
+    const target = '/api/close-up/upsert'
     return proxyResponse(await handleD1CloseUpUpsert(
-      internalRequest(request, '/api/close-up/upsert', await readJson(request)),
-      env,
-      new URL('/api/close-up/upsert', request.url),
+      await internalRequest(request, env, target, body), env, new URL(target, request.url),
     ))
   }
 
   if (url.pathname.startsWith(`${API_PREFIX}/issues/`) && request.method === 'POST') {
     const target = url.pathname.replace(API_PREFIX, '/api')
     return proxyResponse(await handleRealtimeWorkflowApi(
-      internalRequest(request, target, await readJson(request)),
-      env,
-      new URL(target, request.url),
+      await internalRequest(request, env, target, body), env, new URL(target, request.url),
     ))
   }
 
   if (url.pathname.startsWith(`${API_PREFIX}/labels/`) && request.method === 'POST') {
     const target = url.pathname.replace(API_PREFIX, '/api')
     return proxyResponse(await handleD1Labels(
-      internalRequest(request, target, await readJson(request)),
-      env,
-      new URL(target, request.url),
+      await internalRequest(request, env, target, body), env, new URL(target, request.url),
     ))
   }
 
