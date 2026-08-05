@@ -29,11 +29,32 @@ async function writeWatchState(env, value) {
   await env.APP_DATA_PACKS.put(MASTER_WATCH_STATE_KEY, JSON.stringify(value))
 }
 
-async function readTaskTemplateFingerprint(env) {
-  const [templates, photos] = await Promise.all([
-    listRecords(env, 'TaskTemplate', { sort: 'id', limit: 3000 }),
-    listRecords(env, 'TaskTemplatePhoto', { sort: 'template_id,display_order,id', limit: 6000 }),
-  ])
+async function readMasterEntity(env, spreadsheetId, entity, options) {
+  try {
+    return await listRecords(env, entity, options)
+  } catch (cause) {
+    const error = new Error(
+      `Master spreadsheet ${spreadsheetId}: unable to read ${entity}. ${String(cause?.message || cause)}`,
+    )
+    error.status = Number(cause?.status || 502)
+    error.code = `master_${String(entity).replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()}_read_failed`
+    error.cause = cause
+    throw error
+  }
+}
+
+async function readTaskTemplateFingerprint(env, spreadsheetId = masterSpreadsheetId(env)) {
+  // Keep the reads separate. Promise.all previously collapsed every Google 403
+  // into one generic error, making it impossible to know whether TaskTemplates
+  // or TaskTemplatePhotos (and therefore which sheet/range) was denied.
+  const templates = await readMasterEntity(env, spreadsheetId, 'TaskTemplate', {
+    sort: 'id',
+    limit: 3000,
+  })
+  const photos = await readMasterEntity(env, spreadsheetId, 'TaskTemplatePhoto', {
+    sort: 'template_id,display_order,id',
+    limit: 6000,
+  })
   const fingerprint = await sha256(JSON.stringify({
     task_templates: templates || [],
     task_template_photos: photos || [],
@@ -48,6 +69,7 @@ async function readTaskTemplateFingerprint(env) {
 function errorDetails(error) {
   return {
     last_error: String(error?.code || error?.message || error).slice(0, 500),
+    last_error_message: String(error?.message || error).slice(0, 1000),
     last_error_at: new Date().toISOString(),
   }
 }
@@ -87,6 +109,7 @@ export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
         template_count: Number(source?.template_count || previous?.template_count || 0),
         photo_count: Number(source?.photo_count || previous?.photo_count || 0),
         last_error: '',
+        last_error_message: '',
         last_error_at: '',
       }
       await writeWatchState(env, next)
@@ -117,6 +140,7 @@ export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
       photo_count: Number(source?.photo_count || 0),
       packs,
       last_error: '',
+      last_error_message: '',
       last_error_at: '',
     }
     await writeWatchState(env, next)
