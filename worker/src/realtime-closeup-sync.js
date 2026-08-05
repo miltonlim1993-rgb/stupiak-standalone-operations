@@ -1,62 +1,113 @@
 import { getCurrentUser } from './auth.js'
 import { errorResponse, json } from './http.js'
 import { assertOutletAccess } from './permissions.js'
-import { syncCloseUpToSalesTemplate } from './closeup-sync.js'
-import { handleRealtimeDataApi } from './realtime-store.js'
 
 function parseJson(value, fallback = null) {
   try { return JSON.parse(String(value || '')) } catch { return fallback }
 }
 
-async function updateCanonicalRecord(request, env, body) {
-  const targetUrl = new URL('/api/realtime/mutations', request.url)
-  const headers = new Headers(request.headers)
-  headers.set('Content-Type', 'application/json')
-  headers.delete('Content-Length')
-  const subrequest = new Request(targetUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  })
-  const response = await handleRealtimeDataApi(subrequest, env, targetUrl)
-  const data = await response.json().catch(() => ({}))
-  if (!response.ok) {
-    const error = new Error(data.error || data.message || `Realtime mutation failed (${response.status})`)
-    error.status = response.status
-    error.code = data.code || 'realtime_mutation_failed'
-    throw error
+function now() {
+  return new Date().toISOString()
+}
+
+async function closeUpRow(env, id) {
+  return env.OPS_DB.prepare(`
+    SELECT r.*,
+      (SELECT o.mutation_id FROM sheet_sync_outbox o
+       WHERE o.entity = 'CloseUp' AND o.entity_id = r.entity_id
+       ORDER BY o.id DESC LIMIT 1) AS mirror_mutation_id,
+      (SELECT o.status FROM sheet_sync_outbox o
+       WHERE o.entity = 'CloseUp' AND o.entity_id = r.entity_id
+       ORDER BY o.id DESC LIMIT 1) AS mirror_status,
+      (SELECT o.attempts FROM sheet_sync_outbox o
+       WHERE o.entity = 'CloseUp' AND o.entity_id = r.entity_id
+       ORDER BY o.id DESC LIMIT 1) AS mirror_attempts,
+      (SELECT o.last_error FROM sheet_sync_outbox o
+       WHERE o.entity = 'CloseUp' AND o.entity_id = r.entity_id
+       ORDER BY o.id DESC LIMIT 1) AS mirror_error,
+      (SELECT o.synced_at FROM sheet_sync_outbox o
+       WHERE o.entity = 'CloseUp' AND o.entity_id = r.entity_id
+       ORDER BY o.id DESC LIMIT 1) AS mirror_synced_at
+    FROM ops_records r
+    WHERE r.entity = 'CloseUp' AND r.entity_id = ? AND r.deleted_at = ''
+    LIMIT 1
+  `).bind(id).first()
+}
+
+function syncView(row) {
+  return {
+    record_id: row.entity_id,
+    outlet_id: row.outlet_id,
+    d1_committed: true,
+    d1_version: Number(row.version || 0),
+    d1_updated_at: row.updated_at || '',
+    sheet_backup: {
+      role: 'asynchronous_backup_record_only',
+      blocks_store_save: false,
+      mutation_id: row.mirror_mutation_id || '',
+      status: row.mirror_status || 'pending',
+      attempts: Number(row.mirror_attempts || 0),
+      last_error: row.mirror_error || '',
+      synced_at: row.mirror_synced_at || '',
+    },
   }
-  return data
 }
 
 export async function handleRealtimeCloseUpSync(request, env, url) {
-  const match = url.pathname.match(/^\/api\/close-up\/([^/]+)\/sync$/)
-  if (!match || request.method !== 'POST' || !env.OPS_DB?.prepare) return null
+  const match = url.pathname.match(/^\/api\/close-up\/([^/]+)\/(sync|sync-status)$/)
+  if (!match || !env.OPS_DB?.prepare) return null
 
   try {
     const id = decodeURIComponent(match[1])
-    const row = await env.OPS_DB.prepare(`
-      SELECT * FROM ops_records
-      WHERE entity = 'CloseUp' AND entity_id = ? AND deleted_at = '' LIMIT 1
-    `).bind(id).first()
+    const action = match[2]
+    const row = await closeUpRow(env, id)
     if (!row) return null
 
     const user = await getCurrentUser(request, env)
     const record = parseJson(row.payload_json, {}) || {}
     if (record.outlet_id) assertOutletAccess(user, record.outlet_id)
-    const syncPatch = await syncCloseUpToSalesTemplate(env, record)
-    const supplied = String(request.headers.get('X-ChefOps-Mutation-Id') || '').trim()
-    const mutationId = (supplied || `closeup-sync:${id}:${Number(row.version || 0)}`).slice(0, 160)
-    const result = await updateCanonicalRecord(request, env, {
-      mutation_id: mutationId,
-      entity: 'CloseUp',
-      entity_id: id,
-      outlet_id: row.outlet_id,
-      operation: 'update',
-      expected_version: Number(row.version || 0),
-      payload: { ...record, ...syncPatch },
-    })
-    return json(request, env, result.record)
+
+    if (action === 'sync-status' && request.method === 'GET') {
+      return json(request, env, syncView(row))
+    }
+
+    if (action !== 'sync' || request.method !== 'POST') return null
+    if (!row.mirror_mutation_id) {
+      const error = new Error('No Sheet backup outbox entry exists for this Close Up record')
+      error.status = 409
+      error.code = 'close_up_mirror_missing'
+      throw error
+    }
+
+    const retryAt = now()
+    await env.OPS_DB.prepare(`
+      UPDATE sheet_sync_outbox
+      SET status = 'pending', next_attempt_at = ?, last_error = ''
+      WHERE mutation_id = ?
+    `).bind(retryAt, row.mirror_mutation_id).run()
+
+    const payloadRow = await env.OPS_DB.prepare(
+      'SELECT payload_json FROM sheet_sync_outbox WHERE mutation_id = ? LIMIT 1',
+    ).bind(row.mirror_mutation_id).first()
+    const message = parseJson(payloadRow?.payload_json, null)
+    let queued = false
+    if (message && env.SHEET_SYNC_QUEUE?.send) {
+      await env.SHEET_SYNC_QUEUE.send(message)
+      await env.OPS_DB.prepare(`
+        UPDATE sheet_sync_outbox
+        SET status = 'queued', queued_at = ?
+        WHERE mutation_id = ?
+      `).bind(retryAt, row.mirror_mutation_id).run()
+      queued = true
+    }
+
+    const refreshed = await closeUpRow(env, id)
+    return json(request, env, {
+      ok: true,
+      accepted: true,
+      queued,
+      ...syncView(refreshed || row),
+    }, 202)
   } catch (error) {
     return errorResponse(request, env, error)
   }
