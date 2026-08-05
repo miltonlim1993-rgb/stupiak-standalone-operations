@@ -9,6 +9,7 @@ import {
 } from './local-auth-crypto.js'
 import { localAuthSchemaReady } from './local-auth-store.js'
 import { refreshAppPacksWhenMasterChanges } from './master-data-watch.js'
+import { mediaRetentionPolicy, purgeExpiredOperationalPhotos } from './media-retention.js'
 
 const MASTER_WATCH_CRON = '*/2 * * * *'
 const HOURLY_SAFETY_CRON = '0 * * * *'
@@ -72,13 +73,49 @@ async function masterWatchStatus(env) {
   }
 }
 
+async function mediaRetentionStatus(env) {
+  const policy = mediaRetentionPolicy(env)
+  if (!env.APP_DATA_PACKS?.get) return { ...policy, last_run_available: false }
+  try {
+    const lastRun = await env.APP_DATA_PACKS.get('chefops:media-retention:last-run', 'json')
+    return {
+      ...policy,
+      last_run_available: Boolean(lastRun),
+      last_run: lastRun ? {
+        ok: Boolean(lastRun.ok),
+        cutoff: String(lastRun.cutoff || ''),
+        checked_at: String(lastRun.checked_at || ''),
+        r2_scanned: Number(lastRun.r2?.scanned || 0),
+        r2_deleted: Number(lastRun.r2?.deleted || 0),
+        d1_records_scrubbed: Number(lastRun.r2?.records_scrubbed || 0),
+        kv_deleted: Number(lastRun.kv?.deleted || 0),
+        failure_count: Array.isArray(lastRun.r2?.failures) ? lastRun.r2.failures.length : 0,
+      } : null,
+    }
+  } catch (error) {
+    return {
+      ...policy,
+      last_run_available: false,
+      status_error: String(error?.message || error).slice(0, 300),
+    }
+  }
+}
+
 async function runtimeDependencyStatus(env) {
   const backupMode = driveBackupMode(env)
   const schemaReady = await localAuthSchemaReady(env)
   const pepperReady = String(env.LOCAL_AUTH_PEPPER || '').length >= 32
+  const retention = await mediaRetentionStatus(env)
   return {
+    operational_storage: {
+      canonical_database: 'cloudflare-d1',
+      canonical_media: 'cloudflare-r2',
+      google_sheet_role: 'asynchronous_backup_record_only',
+      sheet_backup_blocks_store_save: false,
+    },
     google_data_auth: googleAuthMode(env, 'data'),
     media_primary_storage: mediaPrimaryStorage(env),
+    media_retention: retention,
     drive_legacy_read_auth: googleAuthMode(env, 'drive'),
     drive_backup_auth: googleAuthMode(env, 'drive'),
     drive_backup_mode: backupMode === 'enabled'
@@ -218,6 +255,10 @@ export default {
 
     const jobs = []
     if (String(event?.cron || '') === HOURLY_SAFETY_CRON) {
+      jobs.push(purgeExpiredOperationalPhotos(env, { limit: 500 }).catch((error) => {
+        console.error('Cloudflare photo retention cleanup failed', error)
+        return { ok: false, error: String(error?.message || error) }
+      }))
       jobs.push(retryPendingDriveBackups(env, 25).catch((error) => {
         console.error('Pending Drive backup retry failed; R2 remains canonical', error)
         return []
