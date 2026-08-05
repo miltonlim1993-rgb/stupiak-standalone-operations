@@ -80,6 +80,26 @@ function hasCurrentPublication(previous, sourceFingerprint) {
   )
 }
 
+function publicationStateNeedsRepair(previous, source, spreadsheetId) {
+  return Boolean(
+    String(previous?.spreadsheet_id || '') !== spreadsheetId
+    || String(previous?.source || '') !== MASTER_WATCH_SOURCE
+    || Number(previous?.template_count || 0) !== Number(source?.template_count || 0)
+    || Number(previous?.photo_count || 0) !== Number(source?.photo_count || 0)
+    || previous?.last_error
+    || previous?.last_error_message
+    || previous?.last_error_at,
+  )
+}
+
+function samePersistedError(previous, details) {
+  return Boolean(
+    previous?.last_error
+    && String(previous.last_error) === String(details.last_error)
+    && String(previous.last_error_message || '') === String(details.last_error_message || ''),
+  )
+}
+
 export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
   const spreadsheetId = masterSpreadsheetId(env)
   if (!spreadsheetId) {
@@ -105,26 +125,32 @@ export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
       throw error
     }
 
-    // A deploy can race the 2-minute watcher. When the current Worker has already
-    // published this exact fingerprint and the published pack list is present,
-    // a second force request is a verification, not a reason to rewrite every KV
-    // key again. Reuse the proven publication and clear any stale failure state.
+    // The two-minute watcher is primarily a read check. When the exact source
+    // fingerprint already has published packs, do not rewrite KV merely to move
+    // checked_at forward. Persist only when stored state actually needs repair.
     if (hasCurrentPublication(previous, sourceFingerprint)) {
       const next = {
         ...previous,
         spreadsheet_id: spreadsheetId,
         source: MASTER_WATCH_SOURCE,
         source_fingerprint: sourceFingerprint,
-        checked_at: checkedAt,
         template_count: Number(source?.template_count || previous?.template_count || 0),
         photo_count: Number(source?.photo_count || previous?.photo_count || 0),
         last_error: '',
         last_error_message: '',
         last_error_at: '',
-        force_verified: force,
       }
-      await writeWatchState(env, next)
-      return { ok: true, changed: false, verified_existing_publication: force, ...next }
+      if (publicationStateNeedsRepair(previous, source, spreadsheetId)) {
+        next.checked_at = checkedAt
+        await writeWatchState(env, next)
+      }
+      return {
+        ok: true,
+        changed: false,
+        verified_existing_publication: force,
+        observed_at: checkedAt,
+        ...next,
+      }
     }
 
     const manifests = await rebuildPacks(env)
@@ -153,19 +179,23 @@ export async function refreshAppPacksWhenMasterChanges(env, dependencies = {}) {
       last_error: '',
       last_error_message: '',
       last_error_at: '',
-      force_verified: false,
     }
     await writeWatchState(env, next)
     return { ok: true, changed: true, ...next }
   } catch (error) {
+    const details = errorDetails(error)
     try {
-      await writeWatchState(env, {
-        ...(previous || {}),
-        spreadsheet_id: spreadsheetId,
-        source: MASTER_WATCH_SOURCE,
-        checked_at: checkedAt,
-        ...errorDetails(error),
-      })
+      // Repeating the same upstream error every two minutes must not consume a
+      // KV write each time. Keep the first persisted failure until it changes.
+      if (!samePersistedError(previous, details)) {
+        await writeWatchState(env, {
+          ...(previous || {}),
+          spreadsheet_id: spreadsheetId,
+          source: MASTER_WATCH_SOURCE,
+          checked_at: checkedAt,
+          ...details,
+        })
+      }
     } catch (stateError) {
       console.error('Unable to persist Master watcher failure state', stateError)
     }
