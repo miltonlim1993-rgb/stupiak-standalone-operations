@@ -15,6 +15,7 @@
     "GOOGLE_DRIVE_AUTH_MODE": "service_account",
     "GOOGLE_DRIVE_BACKUP_MODE": "disabled",
     "MEDIA_PRIMARY_STORAGE": "cloudflare-r2",
+    "MEDIA_RETENTION_DAYS": "90",
     "LOCAL_AUTH_MODE": "enabled",
     "LOCAL_AUTH_REGISTRATION": "enabled",
     "GOOGLE_LOGIN_MODE": "fallback",
