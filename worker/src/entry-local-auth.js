@@ -3,6 +3,7 @@ import { getCurrentUser } from './auth.js'
 import { handleEmailApprovalAuth } from './email-approval-auth.js'
 import { corsHeaders, errorResponse } from './http.js'
 import { handleLocalAuth } from './local-auth.js'
+import { handleStatvaraOpsApi } from './statvara-ops-api.js'
 
 function isLocalAccessPath(pathname) {
   return /^\/api\/users\/[^/]+\/local-access$/.test(pathname)
@@ -80,11 +81,27 @@ async function enforceOwnerActivation(request, env, url) {
   }
 }
 
+function runtimeEnv(env, ctx) {
+  const value = Object.create(env)
+  Object.defineProperty(value, '__CHEFOPS_CTX', { value: ctx, enumerable: false })
+  return value
+}
+
 export default {
   ...app,
 
   async fetch(request, env, ctx) {
     const url = new URL(request.url)
+
+    if (url.pathname.startsWith('/api/ops/v1')) {
+      try {
+        const response = await handleStatvaraOpsApi(request, runtimeEnv(env, ctx), url)
+        if (response) return response
+      } catch (error) {
+        return errorResponse(request, env, error)
+      }
+    }
+
     if (!isLocalAuthPath(url.pathname)) return app.fetch(request, env, ctx)
     if (request.method === 'OPTIONS') return localAuthPreflight(request, env)
 
