@@ -7,6 +7,7 @@ import { installStableLabelPrintV16 } from '@/lib/stable-label-print-v16'
 import { installStableLabelPrintV20 } from '@/lib/stable-label-print-v20'
 import { installLabelFifoPolicyV26 } from '@/lib/install-label-fifo-policy-v26'
 import { installLocalUiSandbox } from '@/lib/local-ui-sandbox'
+import { installLocalLabelPrintSandbox } from '@/lib/local-label-print-sandbox'
 
 const FINAL_LABEL_RUNTIME_VERSION = 'stable-tspl-v16-date-fit-v22+d1-fifo-v26'
 let installed = false
@@ -72,15 +73,18 @@ export function installFinalLabelRuntime() {
   installPrintOutcomeIntegrityV13()
   installLabelContentOrientationV7()
   installLabelSizeContractStatusV14()
-  if (isNativeAndroid()) installStableLabelPrintV16()
+  if (localSandbox) installLocalLabelPrintSandbox()
+  else if (isNativeAndroid()) installStableLabelPrintV16()
   else installStableLabelPrintV20()
   installLabelFifoPolicyV26()
 
   window.__chefopsFinalLabelRuntime = {
     version: FINAL_LABEL_RUNTIME_VERSION,
-    printing: isNativeAndroid()
-      ? 'android-raw-tspl-stable-v16-date-fit-v22'
-      : 'web-raw-tspl-stable-v20-date-fit-v22',
+    printing: localSandbox
+      ? 'local-ui-sandbox-no-device-output'
+      : isNativeAndroid()
+        ? 'android-raw-tspl-stable-v16-date-fit-v22'
+        : 'web-raw-tspl-stable-v20-date-fit-v22',
     label_catalog: localSandbox
       ? 'local-browser-sandbox'
       : 'd1-primary-with-installed-package-fallback',
