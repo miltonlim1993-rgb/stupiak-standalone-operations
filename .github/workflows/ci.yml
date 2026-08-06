@@ -54,8 +54,6 @@ jobs:
             'd1-three-stage-fifo-v26' \
             '4.6.25-label-source-fifo-v26' \
             '4.6.20-stable-tspl-core-v16-date-fit-v22' \
-            'LOCAL_AUTH_MODE' \
-            'MEDIA_RETENTION_DAYS' \
             'stale-aware-v1'; do
             if grep -Fq "${marker}" live-bundle.js health.json release.json; then
               echo "${marker}=present"
@@ -64,13 +62,12 @@ jobs:
             fi
           done
 
-  match-live-production-baseline:
+  identify-live-production-source:
     if: github.event_name == 'pull_request' && github.head_ref == 'agent/audit-live-before-label-merge'
     runs-on: ubuntu-latest
     env:
       VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
       VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
-      LIVE_BUNDLE_SHA256: fb7c38e14ef035be6ad91948b72432e62002ac37ae1c6f8ff760a1b69d723ca8
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,36 +76,77 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Compare likely production commits
+      - run: npm ci
+      - name: Compare normalized bundles and chunk identities
         shell: bash
         run: |
           set -euo pipefail
+          origin='https://stupiaks-ops.sporkburger19.workers.dev'
+          stamp="$(date +%s)"
+          curl -fsSL "${origin}/?ts=${stamp}" -o /tmp/live-index.html
+          live_asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' /tmp/live-index.html | head -n 1 | sed -E 's/^src=\"([^\"]+)\"$/\1/')"
+          curl -fsSL "${origin}${live_asset}?ts=${stamp}" -o /tmp/live-main.js
+
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('/tmp/live-main.js').read_text(errors='replace')
+          text = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.js', r'/assets/\1-HASH.js', text)
+          text = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.css', r'/assets/\1-HASH.css', text)
+          text = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', text, flags=re.I)
+          Path('/tmp/live-main.normalized.js').write_text(text)
+          chunks = sorted(set(re.findall(r'/assets/[^"\']+?-[A-Za-z0-9_-]{8}\.js', Path('/tmp/live-main.js').read_text(errors='replace'))))
+          Path('/tmp/live-chunks.txt').write_text('\n'.join(chunks))
+          PY
+
           candidates=(
             4d0f9eec13fd00ea34a3c0c955026048ec57c123
             6f03f5ba1fd862e241da7b4ee954a7be17328911
             fa4c1709987feeae24b1e7c5f8167d288a4d6c65
+            ed8222e4190dfaa01fcb5340b13039a6ce881ac7
+            057ace67a5ecfe4e454709be168b207991c0fe04
+            33a457b989d7f6674bf90b84264f1e65c1362679
+            cc3d63d9e645f394e0eb712451652bed5e207f11
+            aa6ed51f557922692bc43c40b7c53e0321aa0cba
+            b42427d70490ccdf0a87b086e5f2e5e10676cfd2
+            db6645aff8bf992f067552b16d225238f418d4ed
+            cbb321780b7c75cddc36009d528a6327ffa1ce93
+            c6e4e86be1de7bc699f1b3b1fbade2e6c3eb1fea
+            659c0594e96dbf5cdec8a6f7d6e97f9925eee08d
+            e9373b4089acefb5fddb709b2c3f5bd5e10494b4
+            2e907521fe133a5763e4706692e0a2cc6f2e7af5
+            5e04a1c070cd6a23ed7c94de3f823032f0056525
             fa3fc542fe497bf6b63273163f11e96a09c26bf8
           )
-          matched=''
+
+          : > /tmp/scores.tsv
           for sha in "${candidates[@]}"; do
-            echo "=== CANDIDATE ${sha} ==="
             git checkout --force "${sha}"
-            git clean -fdx
-            npm ci
-            npm run build
+            rm -rf web/dist
+            npm run build -w web >/tmp/build.log 2>&1
             asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' web/dist/index.html | head -n 1 | sed -E 's/^src=\"([^\"]+)\"$/\1/')"
             file="web/dist${asset}"
-            test -f "${file}"
-            hash="$(sha256sum "${file}" | awk '{print $1}')"
-            echo "candidate_asset=${asset}"
-            echo "candidate_sha256=${hash}"
-            if [[ "${hash}" == "${LIVE_BUNDLE_SHA256}" ]]; then
-              echo "LIVE_PRODUCTION_BASELINE_MATCH=${sha}"
-              matched="${sha}"
-              break
-            fi
+            SHA="${sha}" FILE="${file}" python3 - <<'PY' >> /tmp/scores.tsv
+          import os, re, difflib
+          from pathlib import Path
+          sha = os.environ['SHA']
+          cand_path = Path(os.environ['FILE'])
+          live = Path('/tmp/live-main.normalized.js').read_text(errors='replace')
+          cand_raw = cand_path.read_text(errors='replace')
+          cand = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.js', r'/assets/\1-HASH.js', cand_raw)
+          cand = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.css', r'/assets/\1-HASH.css', cand)
+          cand = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', cand, flags=re.I)
+          ratio = difflib.SequenceMatcher(None, live, cand, autojunk=False).ratio()
+          live_chunks = set(Path('/tmp/live-chunks.txt').read_text().splitlines())
+          cand_chunks = set(re.findall(r'/assets/[^"\']+?-[A-Za-z0-9_-]{8}\.js', cand_raw))
+          common = len(live_chunks & cand_chunks)
+          union = len(live_chunks | cand_chunks)
+          jaccard = common / union if union else 1.0
+          print(f'{ratio:.9f}\t{jaccard:.9f}\t{common}\t{len(live_chunks)}\t{len(cand_chunks)}\t{sha}')
+          PY
           done
-          if [[ -z "${matched}" ]]; then
-            echo 'LIVE_PRODUCTION_BASELINE_MATCH=none'
-            exit 2
-          fi
+
+          echo '=== NORMALIZED_MATCH_SCORES ==='
+          sort -nr -k1,1 /tmp/scores.tsv
+          best="$(sort -nr -k1,1 /tmp/scores.tsv | head -n 1)"
+          echo "BEST_LIVE_SOURCE_CANDIDATE=${best}"
