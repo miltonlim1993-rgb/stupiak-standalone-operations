@@ -6,6 +6,7 @@ import { installLabelContentOrientationV7 } from '@/lib/label-content-orientatio
 import { installStableLabelPrintV16 } from '@/lib/stable-label-print-v16'
 import { installStableLabelPrintV20 } from '@/lib/stable-label-print-v20'
 import { installLabelFifoPolicyV26 } from '@/lib/install-label-fifo-policy-v26'
+import { installLocalUiSandbox } from '@/lib/local-ui-sandbox'
 
 const FINAL_LABEL_RUNTIME_VERSION = 'stable-tspl-v16-date-fit-v22+d1-fifo-v26'
 let installed = false
@@ -65,6 +66,7 @@ export function installFinalLabelRuntime() {
   if (installed) return
   installed = true
 
+  const localSandbox = installLocalUiSandbox()
   installD1PrimaryLabelCatalog()
   installCreatedLabelSizeContractV14()
   installPrintOutcomeIntegrityV13()
@@ -79,7 +81,10 @@ export function installFinalLabelRuntime() {
     printing: isNativeAndroid()
       ? 'android-raw-tspl-stable-v16-date-fit-v22'
       : 'web-raw-tspl-stable-v20-date-fit-v22',
-    label_catalog: 'd1-primary-with-installed-package-fallback',
+    label_catalog: localSandbox
+      ? 'local-browser-sandbox'
+      : 'd1-primary-with-installed-package-fallback',
     source_policy: 'three-stage-source-chain-v26',
+    local_ui_sandbox: localSandbox,
   }
 }
