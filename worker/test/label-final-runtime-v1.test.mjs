@@ -8,6 +8,10 @@ import {
   LABEL_FIFO_POLICY_VERSION,
   labelSourceTier,
 } from '../src/label-fifo-policy-v26.js'
+import {
+  recoveredCreateBody,
+  stableRuleMatch,
+} from '../src/label-rule-recovery.js'
 
 async function source(path) {
   return fs.readFile(new URL(`../../${path}`, import.meta.url), 'utf8')
@@ -36,10 +40,64 @@ test('final source hierarchy remains the approved v26 contract', () => {
   assert.match(catalog.rules[2].allowedSourceActions, /open/)
 })
 
+test('stale expiry rule keys recover to the current unique D1 rule', () => {
+  const currentRule = {
+    ruleId: 'beef-mix-powder-6kg-prepare',
+    ruleKey: 'beef-mix-powder-6kg-prepare::Prepare::Dry Storage::44',
+    productId: 'beef-mix-powder-6kg',
+    action: 'Prepare',
+    storageCondition: 'Dry Storage',
+  }
+  const staleRequest = {
+    rule_id: currentRule.ruleId,
+    rule_key: 'beef-mix-powder-6kg-prepare::Prepare::Dry Storage::18',
+    product_id: currentRule.productId,
+    manual_expiry_at: '2026-08-06T07:20:00.000Z',
+  }
+
+  assert.equal(stableRuleMatch([currentRule], staleRequest), currentRule)
+  assert.deepEqual(recoveredCreateBody([currentRule], staleRequest), {
+    ...staleRequest,
+    rule_id: currentRule.ruleId,
+    rule_key: currentRule.ruleKey,
+    product_id: currentRule.productId,
+  })
+})
+
+test('stale expiry rule recovery refuses product mismatches and ambiguity', () => {
+  const baseRule = {
+    ruleId: 'prepare',
+    ruleKey: 'prepare::Prepare::Dry Storage::9',
+    productId: 'product-a',
+    action: 'Prepare',
+    storageCondition: 'Dry Storage',
+  }
+  const staleRequest = {
+    rule_id: 'prepare',
+    rule_key: 'prepare::Prepare::Dry Storage::2',
+    product_id: 'product-b',
+  }
+
+  assert.equal(stableRuleMatch([baseRule], staleRequest), null)
+  assert.equal(recoveredCreateBody([baseRule], staleRequest), null)
+
+  const duplicate = {
+    ...baseRule,
+    ruleKey: 'prepare::Prepare::Dry Storage::10',
+  }
+  const matchingProductRequest = {
+    ...staleRequest,
+    product_id: 'product-a',
+  }
+  assert.equal(stableRuleMatch([baseRule, duplicate], matchingProductRequest), null)
+  assert.equal(recoveredCreateBody([baseRule, duplicate], matchingProductRequest), null)
+})
+
 test('current D1 runtime routes through the v26 adapter', async () => {
   const router = await source('worker/src/realtime-labels-d1.js')
   const adapter = await source('worker/src/label-d1-operations-v26.js')
   assert.match(router, /from '\.\/label-d1-operations-v26\.js'/)
+  assert.match(router, /recoveredCreateBody/)
   assert.match(adapter, /applyHierarchyToCatalog\(await d1LabelCatalog/)
   assert.match(adapter, /fifo_source_order_violation/)
   assert.match(adapter, /source_chain_incomplete/)
