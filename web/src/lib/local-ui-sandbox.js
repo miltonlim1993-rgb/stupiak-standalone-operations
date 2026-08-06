@@ -1,6 +1,8 @@
 const SANDBOX_ENABLED = import.meta.env.DEV
   && String(import.meta.env.VITE_LOCAL_UI_SANDBOX || '').toLowerCase() === 'true'
 
+const SANDBOX_OUTLET = String(import.meta.env.VITE_LOCAL_SANDBOX_OUTLET || 'RR-KCH').trim() || 'RR-KCH'
+const SNAPSHOT_URL = `/local-sandbox/${SANDBOX_OUTLET.toLowerCase()}-pack.json`
 const USER_KEY = 'chefops.auth.cached-user'
 const LABELS_KEY = 'chefops.local-ui-sandbox.food-labels.v1'
 const LOGS_KEY = 'chefops.local-ui-sandbox.label-print-logs.v1'
@@ -12,13 +14,13 @@ const SANDBOX_USER = {
   full_name: 'Milton Local',
   role: 'owner',
   status: 'active',
-  outlet_id: 'RR-KCH',
-  outlet_ids: JSON.stringify(['RR-KCH']),
+  outlet_id: SANDBOX_OUTLET,
+  outlet_ids: JSON.stringify([SANDBOX_OUTLET]),
   name_confirmed: true,
   requires_name_setup: false,
 }
 
-const CATALOG = {
+const BUILTIN_CATALOG = {
   source: {
     spreadsheetId: 'local-ui-sandbox',
     productSheet: 'LabelProduct',
@@ -123,6 +125,10 @@ const CATALOG = {
   ],
 }
 
+let activeCatalog = BUILTIN_CATALOG
+let productionSnapshot = null
+let snapshotPromise = null
+
 function readJson(key, fallback) {
   try {
     const parsed = JSON.parse(localStorage.getItem(key) || 'null')
@@ -150,6 +156,131 @@ async function requestBody(init) {
     try { return JSON.parse(init.body) } catch { return {} }
   }
   return init.body
+}
+
+function moduleData(name) {
+  const value = productionSnapshot?.modules?.[name]
+  return value?.data ?? value ?? {}
+}
+
+function catalogSummary(catalog) {
+  const products = Array.isArray(catalog?.products) ? catalog.products : []
+  const rules = Array.isArray(catalog?.rules) ? catalog.rules : []
+  return {
+    productCount: products.length,
+    ruleCount: rules.length,
+    actions: [...new Set(rules.map((row) => row.action).filter(Boolean))].sort(),
+    storageConditions: [...new Set(rules.map((row) => row.storageCondition).filter(Boolean))].sort(),
+  }
+}
+
+async function loadProductionSnapshot({ refresh = false } = {}) {
+  if (!SANDBOX_ENABLED) return null
+  if (snapshotPromise && !refresh) return snapshotPromise
+
+  const suffix = refresh ? `?_=${Date.now()}` : ''
+  snapshotPromise = fetch(`${SNAPSHOT_URL}${suffix}`, { cache: 'no-store' })
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Read-only production snapshot is unavailable (${response.status})`)
+      const snapshot = await response.json()
+      if (!snapshot?.manifest?.version || !snapshot?.modules) throw new Error('Read-only production snapshot is incomplete')
+
+      productionSnapshot = snapshot
+      const labels = snapshot.modules.labels?.data ?? snapshot.modules.labels
+      if (Array.isArray(labels?.products) && labels.products.length && Array.isArray(labels?.rules) && labels.rules.length) {
+        activeCatalog = {
+          ...labels,
+          source: {
+            ...(labels.source || {}),
+            status: 'connected',
+            storage: 'production-kv-readonly-local-sandbox',
+            snapshotVersion: snapshot.manifest.version,
+            snapshotGeneratedAt: snapshot.manifest.generated_at || '',
+            snapshotPulledAt: snapshot.pulled_at || '',
+          },
+          summary: labels.summary || catalogSummary(labels),
+        }
+      }
+
+      window.dispatchEvent(new CustomEvent('chefops:local-sandbox-data-ready', {
+        detail: {
+          outlet_id: snapshot.outlet_id || SANDBOX_OUTLET,
+          version: snapshot.manifest.version,
+          generated_at: snapshot.manifest.generated_at || '',
+          pulled_at: snapshot.pulled_at || '',
+        },
+      }))
+      console.info('ChefOps local sandbox loaded the read-only production package.', snapshot.manifest.version)
+      return snapshot
+    })
+    .catch((error) => {
+      productionSnapshot = null
+      activeCatalog = BUILTIN_CATALOG
+      console.warn('ChefOps local sandbox is using built-in fallback data.', error)
+      return null
+    })
+
+  return snapshotPromise
+}
+
+function snapshotRows(entity) {
+  const core = moduleData('core')
+  const inventory = moduleData('inventory')
+  const tasks = moduleData('tasks')
+  const training = moduleData('training')
+
+  const map = {
+    Outlet: core.outlets,
+    PaymentMethod: core.payment_methods,
+    PositionMaster: core.positions,
+    MediaRule: core.media_rules,
+    InventoryCatalog: inventory.inventory_catalog,
+    OutletStockList: inventory.outlet_stock_list,
+    TaskTemplate: tasks.task_templates,
+    TaskTemplatePhoto: tasks.task_template_photos,
+    SOP: training.sops,
+    SOPStep: training.sop_steps,
+    SOPAsset: training.sop_assets,
+    TrainingCourse: training.training_courses,
+    TrainingLesson: training.training_lessons,
+    TrainingQuiz: training.training_quizzes,
+    TrainingQuestion: training.training_questions,
+    LabelProduct: activeCatalog.products,
+    LabelRule: activeCatalog.rules,
+  }
+
+  if (entity === 'AppSetting') {
+    return Object.entries(core.settings || {}).map(([key, value]) => ({ key, value }))
+  }
+  return Array.isArray(map[entity]) ? map[entity] : []
+}
+
+function comparable(value) {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'boolean') return value ? 'true' : 'false'
+  return String(value)
+}
+
+function matchesExpected(actual, expected) {
+  if (expected === undefined) return true
+  if (Array.isArray(expected)) return expected.map(comparable).includes(comparable(actual))
+  if (expected && typeof expected === 'object') {
+    if (Array.isArray(expected.$in) && !expected.$in.map(comparable).includes(comparable(actual))) return false
+    if (Array.isArray(expected.$nin) && expected.$nin.map(comparable).includes(comparable(actual))) return false
+    if (Object.prototype.hasOwnProperty.call(expected, '$eq') && comparable(actual) !== comparable(expected.$eq)) return false
+    if (Object.prototype.hasOwnProperty.call(expected, '$ne') && comparable(actual) === comparable(expected.$ne)) return false
+    return true
+  }
+  return comparable(actual) === comparable(expected)
+}
+
+function filteredRows(rows, url) {
+  let filter = {}
+  try { filter = JSON.parse(url.searchParams.get('filter') || '{}') } catch {}
+  const limit = Math.max(1, Number(url.searchParams.get('limit') || 5000))
+  return (rows || [])
+    .filter((row) => Object.entries(filter || {}).every(([field, expected]) => matchesExpected(row?.[field], expected)))
+    .slice(0, limit)
 }
 
 function pad(value, size = 2) {
@@ -185,12 +316,46 @@ function currentLogs() {
   return readJson(LOGS_KEY, [])
 }
 
+function baselineRows(entity) {
+  const value = productionSnapshot?.realtime?.[entity]
+  return Array.isArray(value) ? value : []
+}
+
+function mergeById(localRows, remoteRows) {
+  const result = []
+  const seen = new Set()
+  for (const row of [...(localRows || []), ...(remoteRows || [])]) {
+    const id = String(row?.id || row?.__realtime?.entity_id || '')
+    if (id && seen.has(id)) continue
+    if (id) seen.add(id)
+    result.push(row)
+  }
+  return result
+}
+
+function allLabels() {
+  return mergeById(currentLabels(), baselineRows('FoodLabel'))
+}
+
+function allLogs() {
+  return mergeById(currentLogs(), baselineRows('LabelPrintLog'))
+}
+
+function upsertLocalLabel(label) {
+  const labels = currentLabels()
+  const index = labels.findIndex((row) => String(row.id) === String(label.id))
+  if (index >= 0) labels[index] = label
+  else labels.unshift(label)
+  saveLabels(labels)
+  return label
+}
+
 function createLabel(body) {
-  const rule = CATALOG.rules.find((item) => item.ruleKey === body.rule_key)
-    || CATALOG.rules.find((item) => item.ruleId === body.rule_id)
+  const rule = activeCatalog.rules.find((item) => item.ruleKey === body.rule_key)
+    || activeCatalog.rules.find((item) => item.ruleId === body.rule_id)
   if (!rule) return { error: 'The selected expiry rule no longer exists', code: 'label_rule_not_found' }
 
-  const product = CATALOG.products.find((item) => item.productId === rule.productId)
+  const product = activeCatalog.products.find((item) => item.productId === rule.productId)
   const preparedAt = new Date()
   const manual = body.manual_expiry_at ? new Date(body.manual_expiry_at) : null
   const expiresAt = manual && !Number.isNaN(manual.getTime())
@@ -217,10 +382,11 @@ function createLabel(body) {
     source_capacity: rule.action === 'Prepare' ? copies : undefined,
     source_remaining_qty: rule.action === 'Prepare' ? copies : undefined,
     local_ui_sandbox: true,
+    production_snapshot_version: productionSnapshot?.manifest?.version || '',
   }
   const record = {
     id,
-    outlet_id: body.outlet_id || 'RR-KCH',
+    outlet_id: body.outlet_id || SANDBOX_OUTLET,
     item_name: product?.displayName || rule.productName,
     quantity: Number(body.quantity || 1),
     prep_date: preparedAt.toISOString().slice(0, 10),
@@ -240,7 +406,7 @@ function createLabel(body) {
     __realtime: {
       entity: 'FoodLabel',
       entity_id: id,
-      outlet_id: body.outlet_id || 'RR-KCH',
+      outlet_id: body.outlet_id || SANDBOX_OUTLET,
       version: 1,
       created_at: preparedAt.toISOString(),
       updated_at: preparedAt.toISOString(),
@@ -271,19 +437,43 @@ async function routeSandboxRequest(input, init = {}) {
   if (path === '/api/auth/me') return json(SANDBOX_USER)
   if (path === '/api/auth/config') return json({ local_enabled: true, registration_enabled: true, google_enabled: false, local_ui_sandbox: true })
   if (path === '/api/auth/logout') return json({ ok: true })
-  if (path === '/api/app/v4/version') return json({ version: 'local-ui-sandbox', local_ui_sandbox: true })
-  if (path === '/api/app/v4/bootstrap') return json({ ok: true, local_ui_sandbox: true })
-  if (path === '/api/realtime/data/status') return json({ ok: true, mode: 'local-browser', local_ui_sandbox: true })
+
+  await loadProductionSnapshot()
+
+  if (path === '/api/app/v4/version') {
+    return json({
+      version: 'local-ui-sandbox',
+      local_ui_sandbox: true,
+      production_snapshot_version: productionSnapshot?.manifest?.version || '',
+    })
+  }
+  if (path === '/api/app/v4/bootstrap') {
+    return json({
+      ok: true,
+      local_ui_sandbox: true,
+      user: SANDBOX_USER,
+      data_version: productionSnapshot?.manifest?.data_version || productionSnapshot?.manifest?.version || 'local-fallback',
+      production_snapshot: productionSnapshot?.manifest || null,
+    })
+  }
+  if (path === '/api/realtime/data/status') {
+    return json({
+      ok: true,
+      mode: productionSnapshot ? 'production-snapshot-readonly-local-overlay' : 'local-browser-fallback',
+      local_ui_sandbox: true,
+      production_snapshot_version: productionSnapshot?.manifest?.version || '',
+    })
+  }
   if (path.startsWith('/api/notifications')) return json([])
   if (path === '/api/labels/catalog') {
     return json(url.searchParams.get('summary') === '1'
-      ? { source: CATALOG.source, summary: CATALOG.summary }
-      : CATALOG)
+      ? { source: activeCatalog.source, summary: activeCatalog.summary || catalogSummary(activeCatalog) }
+      : activeCatalog)
   }
   if (path === '/api/labels/printer-profile') {
     return json({
       id: 'local-printer',
-      outlet_id: url.searchParams.get('outlet_id') || 'RR-KCH',
+      outlet_id: url.searchParams.get('outlet_id') || SANDBOX_OUTLET,
       profile_name: 'Local UI Sandbox',
       printer_name: 'Local UI Sandbox',
       label_width_mm: 40,
@@ -297,9 +487,9 @@ async function routeSandboxRequest(input, init = {}) {
   }
   if (path === '/api/realtime/records' && method === 'GET') {
     const entity = url.searchParams.get('entity') || ''
-    if (entity === 'FoodLabel') return json({ records: currentLabels() })
-    if (entity === 'LabelPrintLog') return json({ records: currentLogs() })
-    return json({ records: [] })
+    if (entity === 'FoodLabel') return json({ records: filteredRows(allLabels(), url) })
+    if (entity === 'LabelPrintLog') return json({ records: filteredRows(allLogs(), url) })
+    return json({ records: filteredRows(snapshotRows(entity), url) })
   }
   if (path === '/api/labels/create' && method === 'POST') {
     const created = createLabel(await requestBody(init))
@@ -310,36 +500,36 @@ async function routeSandboxRequest(input, init = {}) {
   if (reprint && method === 'POST') {
     const id = decodeURIComponent(reprint[1])
     const body = await requestBody(init)
-    const labels = currentLabels()
-    const index = labels.findIndex((item) => String(item.id) === id)
-    if (index < 0) return json({ error: 'Food label was not found', code: 'label_not_found' }, 404)
+    const existing = allLabels().find((item) => String(item.id) === id)
+    if (!existing) return json({ error: 'Food label was not found', code: 'label_not_found' }, 404)
     const quantity = Math.max(1, Number(body.reprint_quantity || 1))
     const timestamp = new Date().toISOString()
-    const label = {
-      ...labels[index],
-      total_reprint_quantity: Number(labels[index].total_reprint_quantity || 0) + quantity,
-      reprint_count: Number(labels[index].reprint_count || 0) + 1,
+    const label = upsertLocalLabel({
+      ...existing,
+      total_reprint_quantity: Number(existing.total_reprint_quantity || 0) + quantity,
+      reprint_count: Number(existing.reprint_count || 0) + 1,
       last_reprinted_at: timestamp,
       last_reprinted_by_name: SANDBOX_USER.full_name,
-    }
-    labels[index] = label
-    saveLabels(labels)
+    })
     return json({ label, print: { action: 'reprint', quantity, printed_at: timestamp, printed_by_name: SANDBOX_USER.full_name } })
   }
   const finish = path.match(/^\/api\/labels\/source\/([^/]+)\/finish$/)
   if (finish && method === 'POST') {
     const id = decodeURIComponent(finish[1])
-    const labels = currentLabels()
-    const index = labels.findIndex((item) => String(item.id) === id)
-    if (index < 0) return json({ error: 'Source label was not found', code: 'source_label_not_found' }, 404)
+    const existing = allLabels().find((item) => String(item.id) === id)
+    if (!existing) return json({ error: 'Source label was not found', code: 'source_label_not_found' }, 404)
     let meta = {}
-    try { meta = JSON.parse(labels[index].notes || '{}') } catch {}
-    labels[index] = {
-      ...labels[index],
+    try { meta = JSON.parse(existing.notes || '{}') } catch {}
+    const label = upsertLocalLabel({
+      ...existing,
       notes: JSON.stringify({ ...meta, source_status: 'depleted', source_remaining_qty: 0, source_finished_at: new Date().toISOString() }),
-    }
-    saveLabels(labels)
-    return json(labels[index])
+    })
+    return json(label)
+  }
+
+  const entityMatch = path.match(/^\/api\/entities\/([^/]+)$/)
+  if (entityMatch && method === 'GET') {
+    return json(filteredRows(snapshotRows(decodeURIComponent(entityMatch[1])), url))
   }
   if (path.startsWith('/api/entities/')) return json([])
 
@@ -350,6 +540,7 @@ export function installLocalUiSandbox() {
   if (!SANDBOX_ENABLED || window.__chefopsLocalUiSandboxInstalled) return false
   window.__chefopsLocalUiSandboxInstalled = true
   localStorage.setItem(USER_KEY, JSON.stringify(SANDBOX_USER))
+  localStorage.setItem('chefops.data-pack.outlet', SANDBOX_OUTLET)
 
   const nativeFetch = window.fetch.bind(window)
   window.fetch = (input, init) => {
@@ -359,10 +550,17 @@ export function installLocalUiSandbox() {
     return nativeFetch(input, init)
   }
 
+  void loadProductionSnapshot()
+
   window.__chefopsLocalSandbox = {
     enabled: true,
     user: SANDBOX_USER,
-    catalog: CATALOG,
+    get catalog() { return activeCatalog },
+    get snapshot() { return productionSnapshot },
+    async refreshData() {
+      snapshotPromise = null
+      return loadProductionSnapshot({ refresh: true })
+    },
     reset() {
       localStorage.removeItem(LABELS_KEY)
       localStorage.removeItem(LOGS_KEY)
@@ -370,6 +568,6 @@ export function installLocalUiSandbox() {
     },
   }
   document.documentElement.dataset.chefopsLocalSandbox = 'true'
-  console.info('ChefOps local UI sandbox enabled: authentication and Label data stay in this browser only.')
+  console.info('ChefOps local UI sandbox enabled: production package is read-only and all mutations stay in this browser.')
   return true
 }
