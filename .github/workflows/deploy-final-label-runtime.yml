@@ -11,8 +11,12 @@ permissions:
   contents: read
   issues: write
 
+concurrency:
+  group: deploy-final-label-runtime-production
+  cancel-in-progress: true
+
 env:
-  DEPLOYMENT_RUN_ID: final-label-runtime-20260806-1246
+  DEPLOYMENT_RUN_ID: final-label-runtime-20260806-1258
   DEPLOYMENT_STATUS_ISSUE: "70"
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
