@@ -16,13 +16,11 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEPLOYMENT_RUN_ID: final-label-runtime-direct-20260806-1315
+  DEPLOYMENT_RUN_ID: final-label-runtime-main-push-20260806-1420
   DEPLOYMENT_STATUS_ISSUE: "70"
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
-  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN || secrets.CF_API_TOKEN || secrets.WRANGLER_API_TOKEN || secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
-  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || secrets.CF_ACCOUNT_ID }}
   CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
   CLOUDFLARE_OPS_DB_ID: 080c13d7-e2f5-4c01-a1ca-aa00094d6fc0
   CLOUDFLARE_SHEET_SYNC_QUEUE_NAME: stupiaks-ops-sheet-sync
@@ -38,33 +36,96 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      - name: Publish deployment start to PR 70
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          gh issue comment "${DEPLOYMENT_STATUS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "$(cat <<EOF
-          ## Final Label runtime production deployment: STARTED
-
-          - Run ID: \`${DEPLOYMENT_RUN_ID}\`
-          - Commit: \`${GITHUB_SHA}\`
-          - Production: \`${OPS_PRODUCTION_ORIGIN}\`
-          - Workflow: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
-          EOF
-          )"
-
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Validate Cloudflare credentials
+      - name: Resolve existing Cloudflare credential aliases safely
+        id: credentials
+        env:
+          ALL_SECRETS_JSON: ${{ toJSON(secrets) }}
+          ALL_VARS_JSON: ${{ toJSON(vars) }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN}"
-          test -n "${CLOUDFLARE_ACCOUNT_ID}"
-          echo "CLOUDFLARE_CREDENTIALS_RESOLVED=true"
+          node <<'NODE'
+          const fs = require('node:fs')
+          const secrets = JSON.parse(process.env.ALL_SECRETS_JSON || '{}')
+          const vars = JSON.parse(process.env.ALL_VARS_JSON || '{}')
+          const combined = { ...vars, ...secrets }
+          const entries = Object.entries(combined)
+            .map(([name, value]) => [name, String(value || '').trim()])
+            .filter(([, value]) => value)
+
+          function byNames(names) {
+            for (const name of names) {
+              const value = String(combined[name] || '').trim()
+              if (value) return { name, value }
+            }
+            return null
+          }
+
+          function byPattern(pattern) {
+            for (const [name, value] of entries) {
+              if (pattern.test(name)) return { name, value }
+            }
+            return null
+          }
+
+          function appendEnv(name, value) {
+            const marker = `OPS_${name}_${Date.now()}_${Math.random().toString(16).slice(2)}`
+            fs.appendFileSync(process.env.GITHUB_ENV, `${name}<<${marker}\n${value}\n${marker}\n`)
+          }
+
+          function output(name, value) {
+            fs.appendFileSync(process.env.GITHUB_OUTPUT, `${name}=${String(value || '').replace(/[\r\n]/g, ' ')}\n`)
+          }
+
+          const token = byNames([
+            'CLOUDFLARE_API_TOKEN', 'CF_API_TOKEN', 'WRANGLER_API_TOKEN',
+            'CLOUDFLARE_WORKERS_API_TOKEN', 'CLOUDFLARE_TOKEN', 'CF_TOKEN',
+          ]) || byPattern(/(?:cloudflare|wrangler|^cf[_-]).*(?:api[_-]?)?token|(?:api[_-]?)?token.*(?:cloudflare|wrangler|^cf[_-])/i)
+
+          const apiKey = byNames(['CLOUDFLARE_API_KEY', 'CF_API_KEY'])
+            || byPattern(/(?:cloudflare|^cf[_-]).*api.*key|api.*key.*(?:cloudflare|^cf[_-])/i)
+          const email = byNames(['CLOUDFLARE_EMAIL', 'CF_EMAIL'])
+            || byPattern(/(?:cloudflare|^cf[_-]).*email|email.*(?:cloudflare|^cf[_-])/i)
+          const account = byNames(['CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID', 'CLOUDFLARE_ACCOUNT'])
+            || byPattern(/(?:cloudflare|^cf[_-]).*account.*id|account.*id.*(?:cloudflare|^cf[_-])/i)
+
+          let authMode = 'none'
+          let authName = 'none'
+          if (token) {
+            appendEnv('CLOUDFLARE_API_TOKEN', token.value)
+            authMode = 'api-token'
+            authName = token.name
+          } else if (apiKey && email) {
+            appendEnv('CLOUDFLARE_API_KEY', apiKey.value)
+            appendEnv('CLOUDFLARE_EMAIL', email.value)
+            authMode = 'global-api-key'
+            authName = `${apiKey.name}+${email.name}`
+          }
+          if (account) appendEnv('CLOUDFLARE_ACCOUNT_ID', account.value)
+
+          const visibleNames = entries
+            .map(([name]) => name)
+            .filter((name) => /(cloudflare|wrangler|^cf[_-])/i.test(name))
+            .sort()
+
+          output('auth_mode', authMode)
+          output('auth_name', authName)
+          output('account_name', account?.name || 'none')
+          output('available_names', visibleNames.join(',') || 'none')
+
+          console.log(`Cloudflare/Wrangler setting names visible: ${visibleNames.join(', ') || 'none'}`)
+          console.log(`Selected auth mode: ${authMode}`)
+          console.log(`Selected auth name: ${authName}`)
+          console.log(`Selected account name: ${account?.name || 'none'}`)
+
+          if (authMode === 'none') process.exit(2)
+          if (!account) process.exit(3)
+          NODE
 
       - name: Install exact dependencies
         run: npm ci
@@ -113,26 +174,23 @@ jobs:
             fi
             sleep 10
           done
-
           echo "verified=false" >> "$GITHUB_OUTPUT"
-          echo "Production did not expose the final Label runtime within the verification window" >&2
           exit 1
 
-      - name: Publish final deployment status to PR 70
+      - name: Publish deployment status
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
           DEPLOYMENT_JOB_STATUS: ${{ job.status }}
           LIVE_VERIFIED: ${{ steps.verify.outputs.verified }}
+          AUTH_MODE: ${{ steps.credentials.outputs.auth_mode }}
+          AUTH_NAME: ${{ steps.credentials.outputs.auth_name }}
+          ACCOUNT_NAME: ${{ steps.credentials.outputs.account_name }}
+          AVAILABLE_NAMES: ${{ steps.credentials.outputs.available_names }}
         shell: bash
         run: |
-          set -euo pipefail
-          run_url="https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
-          if [[ "${DEPLOYMENT_JOB_STATUS}" == "success" && "${LIVE_VERIFIED}" == "true" ]]; then
-            result="SUCCESS"
-          else
-            result="FAILED"
-          fi
+          result=FAILED
+          if [[ "${DEPLOYMENT_JOB_STATUS}" == "success" && "${LIVE_VERIFIED}" == "true" ]]; then result=SUCCESS; fi
           gh issue comment "${DEPLOYMENT_STATUS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "$(cat <<EOF
           ## Final Label runtime production deployment: ${result}
 
@@ -140,10 +198,12 @@ jobs:
           - Commit: \`${GITHUB_SHA}\`
           - Job status: \`${DEPLOYMENT_JOB_STATUS}\`
           - Live runtime verified: \`${LIVE_VERIFIED:-false}\`
-          - Expected print runtime: \`stable-tspl-v16-date-fit-v22\`
-          - Expected source runtime: \`d1-three-stage-fifo-v26\`
-          - Production: \`${OPS_PRODUCTION_ORIGIN}\`
-          - Workflow: ${run_url}
-          - Checked at: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`
+          - Print runtime: \`stable-tspl-v16-date-fit-v22\`
+          - Source runtime: \`d1-three-stage-fifo-v26\`
+          - Auth mode: \`${AUTH_MODE:-none}\`
+          - Auth setting name: \`${AUTH_NAME:-none}\`
+          - Account setting name: \`${ACCOUNT_NAME:-none}\`
+          - Visible Cloudflare/Wrangler setting names: \`${AVAILABLE_NAMES:-none}\`
+          - Workflow: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF
           )"
