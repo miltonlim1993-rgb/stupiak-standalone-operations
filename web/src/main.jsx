@@ -13,6 +13,7 @@ import '@/lib/install-prompt'
 import { applyTheme } from '@/lib/theme'
 import { installNativeSessionFetch } from '@/lib/native-session'
 import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
+import { installFinalLabelRuntime } from '@/lib/install-final-label-runtime'
 import { installRealtimeClientHeader } from '@/lib/client-id'
 import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
 import { installMediaUiRepair } from '@/lib/media-ui'
@@ -38,6 +39,8 @@ function markRuntime() {
     shell: SHELL_VERSION,
     native: isNativeAndroid(),
     origin: window.location.origin,
+    labelPrinting: 'stable-tspl-v16-date-fit-v22',
+    labelSource: 'd1-three-stage-fifo-v26',
   }
 }
 
@@ -129,6 +132,7 @@ installRealtimeClientHeader()
 installRealtimeMutationQueue()
 installOperationalTaskPolicy()
 installNativeLabelPrintBridge()
+installFinalLabelRuntime()
 installMediaUiRepair()
 applyTheme()
 configureNativeSystemBars()

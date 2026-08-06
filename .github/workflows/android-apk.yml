@@ -95,6 +95,8 @@ jobs:
           node scripts/configure-android-branding.mjs
           node scripts/configure-android-native-google-auth.mjs
           node scripts/configure-android-direct-label-print.mjs
+          node scripts/configure-android-tspl-food-label-compat.mjs
+          node scripts/configure-android-all-device-print-v12.mjs
           node scripts/configure-android-task-alarms.mjs
           node scripts/configure-android-app-update.mjs
       - name: Compile debug APK
@@ -176,6 +178,8 @@ jobs:
           node scripts/configure-android-branding.mjs
           node scripts/configure-android-native-google-auth.mjs
           node scripts/configure-android-direct-label-print.mjs
+          node scripts/configure-android-tspl-food-label-compat.mjs
+          node scripts/configure-android-all-device-print-v12.mjs
           node scripts/configure-android-task-alarms.mjs
           node scripts/configure-android-app-update.mjs
       - name: Restore private release keystore
