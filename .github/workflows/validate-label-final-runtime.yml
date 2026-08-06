@@ -1,0 +1,69 @@
+name: Validate final Label runtime
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'web/src/lib/*label*'
+      - 'web/src/lib/printer-transport-v12.js'
+      - 'web/src/lib/device-printer-v20.js'
+      - 'web/src/lib/print-outcome-*.js'
+      - 'web/src/main.jsx'
+      - 'worker/src/label-*'
+      - 'worker/src/realtime-labels-d1.js'
+      - 'worker/test/label-*'
+      - 'scripts/configure-android-direct-label-print.mjs'
+      - 'scripts/configure-android-tspl-food-label-compat.mjs'
+      - 'scripts/configure-android-all-device-print-v12.mjs'
+      - '.github/workflows/validate-label-final-runtime.yml'
+  workflow_dispatch:
+
+jobs:
+  validate-label-runtime:
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
+      VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Install dependencies
+        run: npm ci
+      - name: Build Web and Worker
+        run: npm run build
+      - name: Run Label regression contract
+        run: node --test worker/test/label-final-runtime-v1.test.mjs
+      - name: Generate Android project with the approved Label pipeline
+        run: |
+          npm run mobile:init
+          node scripts/configure-android-branding.mjs
+          node scripts/configure-android-native-google-auth.mjs
+          node scripts/configure-android-direct-label-print.mjs
+          node scripts/configure-android-tspl-food-label-compat.mjs
+          node scripts/configure-android-all-device-print-v12.mjs
+      - name: Verify generated RAW TSPL support
+        run: |
+          set -euo pipefail
+          PLUGIN=web/android/app/src/main/java/com/stupiaks/ops/DirectLabelPrintPlugin.java
+          grep -q 'rawCommandBase64' "$PLUGIN"
+          grep -q 'renderMode' "$PLUGIN"
+          grep -q 'printSystem' "$PLUGIN"
+          grep -q 'sendNetworkRaw' "$PLUGIN"
+          grep -q 'sendBluetooth' "$PLUGIN"
+          grep -q 'Label HTML and RAW command are empty' "$PLUGIN"
+          grep -q "rawCommandBase64: asciiBase64(stable.command)" web/src/lib/stable-label-print-v16.js
+          grep -q "html: ''" web/src/lib/stable-label-print-v16.js
+          grep -q "4.6.20-stable-tspl-core-v16-date-fit-v22" web/src/lib/stable-tspl-label-v16.js
+          grep -q "4.6.25-label-source-fifo-v26" worker/src/label-fifo-policy-v26.js
+      - name: Compile Android Debug APK
+        run: |
+          chmod +x web/android/gradlew
+          cd web/android
+          ./gradlew assembleDebug
