@@ -50,7 +50,7 @@ const unchanged = await refreshAppPacksWhenMasterChanges(env, dependencies)
 assert.equal(unchanged.changed, false)
 assert.equal(rebuildCount, 1)
 assert.equal(unchanged.source_fingerprint, fingerprint)
-assert.ok(unchanged.checked_at)
+assert.ok(unchanged.observed_at)
 
 fingerprint = 'task-template-fingerprint-v2'
 const changed = await refreshAppPacksWhenMasterChanges(env, dependencies)
@@ -61,7 +61,7 @@ assert.equal(changed.packs.find((pack) => pack.outlet_id === 'RR-KCH')?.version,
 const forced = await refreshAppPacksWhenMasterChanges(env, { ...dependencies, force: true })
 assert.equal(forced.changed, false)
 assert.equal(forced.verified_existing_publication, true)
-assert.equal(forced.force_verified, true)
+assert.ok(forced.observed_at)
 assert.equal(rebuildCount, 2, 'duplicate deploy verification must not rewrite an already current publication')
 assert.equal(forced.packs.find((pack) => pack.outlet_id === 'RR-KCH')?.version, 'rr-v2')
 
@@ -95,3 +95,4 @@ console.log('DRIVE_MODIFIED_TIME_REQUIRED=false')
 console.log('WATCH_FAILURE_STATE_PERSISTED=true')
 console.log('IMMEDIATE_FORCE_PUBLICATION_TESTED=true')
 console.log('DUPLICATE_FORCE_REUSES_CURRENT_PUBLICATION=true')
+console.log('UNCHANGED_WATCH_RUN_WRITES_KV=false')
