@@ -15,3 +15,5 @@ Retry with linear-time normalized hash and exact chunk comparison.
 Compare live production against historical deployment branch heads.
 
 Compare normalized content of every live JS chunk against representative source bases.
+
+Inspect the remaining live main-entry delta against the pre-Label baseline.
