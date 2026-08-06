@@ -66,7 +66,7 @@ jobs:
             fi
           done
 
-  identify-live-production-source:
+  identify-live-production-branch:
     if: github.event_name == 'pull_request' && github.head_ref == 'agent/audit-live-before-label-merge'
     runs-on: ubuntu-latest
     env:
@@ -81,7 +81,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Compare normalized hashes and exact chunk identities
+      - name: Compare deployed branch heads by normalized bundle and chunks
         shell: bash
         run: |
           set -euo pipefail
@@ -95,70 +95,79 @@ jobs:
           import re
           from pathlib import Path
           raw = Path('/tmp/live-main.js').read_text(errors='replace')
-          normalized = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.js', r'/assets/\1-HASH.js', raw)
-          normalized = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.css', r'/assets/\1-HASH.css', normalized)
+          normalized = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.js', r'\1-HASH.js', raw)
+          normalized = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.css', r'\1-HASH.css', normalized)
           normalized = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', normalized, flags=re.I)
           Path('/tmp/live-main.normalized.js').write_text(normalized)
-          chunks = sorted(set(re.findall(r'/assets/[^"\']+?-[A-Za-z0-9_-]{8}\.js', raw)))
+          chunks = sorted(set(re.findall(r'(?:\./)?[A-Za-z0-9_.-]+?-[A-Za-z0-9_-]{8}\.js', raw)))
           Path('/tmp/live-chunks.txt').write_text('\n'.join(chunks))
+          print(f'LIVE_CHUNK_COUNT={len(chunks)}')
+          print('\n'.join(chunks))
           PY
           live_norm_sha="$(sha256sum /tmp/live-main.normalized.js | awk '{print $1}')"
           live_size="$(wc -c < /tmp/live-main.normalized.js)"
           echo "LIVE_NORMALIZED_SHA256=${live_norm_sha}"
           echo "LIVE_NORMALIZED_SIZE=${live_size}"
 
-          candidates=(
-            4d0f9eec13fd00ea34a3c0c955026048ec57c123
-            6f03f5ba1fd862e241da7b4ee954a7be17328911
-            fa4c1709987feeae24b1e7c5f8167d288a4d6c65
-            ed8222e4190dfaa01fcb5340b13039a6ce881ac7
-            057ace67a5ecfe4e454709be168b207991c0fe04
-            33a457b989d7f6674bf90b84264f1e65c1362679
-            cc3d63d9e645f394e0eb712451652bed5e207f11
-            aa6ed51f557922692bc43c40b7c53e0321aa0cba
-            b42427d70490ccdf0a87b086e5f2e5e10676cfd2
-            db6645aff8bf992f067552b16d225238f418d4ed
-            cbb321780b7c75cddc36009d528a6327ffa1ce93
-            c6e4e86be1de7bc699f1b3b1fbade2e6c3eb1fea
-            659c0594e96dbf5cdec8a6f7d6e97f9925eee08d
-            e9373b4089acefb5fddb709b2c3f5bd5e10494b4
-            2e907521fe133a5763e4706692e0a2cc6f2e7af5
-            5e04a1c070cd6a23ed7c94de3f823032f0056525
-            fa3fc542fe497bf6b63273163f11e96a09c26bf8
+          refs=(
+            origin/deploy/stock-count-layout-pwa-v39
+            origin/release/stock-count-layout-pwa-v39-align
+            origin/verify/stock-count-pwa-v39-live
+            origin/verify/stock-count-pwa-v39-pr-check
+            origin/ops/activate-local-auth-production
+            origin/ops/fix-local-auth-r2-coupling
+            origin/feat/owner-approved-local-auth
+            origin/fix/local-auth-free-worker-hash
+            origin/fix/local-email-d1-only
+            origin/fix/local-setup-diagnostics-realtime-overflow
+            origin/feat/simplified-email-approval-login
+            origin/feat/retire-google-login-d1-credential-reset
+            origin/fix/existing-account-first-credential-setup
+            origin/fix/first-login-credential-setup
+            origin/agent/cloudflare-canonical-90-day-media-retention
+            origin/feat/autonomous-runtime-r2-service-account
+            origin/fix/autonomous-bootstrap-sheet-links
+            origin/fix/master-watch-spreadsheet-binding
+            origin/fix/master-watch-sheets-fingerprint
+            origin/fix/master-watch-deploy-propagation
+            origin/fix/master-watch-deploy-verification
+            origin/fix/master-data-auto-pack-refresh
           )
 
           : > /tmp/scores.tsv
-          for sha in "${candidates[@]}"; do
-            if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
-              echo "SKIP_UNKNOWN_COMMIT=${sha}"
+          for ref in "${refs[@]}"; do
+            if ! git rev-parse --verify "${ref}^{commit}" >/dev/null 2>&1; then
+              echo "SKIP_UNKNOWN_REF=${ref}"
               continue
             fi
-            git checkout --force "${sha}"
+            git checkout --force "${ref}"
+            sha="$(git rev-parse HEAD)"
             rm -rf web/dist
             npm run build -w web >/tmp/build.log 2>&1
             asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' web/dist/index.html | head -n 1 | sed -E 's/^src=\"([^\"]+)\"$/\1/')"
             file="web/dist${asset}"
-            SHA="${sha}" FILE="${file}" LIVE_SHA="${live_norm_sha}" LIVE_SIZE="${live_size}" python3 - <<'PY' >> /tmp/scores.tsv
+            REF="${ref}" SHA="${sha}" FILE="${file}" LIVE_SHA="${live_norm_sha}" LIVE_SIZE="${live_size}" python3 - <<'PY' >> /tmp/scores.tsv
           import hashlib, os, re
           from pathlib import Path
+          ref = os.environ['REF']
           sha = os.environ['SHA']
           raw = Path(os.environ['FILE']).read_text(errors='replace')
-          normalized = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.js', r'/assets/\1-HASH.js', raw)
-          normalized = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.css', r'/assets/\1-HASH.css', normalized)
+          normalized = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.js', r'\1-HASH.js', raw)
+          normalized = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.css', r'\1-HASH.css', normalized)
           normalized = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', normalized, flags=re.I)
           norm_sha = hashlib.sha256(normalized.encode()).hexdigest()
           live_chunks = set(Path('/tmp/live-chunks.txt').read_text().splitlines())
-          cand_chunks = set(re.findall(r'/assets/[^"\']+?-[A-Za-z0-9_-]{8}\.js', raw))
+          cand_chunks = set(re.findall(r'(?:\./)?[A-Za-z0-9_.-]+?-[A-Za-z0-9_-]{8}\.js', raw))
           common = len(live_chunks & cand_chunks)
           union = len(live_chunks | cand_chunks)
           jaccard = common / union if union else 1.0
           size_delta = abs(len(normalized) - int(os.environ['LIVE_SIZE']))
           exact = int(norm_sha == os.environ['LIVE_SHA'])
-          print(f'{exact}\t{jaccard:.9f}\t{common}\t{size_delta}\t{norm_sha}\t{sha}')
+          print(f'{exact}\t{common}\t{jaccard:.9f}\t{size_delta}\t{norm_sha}\t{sha}\t{ref}')
           PY
           done
 
-          echo '=== NORMALIZED_AND_CHUNK_SCORES ==='
+          echo '=== DEPLOYED_BRANCH_HEAD_SCORES ==='
           sort -t$'\t' -k1,1nr -k2,2nr -k3,3nr -k4,4n /tmp/scores.tsv
           best="$(sort -t$'\t' -k1,1nr -k2,2nr -k3,3nr -k4,4n /tmp/scores.tsv | head -n 1)"
-          echo "BEST_LIVE_SOURCE_CANDIDATE=${best}"
+          echo "BEST_LIVE_BRANCH_CANDIDATE=${best}"
