@@ -7,3 +7,5 @@ The audit reads public release, health, and Web bundle fingerprints. It does not
 Retry after correcting the public JS asset path parser.
 
 Run exact candidate bundle matching against likely production commits.
+
+Run normalized bundle similarity and chunk identity comparison.
