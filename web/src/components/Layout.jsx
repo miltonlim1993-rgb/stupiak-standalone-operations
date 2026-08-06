@@ -11,6 +11,9 @@ import AppFoundation from '@/components/AppFoundation'
 import NotificationBell from '@/components/NotificationBell'
 import DataPackGate from '@/components/DataPackGate'
 
+const LOCAL_UI_SANDBOX = import.meta.env.DEV
+  && String(import.meta.env.VITE_LOCAL_UI_SANDBOX || '').toLowerCase() === 'true'
+
 const primaryNav = [
   { to: '/', label: 'Home', icon: Home, end: true },
   { to: '/tasks', label: 'Tasks', icon: CheckSquare },
@@ -155,7 +158,7 @@ export default function Layout() {
           </header>
 
           <main id="chefops-mobile-main" className="chefops-main-scroll min-h-0 min-w-0 flex-1 overflow-x-hidden overflow-y-auto">
-            <DataPackGate><Outlet /></DataPackGate>
+            {LOCAL_UI_SANDBOX ? <Outlet /> : <DataPackGate><Outlet /></DataPackGate>}
           </main>
 
           <nav id="chefops-mobile-nav" className="chefops-bottom-nav z-50 w-full shrink-0 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur">
