@@ -1,4 +1,4 @@
-name: Deploy Stock Count layout PWA v39
+name: Deploy final Label runtime to production
 
 on:
   push:
@@ -11,9 +11,13 @@ permissions:
   contents: read
   issues: write
 
+concurrency:
+  group: deploy-final-label-runtime-production
+  cancel-in-progress: true
+
 env:
-  DEPLOYMENT_RUN_ID: stock-count-layout-pwa-v39-20260804-0625
-  DEPLOYMENT_STATUS_ISSUE: "44"
+  DEPLOYMENT_RUN_ID: final-label-runtime-canonical-20260806-1305
+  DEPLOYMENT_STATUS_ISSUE: "70"
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
@@ -25,7 +29,7 @@ env:
   CLOUDFLARE_MEDIA_BUCKET_NAME: ${{ secrets.CLOUDFLARE_MEDIA_BUCKET_NAME }}
 
 jobs:
-  deploy-web-pwa:
+  deploy-final-label-runtime:
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -120,23 +124,16 @@ jobs:
           }
           if (account) appendEnv('CLOUDFLARE_ACCOUNT_ID', account.value)
 
-          const visibleNames = entries
-            .map(([name]) => name)
-            .filter((name) => /(cloudflare|wrangler|^cf[_-])/i.test(name))
-            .sort()
-
           output('auth_mode', authMode)
           output('auth_name', authName)
           output('account_name', account?.name || 'none')
-          output('available_names', visibleNames.join(',') || 'none')
 
-          console.log(`Cloudflare credential aliases available: ${visibleNames.join(', ') || 'none'}`)
           console.log(`Selected auth mode: ${authMode}`)
           console.log(`Selected auth name: ${authName}`)
           console.log(`Selected account name: ${account?.name || 'none'}`)
 
           if (authMode === 'none') {
-            console.error('No usable Cloudflare API token or API key/email pair is visible to the production environment')
+            console.error('No usable Cloudflare credential is visible to the production environment')
             process.exit(2)
           }
           if (!account) {
@@ -154,13 +151,16 @@ jobs:
       - name: Build Web/PWA and validate Worker
         run: npm run build
 
+      - name: Validate final Label regression contract
+        run: node --test worker/test/label-final-runtime-v1.test.mjs
+
       - name: Render canonical production bindings
         run: npm run cf:render
 
       - name: Deploy Worker and Web/PWA assets
         run: npx wrangler deploy --config worker/wrangler.production.jsonc
 
-      - name: Verify live PWA v39
+      - name: Verify final Label runtime on production
         id: verify
         shell: bash
         run: |
@@ -168,21 +168,33 @@ jobs:
           for attempt in $(seq 1 24); do
             stamp="$(date +%s)"
             release="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/app-release.json?attempt=${attempt}&ts=${stamp}" || true)"
-            shell="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/sw-v38.js?attempt=${attempt}&ts=${stamp}" || true)"
-            if grep -Fq '"pwa_version": "stock-count-layout-pwa-v39"' <<<"$release" \
-              && grep -Fq 'stock-count-layout-pwa-v39' <<<"$shell"; then
+            health="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/api/health?attempt=${attempt}&ts=${stamp}" || true)"
+            index="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/?attempt=${attempt}&ts=${stamp}" || true)"
+            asset="$(grep -oE 'src="/assets/[^"]+\.js"' <<<"${index}" | head -n 1 | cut -d'"' -f2 || true)"
+            bundle=""
+            if [[ -n "${asset}" ]]; then
+              bundle="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}${asset}?attempt=${attempt}&ts=${stamp}" || true)"
+            fi
+
+            if grep -Fq '"pwa_version": "stock-count-layout-pwa-v39"' <<<"${release}" \
+              && [[ -n "${health}" ]] \
+              && grep -Fq 'stable-tspl-v16-date-fit-v22' <<<"${bundle}" \
+              && grep -Fq 'd1-three-stage-fifo-v26' <<<"${bundle}"; then
               echo "verified=true" >> "$GITHUB_OUTPUT"
               echo "LIVE_PWA_VERSION=stock-count-layout-pwa-v39"
+              echo "LIVE_LABEL_PRINTING=stable-tspl-v16-date-fit-v22"
+              echo "LIVE_LABEL_SOURCE=d1-three-stage-fifo-v26"
               echo "PRODUCTION_DEPLOYMENT_VERIFIED=true"
               exit 0
             fi
             sleep 10
           done
+
           echo "verified=false" >> "$GITHUB_OUTPUT"
-          echo "Production did not expose PWA v39 within the verification window" >&2
+          echo "Production did not expose the final Label runtime within the verification window" >&2
           exit 1
 
-      - name: Publish deployment status
+      - name: Publish deployment status to PR 70
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
@@ -191,7 +203,6 @@ jobs:
           AUTH_MODE: ${{ steps.credentials.outputs.auth_mode }}
           AUTH_NAME: ${{ steps.credentials.outputs.auth_name }}
           ACCOUNT_NAME: ${{ steps.credentials.outputs.account_name }}
-          AVAILABLE_NAMES: ${{ steps.credentials.outputs.available_names }}
         shell: bash
         run: |
           set -euo pipefail
@@ -202,16 +213,17 @@ jobs:
             result="FAILED"
           fi
           gh issue comment "${DEPLOYMENT_STATUS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "$(cat <<EOF
-          ## Stock Count layout PWA v39 deployment: ${result}
+          ## Final Label runtime production deployment: ${result}
 
           - Run ID: \`${DEPLOYMENT_RUN_ID}\`
           - Commit: \`${GITHUB_SHA}\`
           - Job status: \`${DEPLOYMENT_JOB_STATUS}\`
-          - Live v39 verified: \`${LIVE_VERIFIED:-false}\`
+          - Live runtime verified: \`${LIVE_VERIFIED:-false}\`
+          - Expected print runtime: \`stable-tspl-v16-date-fit-v22\`
+          - Expected source runtime: \`d1-three-stage-fifo-v26\`
           - Auth mode selected: \`${AUTH_MODE:-none}\`
-          - Auth secret selected: \`${AUTH_NAME:-none}\`
+          - Auth setting selected: \`${AUTH_NAME:-none}\`
           - Account setting selected: \`${ACCOUNT_NAME:-none}\`
-          - Visible Cloudflare/Wrangler setting names: \`${AVAILABLE_NAMES:-none}\`
           - Production: \`${OPS_PRODUCTION_ORIGIN}\`
           - Workflow: ${run_url}
           - Checked at: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`
