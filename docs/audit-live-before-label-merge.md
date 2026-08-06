@@ -11,3 +11,5 @@ Run exact candidate bundle matching against likely production commits.
 Run normalized bundle similarity and chunk identity comparison.
 
 Retry with linear-time normalized hash and exact chunk comparison.
+
+Compare live production against historical deployment branch heads.
