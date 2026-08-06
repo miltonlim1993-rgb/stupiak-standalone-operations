@@ -34,7 +34,7 @@ jobs:
           curl -fsSL --retry 3 --retry-delay 2 "${origin}/app-release.json?ts=${stamp}" -o release.json
           curl -fsSL --retry 3 --retry-delay 2 "${origin}/api/health?ts=${stamp}" -o health.json
           curl -fsSL --retry 3 --retry-delay 2 "${origin}/?ts=${stamp}" -o index.html
-          asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' index.html | head -n 1 | cut -d'\"' -f2)"
+          asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' index.html | head -n 1 | sed -E 's/^src=\"([^\"]+)\"$/\1/')"
           test -n "${asset}"
           curl -fsSL --retry 3 --retry-delay 2 "${origin}${asset}?ts=${stamp}" -o live-bundle.js
 
