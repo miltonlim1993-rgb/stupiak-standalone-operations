@@ -63,3 +63,52 @@ jobs:
               echo "${marker}=absent"
             fi
           done
+
+  match-live-production-baseline:
+    if: github.event_name == 'pull_request' && github.head_ref == 'agent/audit-live-before-label-merge'
+    runs-on: ubuntu-latest
+    env:
+      VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
+      VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
+      LIVE_BUNDLE_SHA256: fb7c38e14ef035be6ad91948b72432e62002ac37ae1c6f8ff760a1b69d723ca8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Compare likely production commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          candidates=(
+            4d0f9eec13fd00ea34a3c0c955026048ec57c123
+            6f03f5ba1fd862e241da7b4ee954a7be17328911
+            fa4c1709987feeae24b1e7c5f8167d288a4d6c65
+            fa3fc542fe497bf6b63273163f11e96a09c26bf8
+          )
+          matched=''
+          for sha in "${candidates[@]}"; do
+            echo "=== CANDIDATE ${sha} ==="
+            git checkout --force "${sha}"
+            git clean -fdx
+            npm ci
+            npm run build
+            asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' web/dist/index.html | head -n 1 | sed -E 's/^src=\"([^\"]+)\"$/\1/')"
+            file="web/dist${asset}"
+            test -f "${file}"
+            hash="$(sha256sum "${file}" | awk '{print $1}')"
+            echo "candidate_asset=${asset}"
+            echo "candidate_sha256=${hash}"
+            if [[ "${hash}" == "${LIVE_BUNDLE_SHA256}" ]]; then
+              echo "LIVE_PRODUCTION_BASELINE_MATCH=${sha}"
+              matched="${sha}"
+              break
+            fi
+          done
+          if [[ -z "${matched}" ]]; then
+            echo 'LIVE_PRODUCTION_BASELINE_MATCH=none'
+            exit 2
+          fi
