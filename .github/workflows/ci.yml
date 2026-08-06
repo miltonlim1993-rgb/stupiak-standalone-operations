@@ -20,3 +20,46 @@ jobs:
       - run: npm run build
       - name: Validate final Label printing and D1 source runtime
         run: node --test worker/test/label-final-runtime-v1.test.mjs
+
+  audit-live-production:
+    if: github.event_name == 'pull_request' && github.head_ref == 'agent/audit-live-before-label-merge'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Read live OPS release fingerprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          origin='https://stupiaks-ops.sporkburger19.workers.dev'
+          stamp="$(date +%s)"
+          curl -fsSL --retry 3 --retry-delay 2 "${origin}/app-release.json?ts=${stamp}" -o release.json
+          curl -fsSL --retry 3 --retry-delay 2 "${origin}/api/health?ts=${stamp}" -o health.json
+          curl -fsSL --retry 3 --retry-delay 2 "${origin}/?ts=${stamp}" -o index.html
+          asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' index.html | head -n 1 | cut -d'\"' -f2)"
+          test -n "${asset}"
+          curl -fsSL --retry 3 --retry-delay 2 "${origin}${asset}?ts=${stamp}" -o live-bundle.js
+
+          echo '=== LIVE_APP_RELEASE ==='
+          cat release.json
+          echo
+          echo '=== LIVE_HEALTH_JSON ==='
+          cat health.json
+          echo
+          echo '=== LIVE_ASSET ==='
+          echo "asset=${asset}"
+          sha256sum live-bundle.js
+          echo '=== LIVE_RUNTIME_MARKERS ==='
+          for marker in \
+            'stock-count-layout-pwa-v39' \
+            'stable-tspl-v16-date-fit-v22' \
+            'd1-three-stage-fifo-v26' \
+            '4.6.25-label-source-fifo-v26' \
+            '4.6.20-stable-tspl-core-v16-date-fit-v22' \
+            'LOCAL_AUTH_MODE' \
+            'MEDIA_RETENTION_DAYS' \
+            'stale-aware-v1'; do
+            if grep -Fq "${marker}" live-bundle.js health.json release.json; then
+              echo "${marker}=present"
+            else
+              echo "${marker}=absent"
+            fi
+          done
