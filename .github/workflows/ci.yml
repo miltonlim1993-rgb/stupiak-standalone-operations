@@ -7,6 +7,10 @@ on:
       - main
       - 'release/**'
 
+concurrency:
+  group: validate-source-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -77,7 +81,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Compare normalized bundles and chunk identities
+      - name: Compare normalized hashes and exact chunk identities
         shell: bash
         run: |
           set -euo pipefail
@@ -90,14 +94,18 @@ jobs:
           python3 - <<'PY'
           import re
           from pathlib import Path
-          text = Path('/tmp/live-main.js').read_text(errors='replace')
-          text = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.js', r'/assets/\1-HASH.js', text)
-          text = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.css', r'/assets/\1-HASH.css', text)
-          text = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', text, flags=re.I)
-          Path('/tmp/live-main.normalized.js').write_text(text)
-          chunks = sorted(set(re.findall(r'/assets/[^"\']+?-[A-Za-z0-9_-]{8}\.js', Path('/tmp/live-main.js').read_text(errors='replace'))))
+          raw = Path('/tmp/live-main.js').read_text(errors='replace')
+          normalized = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.js', r'/assets/\1-HASH.js', raw)
+          normalized = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.css', r'/assets/\1-HASH.css', normalized)
+          normalized = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', normalized, flags=re.I)
+          Path('/tmp/live-main.normalized.js').write_text(normalized)
+          chunks = sorted(set(re.findall(r'/assets/[^"\']+?-[A-Za-z0-9_-]{8}\.js', raw)))
           Path('/tmp/live-chunks.txt').write_text('\n'.join(chunks))
           PY
+          live_norm_sha="$(sha256sum /tmp/live-main.normalized.js | awk '{print $1}')"
+          live_size="$(wc -c < /tmp/live-main.normalized.js)"
+          echo "LIVE_NORMALIZED_SHA256=${live_norm_sha}"
+          echo "LIVE_NORMALIZED_SIZE=${live_size}"
 
           candidates=(
             4d0f9eec13fd00ea34a3c0c955026048ec57c123
@@ -121,32 +129,36 @@ jobs:
 
           : > /tmp/scores.tsv
           for sha in "${candidates[@]}"; do
+            if ! git cat-file -e "${sha}^{commit}" 2>/dev/null; then
+              echo "SKIP_UNKNOWN_COMMIT=${sha}"
+              continue
+            fi
             git checkout --force "${sha}"
             rm -rf web/dist
             npm run build -w web >/tmp/build.log 2>&1
             asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' web/dist/index.html | head -n 1 | sed -E 's/^src=\"([^\"]+)\"$/\1/')"
             file="web/dist${asset}"
-            SHA="${sha}" FILE="${file}" python3 - <<'PY' >> /tmp/scores.tsv
-          import os, re, difflib
+            SHA="${sha}" FILE="${file}" LIVE_SHA="${live_norm_sha}" LIVE_SIZE="${live_size}" python3 - <<'PY' >> /tmp/scores.tsv
+          import hashlib, os, re
           from pathlib import Path
           sha = os.environ['SHA']
-          cand_path = Path(os.environ['FILE'])
-          live = Path('/tmp/live-main.normalized.js').read_text(errors='replace')
-          cand_raw = cand_path.read_text(errors='replace')
-          cand = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.js', r'/assets/\1-HASH.js', cand_raw)
-          cand = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.css', r'/assets/\1-HASH.css', cand)
-          cand = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', cand, flags=re.I)
-          ratio = difflib.SequenceMatcher(None, live, cand, autojunk=False).ratio()
+          raw = Path(os.environ['FILE']).read_text(errors='replace')
+          normalized = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.js', r'/assets/\1-HASH.js', raw)
+          normalized = re.sub(r'/assets/([^"\']+?)-[A-Za-z0-9_-]{8}\.css', r'/assets/\1-HASH.css', normalized)
+          normalized = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', normalized, flags=re.I)
+          norm_sha = hashlib.sha256(normalized.encode()).hexdigest()
           live_chunks = set(Path('/tmp/live-chunks.txt').read_text().splitlines())
-          cand_chunks = set(re.findall(r'/assets/[^"\']+?-[A-Za-z0-9_-]{8}\.js', cand_raw))
+          cand_chunks = set(re.findall(r'/assets/[^"\']+?-[A-Za-z0-9_-]{8}\.js', raw))
           common = len(live_chunks & cand_chunks)
           union = len(live_chunks | cand_chunks)
           jaccard = common / union if union else 1.0
-          print(f'{ratio:.9f}\t{jaccard:.9f}\t{common}\t{len(live_chunks)}\t{len(cand_chunks)}\t{sha}')
+          size_delta = abs(len(normalized) - int(os.environ['LIVE_SIZE']))
+          exact = int(norm_sha == os.environ['LIVE_SHA'])
+          print(f'{exact}\t{jaccard:.9f}\t{common}\t{size_delta}\t{norm_sha}\t{sha}')
           PY
           done
 
-          echo '=== NORMALIZED_MATCH_SCORES ==='
-          sort -nr -k1,1 /tmp/scores.tsv
-          best="$(sort -nr -k1,1 /tmp/scores.tsv | head -n 1)"
+          echo '=== NORMALIZED_AND_CHUNK_SCORES ==='
+          sort -t$'\t' -k1,1nr -k2,2nr -k3,3nr -k4,4n /tmp/scores.tsv
+          best="$(sort -t$'\t' -k1,1nr -k2,2nr -k3,3nr -k4,4n /tmp/scores.tsv | head -n 1)"
           echo "BEST_LIVE_SOURCE_CANDIDATE=${best}"
