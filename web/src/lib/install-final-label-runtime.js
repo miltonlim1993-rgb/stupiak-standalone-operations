@@ -10,19 +10,22 @@ import { installLabelFifoPolicyV26 } from '@/lib/install-label-fifo-policy-v26'
 const FINAL_LABEL_RUNTIME_VERSION = 'stable-tspl-v16-date-fit-v22+d1-fifo-v26'
 let installed = false
 
+function isNativeAndroid() {
+  const capacitor = window.Capacitor
+  return Boolean(
+    (capacitor?.isNativePlatform?.() && capacitor?.getPlatform?.() === 'android')
+    || window.location.origin === 'https://localhost'
+    || window.location.origin === 'capacitor://localhost'
+  )
+}
+
 function apiUrl(pathname) {
   const configured = String(import.meta.env.VITE_API_BASE_URL || '').trim().replace(/\/$/, '')
   return configured ? `${configured}${pathname}` : pathname
 }
 
 function nativeHeaders() {
-  const capacitor = window.Capacitor
-  const nativeAndroid = Boolean(
-    (capacitor?.isNativePlatform?.() && capacitor?.getPlatform?.() === 'android')
-    || window.location.origin === 'https://localhost'
-    || window.location.origin === 'capacitor://localhost'
-  )
-  return nativeAndroid ? { 'X-ChefOps-Native': 'android' } : {}
+  return isNativeAndroid() ? { 'X-ChefOps-Native': 'android' } : {}
 }
 
 async function liveD1Catalog(options = {}) {
@@ -35,9 +38,12 @@ async function liveD1Catalog(options = {}) {
   })
   const data = await response.json().catch(() => null)
   if (!response.ok) {
-    const error = new Error(data?.error || data?.message || `Label catalog failed (${response.status})`)
+    const message = typeof data?.error === 'string'
+      ? data.error
+      : data?.error?.message || data?.message || `Label catalog failed (${response.status})`
+    const error = new Error(message)
     error.status = response.status
-    error.code = data?.code || 'label_catalog_live_failed'
+    error.code = data?.code || data?.error?.code || 'label_catalog_live_failed'
     throw error
   }
   return data
@@ -64,13 +70,15 @@ export function installFinalLabelRuntime() {
   installPrintOutcomeIntegrityV13()
   installLabelContentOrientationV7()
   installLabelSizeContractStatusV14()
-  installStableLabelPrintV16()
-  installStableLabelPrintV20()
+  if (isNativeAndroid()) installStableLabelPrintV16()
+  else installStableLabelPrintV20()
   installLabelFifoPolicyV26()
 
   window.__chefopsFinalLabelRuntime = {
     version: FINAL_LABEL_RUNTIME_VERSION,
-    printing: 'raw-tspl-stable-v16-date-fit-v22',
+    printing: isNativeAndroid()
+      ? 'android-raw-tspl-stable-v16-date-fit-v22'
+      : 'web-raw-tspl-stable-v20-date-fit-v22',
     label_catalog: 'd1-primary-with-installed-package-fallback',
     source_policy: 'three-stage-source-chain-v26',
   }
