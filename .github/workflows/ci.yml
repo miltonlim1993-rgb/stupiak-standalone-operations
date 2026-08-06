@@ -65,7 +65,7 @@ jobs:
             fi
           done
 
-  compare-live-chunk-content:
+  inspect-live-main-delta:
     if: github.event_name == 'pull_request' && github.head_ref == 'agent/audit-live-before-label-merge'
     runs-on: ubuntu-latest
     env:
@@ -80,7 +80,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Compare normalized content of live chunks
+      - name: Inspect live versus pre-Label main entry
         shell: bash
         run: |
           set -euo pipefail
@@ -89,89 +89,41 @@ jobs:
           curl -fsSL "${origin}/?ts=${stamp}" -o /tmp/live-index.html
           live_main_path="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' /tmp/live-index.html | head -n 1 | sed -E 's/^src=\"([^\"]+)\"$/\1/')"
           curl -fsSL "${origin}${live_main_path}?ts=${stamp}" -o /tmp/live-main.js
-          mkdir -p /tmp/live-assets
+
+          git checkout --force fa3fc542fe497bf6b63273163f11e96a09c26bf8
+          rm -rf web/dist
+          npm run build -w web >/tmp/build.log 2>&1
+          candidate_main_path="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' web/dist/index.html | head -n 1 | sed -E 's/^src=\"([^\"]+)\"$/\1/')"
+          cp "web/dist${candidate_main_path}" /tmp/candidate-main.js
 
           python3 - <<'PY'
           import re
           from pathlib import Path
-          raw = Path('/tmp/live-main.js').read_text(errors='replace')
-          names = sorted({m.split('/')[-1] for m in re.findall(r'(?:\./)?[A-Za-z0-9_.-]+?-[A-Za-z0-9_-]{8}\.js', raw)})
-          Path('/tmp/live-names.txt').write_text('\n'.join(names))
-          print(f'LIVE_REFERENCED_CHUNKS={len(names)}')
-          PY
-
-          while IFS= read -r name; do
-            [[ -n "${name}" ]] || continue
-            curl -fsSL --retry 3 --retry-delay 1 "${origin}/assets/${name}?ts=${stamp}" -o "/tmp/live-assets/${name}"
-          done < /tmp/live-names.txt
-
-          python3 - <<'PY'
-          import hashlib, re
-          from pathlib import Path
-          def normalize(text):
-              text = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.js', r'\1-HASH.js', text)
-              text = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.css', r'\1-HASH.css', text)
-              text = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', text, flags=re.I)
-              return text
-          rows=[]
-          for p in sorted(Path('/tmp/live-assets').glob('*.js')):
-              h=hashlib.sha256(normalize(p.read_text(errors='replace')).encode()).hexdigest()
-              rows.append((p.name,h))
-          Path('/tmp/live-map.tsv').write_text('\n'.join(f'{n}\t{h}' for n,h in rows))
-          Path('/tmp/live-hashes.txt').write_text('\n'.join(sorted({h for _,h in rows})))
-          print(f'LIVE_NORMALIZED_CHUNK_HASHES={len(set(h for _,h in rows))}')
-          PY
-
-          refs=(
-            4d0f9eec13fd00ea34a3c0c955026048ec57c123
-            6f03f5ba1fd862e241da7b4ee954a7be17328911
-            fa4c1709987feeae24b1e7c5f8167d288a4d6c65
-            db6645aff8bf992f067552b16d225238f418d4ed
-            origin/fix/local-email-d1-only
-            origin/feat/simplified-email-approval-login
-            origin/fix/first-login-credential-setup
-          )
-
-          : > /tmp/chunk-scores.tsv
-          idx=0
-          for ref in "${refs[@]}"; do
-            idx=$((idx+1))
-            git checkout --force "${ref}"
-            sha="$(git rev-parse HEAD)"
-            rm -rf web/dist
-            npm run build -w web >/tmp/build.log 2>&1
-            REF="${ref}" SHA="${sha}" IDX="${idx}" python3 - <<'PY' >> /tmp/chunk-scores.tsv
-          import hashlib, os, re
-          from pathlib import Path
-          def normalize(text):
-              text = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.js', r'\1-HASH.js', text)
-              text = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.css', r'\1-HASH.css', text)
-              text = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', text, flags=re.I)
-              return text
-          live=set(Path('/tmp/live-hashes.txt').read_text().splitlines())
-          cand=set()
-          for p in Path('web/dist/assets').glob('*.js'):
-              cand.add(hashlib.sha256(normalize(p.read_text(errors='replace')).encode()).hexdigest())
-          common=len(live & cand)
-          union=len(live | cand)
-          j=common/union if union else 1
-          Path(f"/tmp/cand-{os.environ['IDX']}-hashes.txt").write_text('\n'.join(sorted(cand)))
-          print(f"{common}\t{j:.9f}\t{len(live)}\t{len(cand)}\t{os.environ['IDX']}\t{os.environ['SHA']}\t{os.environ['REF']}")
-          PY
-          done
-
-          echo '=== NORMALIZED_CHUNK_CONTENT_SCORES ==='
-          sort -t$'\t' -k1,1nr -k2,2nr /tmp/chunk-scores.tsv
-          best="$(sort -t$'\t' -k1,1nr -k2,2nr /tmp/chunk-scores.tsv | head -n 1)"
-          echo "BEST_CHUNK_CONTENT_BASE=${best}"
-          best_idx="$(cut -f5 <<<"${best}")"
-          BEST_IDX="${best_idx}" python3 - <<'PY'
-          import os
-          from pathlib import Path
-          cand=set(Path(f"/tmp/cand-{os.environ['BEST_IDX']}-hashes.txt").read_text().splitlines())
-          print('=== LIVE_CHUNKS_NOT_PRESENT_IN_BEST_BASE ===')
-          for line in Path('/tmp/live-map.tsv').read_text().splitlines():
-              name,h=line.split('\t',1)
-              if h not in cand:
-                  print(name)
+          def norm(s):
+              s = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.js', r'\1-HASH.js', s)
+              s = re.sub(r'((?:\./)?[A-Za-z0-9_.-]+?)-[A-Za-z0-9_-]{8}\.css', r'\1-HASH.css', s)
+              s = re.sub(r'\d+-[a-z0-9-]+\.apps\.googleusercontent\.com', 'GOOGLE_CLIENT_ID', s, flags=re.I)
+              return s
+          def strings(text):
+              vals=[]
+              for m in re.finditer(r'"((?:\\.|[^"\\])*)"|\'((?:\\.|[^\'\\])*)\'', text):
+                  v=m.group(1) if m.group(1) is not None else m.group(2)
+                  v=norm(v)
+                  if 3 <= len(v) <= 300:
+                      vals.append(v)
+              return set(vals)
+          live_raw=Path('/tmp/live-main.js').read_text(errors='replace')
+          cand_raw=Path('/tmp/candidate-main.js').read_text(errors='replace')
+          live=strings(live_raw)
+          cand=strings(cand_raw)
+          live_only=sorted(live-cand, key=lambda x:(len(x),x))
+          cand_only=sorted(cand-live, key=lambda x:(len(x),x))
+          print(f'LIVE_MAIN_BYTES={len(live_raw)}')
+          print(f'CANDIDATE_MAIN_BYTES={len(cand_raw)}')
+          print(f'LIVE_ONLY_STRING_COUNT={len(live_only)}')
+          print(f'CANDIDATE_ONLY_STRING_COUNT={len(cand_only)}')
+          print('=== LIVE_ONLY_STRINGS ===')
+          for v in live_only[:250]: print(repr(v))
+          print('=== CANDIDATE_ONLY_STRINGS ===')
+          for v in cand_only[:250]: print(repr(v))
           PY
