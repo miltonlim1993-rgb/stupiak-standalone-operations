@@ -11,6 +11,8 @@
     "dev": "node scripts/dev.mjs",
     "dev:web": "npm run dev -w web",
     "dev:api": "npm run dev -w worker",
+    "local:data:pull": "node scripts/pull-production-pack-readonly.mjs",
+    "dev:local-ui": "npm run local:data:pull && npm run dev -w web",
     "build": "npm run build -w web && npm run check -w worker",
     "setup:google": "node scripts/setup-google.mjs",
     "deploy:secrets": "node scripts/push-worker-secrets.mjs",
