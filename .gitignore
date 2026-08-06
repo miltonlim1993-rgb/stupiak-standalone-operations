@@ -9,6 +9,7 @@ worker/.wrangler/
 .env.*
 !.env.example
 worker/wrangler.production.jsonc
+web/public/local-sandbox/*.json
 *.jks
 *.keystore
 *.apk
