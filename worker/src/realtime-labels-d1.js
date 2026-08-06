@@ -9,7 +9,7 @@ import {
   handleD1FinishSource,
   handleD1LabelCatalog,
   handleD1ReprintLabel,
-} from './label-d1-operations.js'
+} from './label-d1-operations-v26.js'
 
 function normalizedText(value) {
   return String(value || '').trim().toLowerCase()
