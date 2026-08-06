@@ -106,6 +106,16 @@ test('current D1 runtime routes through the v26 adapter', async () => {
   assert.match(adapter, /source-rollback/)
 })
 
+test('local UI sandbox is explicitly dev-only and opt-in', async () => {
+  const sandbox = await source('web/src/lib/local-ui-sandbox.js')
+  const installer = await source('web/src/lib/install-final-label-runtime.js')
+  assert.match(sandbox, /import\.meta\.env\.DEV/)
+  assert.match(sandbox, /VITE_LOCAL_UI_SANDBOX/)
+  assert.match(sandbox, /localStorage/)
+  assert.match(sandbox, /local-browser/)
+  assert.match(installer, /installLocalUiSandbox\(\)/)
+})
+
 test('final raw TSPL printing files remain wired without HTML raster fallback', async () => {
   const main = await source('web/src/main.jsx')
   const installer = await source('web/src/lib/install-final-label-runtime.js')
