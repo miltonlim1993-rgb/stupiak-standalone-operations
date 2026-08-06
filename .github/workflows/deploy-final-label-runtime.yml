@@ -1,7 +1,7 @@
 name: Deploy final Label runtime
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened]
     branches: [main]
     paths:
@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEPLOYMENT_RUN_ID: final-label-runtime-target-20260806-1355
+  DEPLOYMENT_RUN_ID: final-label-runtime-pr-main-20260806-1405
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
   VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
@@ -33,7 +33,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish deployment start
-        if: github.event_name == 'pull_request_target'
+        if: github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -43,7 +43,7 @@ jobs:
           ## Final Label production deployment: STARTED
 
           - Run ID: \`${DEPLOYMENT_RUN_ID}\`
-          - Trusted main commit: \`${GITHUB_SHA}\`
+          - Trusted main commit: \`${{ github.event.pull_request.base.sha }}\`
           - Workflow: https://github.com/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
           EOF
           )"
@@ -192,7 +192,7 @@ jobs:
           exit 1
 
       - name: Publish final deployment status
-        if: always() && github.event_name == 'pull_request_target'
+        if: always() && github.event_name == 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
@@ -210,7 +210,7 @@ jobs:
           ## Final Label production deployment: ${result}
 
           - Run ID: \`${DEPLOYMENT_RUN_ID}\`
-          - Trusted main commit deployed: \`${GITHUB_SHA}\`
+          - Trusted main commit deployed: \`${{ github.event.pull_request.base.sha }}\`
           - Job status: \`${DEPLOYMENT_JOB_STATUS}\`
           - Live runtime verified: \`${LIVE_VERIFIED:-false}\`
           - Print runtime: \`stable-tspl-v16-date-fit-v22\`
