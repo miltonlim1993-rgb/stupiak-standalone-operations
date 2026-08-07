@@ -18,18 +18,18 @@ jobs:
       - name: Wait for canonical production deployment and report
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: d8c2302f0b0e2199e79def2d3f40148e9dd40d74
+          STARTED_AFTER: "2026-08-07T03:47:00Z"
         shell: bash
         run: |
           set -euo pipefail
           run_id=""
-          for attempt in $(seq 1 18); do
-            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-stock-count-pwa-v38.yml --event workflow_dispatch --branch main --limit 20 --json databaseId,headSha -q ".[] | select(.headSha == \"${TARGET_SHA}\") | .databaseId" | head -n 1)"
+          for attempt in $(seq 1 24); do
+            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-stock-count-pwa-v38.yml --event workflow_dispatch --branch main --limit 20 --json databaseId,createdAt -q ".[] | select(.createdAt >= \"${STARTED_AFTER}\") | .databaseId" | head -n 1)"
             if [[ -n "$run_id" ]]; then break; fi
             sleep 5
           done
           if [[ -z "$run_id" ]]; then
-            gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "Production deploy monitor could not find a canonical workflow_dispatch run for ${TARGET_SHA}."
+            gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "Production deploy monitor did not find a canonical workflow_dispatch run after ${STARTED_AFTER}."
             exit 1
           fi
           set +e
@@ -37,5 +37,5 @@ jobs:
           watch_status=$?
           set -e
           result="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion,url,headSha -q '{status: .status, conclusion: .conclusion, url: .url, headSha: .headSha}')"
-          gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "## Task realtime production deploy monitor\n\n- Target dispatch SHA: \`${TARGET_SHA}\`\n- Canonical run ID: \`${run_id}\`\n- Result: \`${result}\`"
+          gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "## Task realtime production deploy monitor\n\n- Canonical run ID: \`${run_id}\`\n- Result: \`${result}\`"
           exit "$watch_status"
