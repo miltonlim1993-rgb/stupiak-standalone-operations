@@ -1,4 +1,4 @@
-name: Locate automatic OPS deploy workflow
+name: Verify live OPS Task lazy chunk
 
 on:
   push:
@@ -8,25 +8,40 @@ on:
 
 permissions:
   contents: write
-  actions: read
 
 jobs:
-  locate:
+  verify-task-chunk:
     runs-on: ubuntu-latest
     steps:
-      - name: Persist workflow run metadata
+      - name: Resolve live Task chunk and inspect no-remount marker
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: "31146886064"
-          STATUS_PATH: .ops-deploy-status/automatic-deploy-workflow-20260807.json
+          ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
+          STATUS_PATH: .ops-deploy-status/live-task-lazy-chunk-20260807.json
         shell: bash
         run: |
           set -euo pipefail
-          result="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '{id,name,path,event,status,conclusion,head_sha,html_url,display_title}')"
-          encoded="$(printf '%s' "$result" | base64 -w0)"
+          stamp="$(date +%s)"
+          curl -fsSL --retry 3 --retry-delay 1 "${ORIGIN}/?task_lazy_probe=${stamp}" -o /tmp/index.html
+          main_asset="$(grep -oE '/assets/index-[A-Za-z0-9_-]+\.js' /tmp/index.html | head -n 1)"
+          test -n "$main_asset"
+          curl -fsSL --retry 3 --retry-delay 1 "${ORIGIN}${main_asset}?task_lazy_probe=${stamp}" -o /tmp/main.js
+          task_name="$(grep -oE 'OperationalTasksLive-[A-Za-z0-9_-]+\.js' /tmp/main.js | head -n 1 || true)"
+          task_asset=""
+          marker=false
+          old_revision_key=false
+          if [[ -n "$task_name" ]]; then
+            task_asset="/assets/${task_name}"
+            curl -fsSL --retry 3 --retry-delay 1 "${ORIGIN}${task_asset}?task_lazy_probe=${stamp}" -o /tmp/task.js
+            if grep -Fq 'chefops-task-realtime' /tmp/task.js; then marker=true; fi
+            if grep -Fq 'chefops:realtime-applied' /tmp/task.js && grep -Fq 'chefops:realtime' /tmp/task.js; then old_revision_key=true; fi
+          fi
+          checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          payload="$(printf '{\"checked_at\":\"%s\",\"main_asset\":\"%s\",\"task_asset\":\"%s\",\"task_no_remount_marker\":%s,\"old_dual_realtime_signature\":%s}' "$checked_at" "$main_asset" "$task_asset" "$marker" "$old_revision_key")"
+          encoded="$(printf '%s' "$payload" | base64 -w0)"
           current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" --jq .sha 2>/dev/null || true)"
           if [[ -n "$current_sha" ]]; then
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update automatic deploy workflow metadata' -f content="$encoded" -f sha="$current_sha"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update live Task lazy chunk probe' -f content="$encoded" -f sha="$current_sha"
           else
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record automatic deploy workflow metadata' -f content="$encoded"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record live Task lazy chunk probe' -f content="$encoded"
           fi
