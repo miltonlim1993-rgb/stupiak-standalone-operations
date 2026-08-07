@@ -14,6 +14,7 @@ import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
 import { handleD1OperationalTaskAction } from './realtime-task-action-d1.js'
 import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
 import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
+import { handlePrimaryMediaUpload } from './realtime-media-upload.js'
 import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
 import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import { withSubmissionLock } from './submission-locks.js'
@@ -108,7 +109,7 @@ function apiCorsHeaders(request, env) {
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Directory-Migration-Secret, X-ChefOps-Client-Id, X-ChefOps-Mutation-Id, X-Requested-With',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
-    'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision',
+    'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision, X-ChefOps-Media-Upload-Path',
     'Vary': 'Origin',
     'X-ChefOps-Worker-Revision': WORKER_REVISION,
   }
@@ -186,6 +187,9 @@ export default {
 
       const directoryResponse = await handleD1DirectoryApi(request, runEnv, url)
       if (directoryResponse) return withApiHeaders(request, env, directoryResponse)
+
+      const primaryMediaUploadResponse = await handlePrimaryMediaUpload(request, runEnv, url)
+      if (primaryMediaUploadResponse) return withApiHeaders(request, env, primaryMediaUploadResponse)
 
       const rosterSourceResponse = await handleDutyRosterSourceUpload(request, runEnv, url)
       if (rosterSourceResponse) return withApiHeaders(request, env, rosterSourceResponse)
