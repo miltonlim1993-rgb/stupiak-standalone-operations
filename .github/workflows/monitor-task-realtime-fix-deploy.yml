@@ -1,4 +1,4 @@
-name: Inspect live OPS Task bundle
+name: Inspect Cloudflare check for OPS deploy
 
 on:
   push:
@@ -8,31 +8,25 @@ on:
 
 permissions:
   contents: write
+  checks: read
 
 jobs:
-  inspect-live-task-bundle:
+  inspect-cloudflare-checks:
     runs-on: ubuntu-latest
     steps:
-      - name: Check production JS for Task no-remount marker
+      - name: Persist check runs for deploy-binding fix commit
         env:
           GH_TOKEN: ${{ github.token }}
-          ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
-          ASSET: /assets/index-C6GvYwbB.js
-          STATUS_PATH: .ops-deploy-status/live-task-bundle-marker-20260807.json
+          TARGET_SHA: 6b21fbc5ead19eb889df5e998581232b8a963df9
+          STATUS_PATH: .ops-deploy-status/cloudflare-checks-render-fix-20260807.json
         shell: bash
         run: |
           set -euo pipefail
-          stamp="$(date +%s)"
-          curl -fsSL --retry 3 --retry-delay 1 "${ORIGIN}${ASSET}?bundle_probe=${stamp}" -o /tmp/bundle.js
-          if grep -Fq 'chefops-task-realtime' /tmp/bundle.js; then marker=true; else marker=false; fi
-          if grep -Fq 'chefops:realtime-applied' /tmp/bundle.js; then applied_event=true; else applied_event=false; fi
-          size="$(wc -c < /tmp/bundle.js | tr -d ' ')"
-          checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          payload="$(printf '{\"checked_at\":\"%s\",\"asset\":\"%s\",\"bytes\":%s,\"task_no_remount_marker\":%s,\"realtime_applied_event\":%s}' "$checked_at" "$ASSET" "$size" "$marker" "$applied_event")"
-          encoded="$(printf '%s' "$payload" | base64 -w0)"
+          result="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs" --jq '{total_count,check_runs:[.check_runs[]|{id,name,status,conclusion,details_url,started_at,completed_at,output,app:{slug:.app.slug,name:.app.name}}]}')"
+          encoded="$(printf '%s' "$result" | base64 -w0)"
           current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" --jq .sha 2>/dev/null || true)"
           if [[ -n "$current_sha" ]]; then
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update live Task bundle marker' -f content="$encoded" -f sha="$current_sha"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update Cloudflare check inspection' -f content="$encoded" -f sha="$current_sha"
           else
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record live Task bundle marker' -f content="$encoded"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record Cloudflare check inspection' -f content="$encoded"
           fi
