@@ -11,17 +11,16 @@ permissions:
   actions: read
 
 jobs:
-  inspect-direct-production:
+  inspect-canonical-production:
     runs-on: ubuntu-latest
     steps:
-      - name: Capture direct deploy run details
+      - name: Persist canonical deploy workflow history
         env:
           GH_TOKEN: ${{ github.token }}
-          RUN_ID: "31145943735"
-          STATUS_PATH: .ops-deploy-status/task-realtime-action-required-run-view.txt
+          STATUS_PATH: .ops-deploy-status/canonical-deploy-history-20260807.json
         shell: bash
         run: |
           set -euo pipefail
-          { gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY"; echo; gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json databaseId,name,displayTitle,event,status,conclusion,workflowName,headBranch,headSha,url,createdAt,updatedAt; } > /tmp/run-view.txt 2>&1 || true
-          encoded="$(base64 -w0 /tmp/run-view.txt)"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: capture Task deploy action-required run view' -f content="$encoded"
+          result="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-stock-count-pwa-v38.yml --branch main --limit 20 --json databaseId,status,conclusion,url,headSha,createdAt,event,displayTitle)"
+          encoded="$(printf '%s' "$result" | base64 -w0)"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record canonical deploy workflow history' -f content="$encoded"
