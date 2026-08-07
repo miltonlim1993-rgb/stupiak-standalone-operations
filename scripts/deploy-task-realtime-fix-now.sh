@@ -5,20 +5,23 @@ ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
 ORIGIN="${OPS_PRODUCTION_ORIGIN:-https://stupiaks-ops.sporkburger19.workers.dev}"
-EXPECTED_MARKER="chefops-task-realtime"
+EXPECTED_MARKER="response_patches"
+FORBIDDEN_MARKER="MutationObserver"
 
 cat <<'INFO'
 ============================================================
-Stupiak's OPS — focused Task realtime no-remount deployment
+Stupiak's OPS — focused Task state-driven realtime deployment
 
 Scope:
   - Fast-forward to current main
   - Install exact locked dependencies
   - Reuse the Mac's existing Wrangler login
+  - Run the OPS architecture + Task realtime state-model contracts
   - Build current main
   - Render existing canonical production bindings
   - Deploy Worker + current Web/PWA assets
-  - Verify the live Task lazy chunk contains the no-remount fix
+  - Verify the live Task lazy chunk uses field-patch realtime saving
+  - Verify the old DOM MutationObserver save controller is absent
 
 Safety:
   D1 migration:       NO
@@ -75,10 +78,11 @@ printf '\n==> Deploying current main — no migration/backfill/data rewrite\n'
 npx wrangler deploy --config worker/wrangler.production.jsonc
 
 printf '\n==> Verifying the actual live Task lazy chunk\n'
-export ORIGIN EXPECTED_MARKER
+export ORIGIN EXPECTED_MARKER FORBIDDEN_MARKER
 node --input-type=module <<'NODE'
 const origin = String(process.env.ORIGIN || '').replace(/\/$/, '')
-const marker = String(process.env.EXPECTED_MARKER || '')
+const expectedMarker = String(process.env.EXPECTED_MARKER || '')
+const forbiddenMarker = String(process.env.FORBIDDEN_MARKER || '')
 const deadline = Date.now() + 180_000
 let last = null
 
@@ -94,22 +98,30 @@ async function text(url) {
 while (Date.now() < deadline) {
   const stamp = Date.now()
   try {
-    const html = await text(`${origin}/?task_fix_verify=${stamp}`)
+    const html = await text(`${origin}/?task_state_verify=${stamp}`)
     const mainAsset = html.match(/\/assets\/index-[A-Za-z0-9_-]+\.js/)?.[0] || ''
     if (!mainAsset) throw new Error('Main JS asset was not found in live HTML')
 
-    const main = await text(`${origin}${mainAsset}?task_fix_verify=${stamp}`)
+    const main = await text(`${origin}${mainAsset}?task_state_verify=${stamp}`)
     const taskName = main.match(/OperationalTasksLive-[A-Za-z0-9_-]+\.js/)?.[0] || ''
     if (!taskName) throw new Error('OperationalTasksLive lazy chunk was not found in live main bundle')
 
     const taskAsset = `/assets/${taskName}`
-    const task = await text(`${origin}${taskAsset}?task_fix_verify=${stamp}`)
-    last = { mainAsset, taskAsset, markerPresent: task.includes(marker) }
+    const task = await text(`${origin}${taskAsset}?task_state_verify=${stamp}`)
+    last = {
+      mainAsset,
+      taskAsset,
+      fieldPatchMarkerPresent: task.includes(expectedMarker),
+      domObserverPresent: task.includes(forbiddenMarker),
+    }
 
-    if (last.markerPresent) {
+    if (last.fieldPatchMarkerPresent && !last.domObserverPresent) {
       console.log(`LIVE_MAIN_ASSET=${mainAsset}`)
       console.log(`LIVE_TASK_ASSET=${taskAsset}`)
-      console.log('TASK_REALTIME_NO_REMOUNT_LIVE=true')
+      console.log('TASK_REALTIME_STATE_MODEL_LIVE=true')
+      console.log('TASK_SAVE_MODEL=debounced_serialized_field_patch')
+      console.log('TASK_DOM_SAVE_OBSERVER_LIVE=false')
+      console.log('TASK_PHOTO_BOOTSTRAP_CONFIRMATION_LIVE=false')
       console.log('PRODUCTION_DEPLOYMENT_VERIFIED=true')
       console.log('D1_MIGRATION_RUN=false')
       console.log('D1_BACKFILL_RUN=false')
@@ -123,5 +135,5 @@ while (Date.now() < deadline) {
 }
 
 console.error(JSON.stringify(last, null, 2))
-throw new Error('Production did not expose the Task no-remount bundle marker')
+throw new Error('Production did not expose the Task state-driven realtime bundle contract')
 NODE
