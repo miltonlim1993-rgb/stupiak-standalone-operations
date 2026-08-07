@@ -5,12 +5,16 @@ import process from 'node:process'
 const root = process.cwd()
 const templatePath = path.join(root, 'worker', 'wrangler.production.example.jsonc')
 const outputPath = path.join(root, 'worker', 'wrangler.production.jsonc')
-const kvId = String(process.env.CLOUDFLARE_APP_DATA_PACKS_ID || '').trim()
-const d1Id = String(process.env.CLOUDFLARE_OPS_DB_ID || '').trim()
+
+// These are stable production binding identifiers, not credentials. Keeping the
+// canonical defaults here lets Cloudflare Workers Builds deploy main without
+// depending on GitHub Actions secrets or a developer's local Wrangler session.
+const kvId = String(process.env.CLOUDFLARE_APP_DATA_PACKS_ID || 'f62696e1a2f14b8a9e0b84a540c7e997').trim()
+const d1Id = String(process.env.CLOUDFLARE_OPS_DB_ID || '080c13d7-e2f5-4c01-a1ca-aa00094d6fc0').trim()
 const bucketName = String(process.env.CLOUDFLARE_MEDIA_BUCKET_NAME || 'stupiaks-ops-media').trim()
 const queueName = String(process.env.CLOUDFLARE_SHEET_SYNC_QUEUE_NAME || 'stupiaks-ops-sheet-sync').trim()
 const deadLetterQueueName = String(process.env.CLOUDFLARE_SHEET_SYNC_DLQ_NAME || 'stupiaks-ops-sheet-sync-dlq').trim()
-const masterSpreadsheetId = String(process.env.GOOGLE_MASTER_SPREADSHEET_ID || '').trim()
+const masterSpreadsheetId = String(process.env.GOOGLE_MASTER_SPREADSHEET_ID || '1sy-4AIbZssCmP9HQaq-K4OicXjdvOs2EXVNmvh4bSzM').trim()
 const statvaraBridgePort = String(process.env.STATVARA_OPS_BRIDGE_PORT || '8791').trim()
 const statvaraApiPath = String(process.env.STATVARA_OPS_API_PATH || '/api/ops/v1').trim()
 
