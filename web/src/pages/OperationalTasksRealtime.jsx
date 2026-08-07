@@ -26,6 +26,10 @@ import {
 } from 'lucide-react'
 import { watermarkTaskPhoto } from '@/lib/watermark-image'
 import { taskPhotoEntityId } from '@/lib/task-photo-persistence'
+import {
+  announceTaskPhotoCaptureConsumer,
+  subscribeTaskPhotoCapture,
+} from '@/lib/task-photo-capture-channel'
 
 const AUTOSAVE_DELAY_MS = 800
 const shifts = ['MORNING', 'DAILY', 'NIGHT']
@@ -357,7 +361,6 @@ export default function OperationalTasksRealtime() {
         ))}
       </div>
       {error ? <div className="rounded-xl bg-destructive/10 p-3 text-sm text-destructive">{error}</div> : null}
-
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="animate-spin" /></div>
       ) : shifts.map((shift) => {
@@ -575,6 +578,8 @@ function TaskForm({ task, outletId, outletName, photos, onAct, onPhotoCommitted,
     const onOnline = () => { if (hasDirtyDraft()) queueAutosave(100) }
     const onCameraError = (event) => {
       const groupId = String(event.detail?.groupId || '')
+      const taskId = String(event.detail?.taskId || '')
+      if (taskId && taskId !== String(task.id)) return
       if (groupId) setGroupErrors((current) => ({ ...current, [groupId]: String(event.detail?.message || '无法打开相机') }))
     }
     document.addEventListener('visibilitychange', onHidden)
@@ -586,6 +591,20 @@ function TaskForm({ task, outletId, outletName, photos, onAct, onPhotoCommitted,
       window.removeEventListener('chefops:task-photo-inline-error', onCameraError)
     }
   })
+
+  useEffect(() => {
+    const unsubscribe = subscribeTaskPhotoCapture((event) => {
+      const detail = event.detail || {}
+      if (String(detail.taskId || '') !== String(task.id)) return
+      if (detail.outletId && String(detail.outletId) !== String(outletId)) return
+      const group = groups.find((row) => String(row.id) === String(detail.groupId || ''))
+      if (!group || !(detail.file instanceof File)) return
+      event.preventDefault()
+      void upload(group, detail.file)
+    })
+    announceTaskPhotoCaptureConsumer(task.id)
+    return unsubscribe
+  }, [groups, outletId, task.id])
 
   function removeLocalPhoto(id) {
     releaseLocalPhoto(id)
@@ -735,7 +754,7 @@ function TaskForm({ task, outletId, outletName, photos, onAct, onPhotoCommitted,
                       </div>
                     ) : null}
                     {!readonly ? (
-                      <><Button size="sm" variant="outline" className="mt-2" data-task-photo-ui disabled={uploading === group.id || displayCount >= maximum} onClick={() => input.current[group.id]?.click()}><Camera className="mr-1 h-4 w-4" />{displayCount ? `加拍照片 ${displayCount}/${maximum}` : '拍照'}</Button><input ref={(node) => { input.current[group.id] = node }} type="file" accept="image/*" capture="environment" className="hidden" data-task-photo-input data-task-photo-group={group.id} onChange={(event) => void upload(group, event.target.files?.[0])} /></>
+                      <><Button size="sm" variant="outline" className="mt-2" data-task-photo-ui disabled={uploading === group.id || displayCount >= maximum} onClick={() => input.current[group.id]?.click()}><Camera className="mr-1 h-4 w-4" />{displayCount ? `加拍照片 ${displayCount}/${maximum}` : '拍照'}</Button><input ref={(node) => { input.current[group.id] = node }} type="file" accept="image/*" capture="environment" className="hidden" data-task-photo-input data-task-photo-group={group.id} data-task-photo-task-id={task.id} data-task-photo-outlet-id={outletId} onChange={(event) => void upload(group, event.target.files?.[0])} /></>
                     ) : null}
                   </div>
                 )
