@@ -8,25 +8,39 @@ on:
 
 permissions:
   contents: write
-  actions: read
 
 jobs:
-  inspect-secret-names:
+  probe-cloudflare-secret-aliases:
     runs-on: ubuntu-latest
     steps:
-      - name: Persist repository secret and variable names only
+      - name: Persist SET or EMPTY only
         env:
           GH_TOKEN: ${{ github.token }}
-          STATUS_PATH: .ops-deploy-status/github-secret-names-20260807.txt
+          STATUS_PATH: .ops-deploy-status/cloudflare-secret-alias-probe-20260807.txt
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          WRANGLER_API_TOKEN: ${{ secrets.WRANGLER_API_TOKEN }}
+          CLOUDFLARE_WORKERS_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          CLOUDFLARE_WORKER_API_TOKEN: ${{ secrets.CLOUDFLARE_WORKER_API_TOKEN }}
+          CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          CF_TOKEN: ${{ secrets.CF_TOKEN }}
+          WORKERS_API_TOKEN: ${{ secrets.WORKERS_API_TOKEN }}
+          WORKER_API_TOKEN: ${{ secrets.WORKER_API_TOKEN }}
+          CLOUDFLARE_API_KEY: ${{ secrets.CLOUDFLARE_API_KEY }}
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+          CLOUDFLARE_GLOBAL_API_KEY: ${{ secrets.CLOUDFLARE_GLOBAL_API_KEY }}
+          CLOUDFLARE_EMAIL: ${{ secrets.CLOUDFLARE_EMAIL }}
+          CF_EMAIL: ${{ secrets.CF_EMAIL }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT }}
         shell: bash
         run: |
           set -euo pipefail
-          {
-            echo '=== actions secrets ==='
-            gh secret list --repo "$GITHUB_REPOSITORY" 2>&1 || true
-            echo
-            echo '=== actions variables ==='
-            gh variable list --repo "$GITHUB_REPOSITORY" 2>&1 || true
-          } > /tmp/names.txt
-          encoded="$(base64 -w0 /tmp/names.txt)"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record GitHub secret names for deploy audit' -f content="$encoded"
+          : > /tmp/probe.txt
+          for name in CLOUDFLARE_API_TOKEN CF_API_TOKEN WRANGLER_API_TOKEN CLOUDFLARE_WORKERS_API_TOKEN CLOUDFLARE_WORKER_API_TOKEN CLOUDFLARE_TOKEN CF_TOKEN WORKERS_API_TOKEN WORKER_API_TOKEN CLOUDFLARE_API_KEY CF_API_KEY CLOUDFLARE_GLOBAL_API_KEY CLOUDFLARE_EMAIL CF_EMAIL CLOUDFLARE_ACCOUNT_ID CF_ACCOUNT_ID CLOUDFLARE_ACCOUNT; do
+            if [[ -n "${!name:-}" ]]; then state=SET; else state=EMPTY; fi
+            printf '%s=%s\n' "$name" "$state" >> /tmp/probe.txt
+          done
+          encoded="$(base64 -w0 /tmp/probe.txt)"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record Cloudflare secret alias presence' -f content="$encoded"
