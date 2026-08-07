@@ -1,14 +1,14 @@
 {
   "app_name": "Stupiak's Ops",
-  "apk_version": "4.5.25",
-  "minimum_apk_version": "4.5.25",
+  "apk_version": "4.5.26",
+  "minimum_apk_version": "4.5.26",
   "force_update": true,
   "pwa_version": "stock-count-layout-pwa-v39",
   "minimum_pwa_version": "stock-count-layout-pwa-v39",
   "pwa_force_update": true,
-  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.25",
+  "apk_url": "https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk?v=4.5.26",
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
-  "release_notes": "Mandatory OPS Android 4.5.25 Task photo zoom fix. Failed local evidence no longer uses a full-card Retry/Delete overlay. The captured image stays as the primary tappable surface and opens the existing MediaLightbox for full-screen zoom. Retry/Delete remain available below the image only. Native Task photo capture and D1 registration flow are unchanged. No D1 migration or backfill.",
-  "release_trigger": "2026-08-07-task-photo-zoom-preview-v4.5.25"
+  "release_notes": "Mandatory OPS Android 4.5.26 Task photo React zoom fix. Failed local Task photos no longer render a full-card Retry/Delete overlay. The captured image remains the primary tappable control in every phase and opens the existing MediaLightbox for full-screen zoom; failure text, Retry and Delete render in a separate block below the image. The obsolete CSS overlay workaround has been removed. Native Task photo capture and D1 registration flow are unchanged. No D1 migration or backfill.",
+  "release_trigger": "2026-08-07-task-photo-react-zoom-v4.5.26"
 }
