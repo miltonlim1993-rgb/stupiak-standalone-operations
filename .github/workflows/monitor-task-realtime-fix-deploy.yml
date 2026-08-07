@@ -9,20 +9,19 @@ on:
 permissions:
   contents: write
   actions: read
-  checks: read
 
 jobs:
   inspect-direct-production:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect action-required check and persist details
+      - name: Capture direct deploy run details
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: a47dd8fb4dafcd32cb5c5fe301af1002b1d918b6
-          STATUS_PATH: .ops-deploy-status/task-realtime-action-required-detail.json
+          RUN_ID: "31145943735"
+          STATUS_PATH: .ops-deploy-status/task-realtime-action-required-run-view.txt
         shell: bash
         run: |
           set -euo pipefail
-          result="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs" --jq '{total_count, check_runs: [.check_runs[] | {id,name,status,conclusion,details_url,started_at,completed_at,output,app:{slug:.app.slug,name:.app.name}}]}')"
-          encoded="$(printf '%s' "$result" | base64 -w0)"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record Task deploy action-required details' -f content="$encoded"
+          { gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY"; echo; gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --json databaseId,name,displayTitle,event,status,conclusion,workflowName,headBranch,headSha,url,createdAt,updatedAt; } > /tmp/run-view.txt 2>&1 || true
+          encoded="$(base64 -w0 /tmp/run-view.txt)"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: capture Task deploy action-required run view' -f content="$encoded"
