@@ -12,9 +12,10 @@ import OperationalTasksRealtime from '@/pages/OperationalTasksRealtime'
 // observeSaveCompletion
 // target.matches('input[type="file"]')
 // target.closest('[data-task-photo-ui]')
-// photoForPreview / photoScale / Zoom in / Zoom out / onDoubleClick
+// photoForPreview / photoScale / Zoom in / Zoom out / onDoubleClick / onTouchMove
 // commitLocalPhotosBeforeSave / retryButtonsForLocalPhotos / continueExplicitSave
 // localPhotoImages(activeTaskDrawer()).length / bypassPhotoCommit.current
+// if (photoSaveGate.isInFlight()) return true
 
 export default function OperationalTasksLive() {
   return <OperationalTasksRealtime />
