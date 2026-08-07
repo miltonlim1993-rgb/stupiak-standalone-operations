@@ -1,4 +1,4 @@
-name: Inspect live OPS shell
+name: Inspect live OPS Task bundle
 
 on:
   push:
@@ -10,33 +10,29 @@ permissions:
   contents: write
 
 jobs:
-  inspect-live-shell:
+  inspect-live-task-bundle:
     runs-on: ubuntu-latest
     steps:
-      - name: Capture public production shell and asset refs
+      - name: Check production JS for Task no-remount marker
         env:
           GH_TOKEN: ${{ github.token }}
           ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
-          STATUS_PATH: .ops-deploy-status/live-shell-20260807.txt
+          ASSET: /assets/index-C6GvYwbB.js
+          STATUS_PATH: .ops-deploy-status/live-task-bundle-marker-20260807.json
         shell: bash
         run: |
           set -euo pipefail
           stamp="$(date +%s)"
-          curl -sS -L -D /tmp/headers.txt "${ORIGIN}/?shell_probe=${stamp}" -o /tmp/index.html
-          {
-            echo '=== HEADERS ==='
-            cat /tmp/headers.txt
-            echo
-            echo '=== ASSET REFS ==='
-            grep -oE '/assets/[^"'"'"' <>()]+' /tmp/index.html | head -n 20 || true
-            echo
-            echo '=== BODY ==='
-            head -c 5000 /tmp/index.html
-          } > /tmp/report.txt
-          encoded="$(base64 -w0 /tmp/report.txt)"
+          curl -fsSL --retry 3 --retry-delay 1 "${ORIGIN}${ASSET}?bundle_probe=${stamp}" -o /tmp/bundle.js
+          if grep -Fq 'chefops-task-realtime' /tmp/bundle.js; then marker=true; else marker=false; fi
+          if grep -Fq 'chefops:realtime-applied' /tmp/bundle.js; then applied_event=true; else applied_event=false; fi
+          size="$(wc -c < /tmp/bundle.js | tr -d ' ')"
+          checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          payload="$(printf '{\"checked_at\":\"%s\",\"asset\":\"%s\",\"bytes\":%s,\"task_no_remount_marker\":%s,\"realtime_applied_event\":%s}' "$checked_at" "$ASSET" "$size" "$marker" "$applied_event")"
+          encoded="$(printf '%s' "$payload" | base64 -w0)"
           current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" --jq .sha 2>/dev/null || true)"
           if [[ -n "$current_sha" ]]; then
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update live OPS shell inspection' -f content="$encoded" -f sha="$current_sha"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update live Task bundle marker' -f content="$encoded" -f sha="$current_sha"
           else
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record live OPS shell inspection' -f content="$encoded"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record live Task bundle marker' -f content="$encoded"
           fi
