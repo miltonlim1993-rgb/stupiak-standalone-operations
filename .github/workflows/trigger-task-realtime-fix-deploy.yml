@@ -1,0 +1,20 @@
+name: Trigger Task realtime fix production deploy
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/trigger-task-realtime-fix-deploy.yml
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch-production:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch canonical OPS production workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run deploy-stock-count-pwa-v38.yml --repo "$GITHUB_REPOSITORY" --ref main
