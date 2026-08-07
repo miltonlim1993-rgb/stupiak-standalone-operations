@@ -61,10 +61,12 @@ export async function getMediaRule(env, moduleName, outletId = '') {
     await ensureMediaRules(env)
     rows = await listRecords(env, 'MediaRule', { sort: 'module,outlet_id', limit: 500 })
   } catch (error) {
-    // File storage is Cloudflare R2-first. A temporary Master Sheet/MediaRule
-    // read failure must not turn a valid on-site photo upload into HTTP 500.
-    // TaskPhoto D1 registration still validates the published media rule.
-    console.error('MediaRule runtime read unavailable; using built-in media policy', normalizedModule, error)
+    if (normalizedModule !== 'task') throw error
+    // Task file storage is Cloudflare R2-first. A temporary Master
+    // Sheet/MediaRule read failure must not turn a valid on-site photo upload
+    // into HTTP 500. TaskPhoto D1 registration still validates the published
+    // media rule before the photo becomes canonical evidence.
+    console.error('Task MediaRule runtime read unavailable; using built-in media policy', error)
   }
   const moduleRows = (rows || []).filter((row) => isActive(row) && String(row.module || '').toLowerCase() === normalizedModule)
   const selected = moduleRows.find((row) => String(row.outlet_id || '') === String(outletId || ''))
