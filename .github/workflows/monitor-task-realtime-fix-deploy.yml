@@ -1,4 +1,4 @@
-name: Inspect Cloudflare check for OPS deploy
+name: Locate automatic OPS deploy workflow
 
 on:
   push:
@@ -8,25 +8,25 @@ on:
 
 permissions:
   contents: write
-  checks: read
+  actions: read
 
 jobs:
-  inspect-cloudflare-checks:
+  locate:
     runs-on: ubuntu-latest
     steps:
-      - name: Persist check runs for deploy-binding fix commit
+      - name: Persist workflow run metadata
         env:
           GH_TOKEN: ${{ github.token }}
-          TARGET_SHA: 6b21fbc5ead19eb889df5e998581232b8a963df9
-          STATUS_PATH: .ops-deploy-status/cloudflare-checks-render-fix-20260807.json
+          RUN_ID: "31146886064"
+          STATUS_PATH: .ops-deploy-status/automatic-deploy-workflow-20260807.json
         shell: bash
         run: |
           set -euo pipefail
-          result="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs" --jq '{total_count,check_runs:[.check_runs[]|{id,name,status,conclusion,details_url,started_at,completed_at,output,app:{slug:.app.slug,name:.app.name}}]}')"
+          result="$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}" --jq '{id,name,path,event,status,conclusion,head_sha,html_url,display_title}')"
           encoded="$(printf '%s' "$result" | base64 -w0)"
           current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" --jq .sha 2>/dev/null || true)"
           if [[ -n "$current_sha" ]]; then
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update Cloudflare check inspection' -f content="$encoded" -f sha="$current_sha"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update automatic deploy workflow metadata' -f content="$encoded" -f sha="$current_sha"
           else
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record Cloudflare check inspection' -f content="$encoded"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record automatic deploy workflow metadata' -f content="$encoded"
           fi
