@@ -10,5 +10,5 @@
   "apk_asset_name": "stupiaks-ops-task-sop-alarm.apk",
   "release_api_url": "https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest",
   "release_notes": "Mandatory OPS Android 4.5.23 Task photo capture fix. Native camera results now enter the exact Task photo evidence group directly instead of relying on synthetic file-input change events. Android Camera Activity restoration is handled so a captured photo is not silently lost when the app is recreated. The photo appears locally before watermark/upload/D1 registration, with retry/remove kept on the photo tile. No D1 migration or backfill.",
-  "release_trigger": "2026-08-07-native-task-photo-capture-v4.5.23"
+  "release_trigger": "2026-08-07-task-photo-capture-release-2"
 }
