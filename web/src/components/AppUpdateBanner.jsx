@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { CheckCircle2, Download, Loader2, RefreshCw, ShieldAlert } from 'lucide-react'
 import { opsClient } from '@/api/opsClient'
 
-const CURRENT_RELEASE = '4.5.23'
+const CURRENT_RELEASE = '4.5.24'
 const DEFAULT_APK_URL = 'https://github.com/miltonlim1993-rgb/stupiak-standalone-operations/releases/download/android-release-latest/stupiaks-ops-task-sop-alarm.apk'
 const DEFAULT_RELEASE_API = 'https://api.github.com/repos/miltonlim1993-rgb/stupiak-standalone-operations/releases/tags/android-release-latest'
 const CHECK_MS = 30_000
