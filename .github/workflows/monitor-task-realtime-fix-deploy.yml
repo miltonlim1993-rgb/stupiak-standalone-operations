@@ -7,7 +7,7 @@ on:
       - .github/workflows/monitor-task-realtime-fix-deploy.yml
 
 permissions:
-  contents: read
+  contents: write
   actions: read
   issues: write
 
@@ -15,10 +15,11 @@ jobs:
   monitor-production:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for canonical production deployment and report
+      - name: Wait for canonical production deployment and persist result
         env:
           GH_TOKEN: ${{ github.token }}
           STARTED_AFTER: "2026-08-07T03:47:00Z"
+          STATUS_PATH: ".ops-deploy-status/task-realtime-20260807.json"
         shell: bash
         run: |
           set -euo pipefail
@@ -28,14 +29,21 @@ jobs:
             if [[ -n "$run_id" ]]; then break; fi
             sleep 5
           done
+
           if [[ -z "$run_id" ]]; then
+            payload='{"found":false,"status":"not_found","conclusion":"failure"}'
+            encoded="$(printf '%s' "$payload" | base64 -w0)"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record missing Task production deploy' -f content="$encoded"
             gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "Production deploy monitor did not find a canonical workflow_dispatch run after ${STARTED_AFTER}."
             exit 1
           fi
+
           set +e
           gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
           watch_status=$?
           set -e
-          result="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion,url,headSha -q '{status: .status, conclusion: .conclusion, url: .url, headSha: .headSha}')"
+          result="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion,url,headSha,databaseId)"
+          encoded="$(printf '%s' "$result" | base64 -w0)"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record Task production deploy result' -f content="$encoded"
           gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "## Task realtime production deploy monitor\n\n- Canonical run ID: \`${run_id}\`\n- Result: \`${result}\`"
           exit "$watch_status"
