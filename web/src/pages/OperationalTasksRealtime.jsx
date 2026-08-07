@@ -742,13 +742,27 @@ function TaskForm({ task, outletId, outletName, photos, onAct, onPhotoCommitted,
                           </div>
                         ))}
                         {localRows.map((photo) => (
-                          <div key={photo.id} className="relative" data-task-photo-ui>
-                            <button type="button" className="block w-full" onClick={() => setViewer({ src: photo.url, title: '刚拍摄的任务照片' })}><img src={photo.url} className="aspect-[4/3] w-full rounded-xl object-cover" alt="刚拍摄的任务照片" /></button>
-                            {photo.phase !== 'error' ? (
-                              <div className="absolute inset-x-1 bottom-1 rounded-lg bg-black/65 px-2 py-1 text-center text-[10px] font-semibold text-white">{photo.phase === 'processing' ? '处理中…' : photo.phase === 'uploading' ? '上传中…' : '登记中…'}</div>
-                            ) : (
-                              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 rounded-xl bg-black/70 p-2 text-center"><span className="text-[10px] font-semibold text-white">{photo.error || '照片保存失败'}</span><div className="flex gap-2"><button type="button" onClick={() => void upload(group, photo.file, photo)} className="rounded-lg bg-white px-3 py-1.5 text-xs font-bold text-slate-900">重试</button><button type="button" onClick={() => removeLocalPhoto(photo.id)} className="rounded-lg border border-white/70 px-3 py-1.5 text-xs font-bold text-white">删除</button></div></div>
-                            )}
+                          <div key={photo.id} className="space-y-1.5" data-task-photo-ui data-task-photo-local-state={photo.phase}>
+                            <button
+                              type="button"
+                              className="relative block w-full overflow-hidden rounded-xl"
+                              onClick={() => setViewer({ src: photo.url, title: '刚拍摄的任务照片' })}
+                              aria-label="打开刚拍摄的任务照片"
+                            >
+                              <img src={photo.url} className="aspect-[4/3] w-full object-cover" alt="刚拍摄的任务照片" />
+                              {photo.phase !== 'error' ? (
+                                <span className="pointer-events-none absolute inset-x-1 bottom-1 rounded-lg bg-black/65 px-2 py-1 text-center text-[10px] font-semibold text-white">{photo.phase === 'processing' ? '处理中…' : photo.phase === 'uploading' ? '上传中…' : '登记中…'}</span>
+                              ) : null}
+                            </button>
+                            {photo.phase === 'error' ? (
+                              <div className="rounded-xl border border-rose-200 bg-rose-50 p-2" data-task-photo-error-actions>
+                                <p className="text-[10px] font-semibold leading-4 text-rose-700">{photo.error || '照片保存失败'}</p>
+                                <div className="mt-1.5 flex gap-2">
+                                  <button type="button" onClick={() => void upload(group, photo.file, photo)} className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-bold text-white">重试</button>
+                                  <button type="button" onClick={() => removeLocalPhoto(photo.id)} className="rounded-lg border border-rose-300 bg-white px-3 py-1.5 text-xs font-bold text-rose-700">删除</button>
+                                </div>
+                              </div>
+                            ) : null}
                           </div>
                         ))}
                       </div>
