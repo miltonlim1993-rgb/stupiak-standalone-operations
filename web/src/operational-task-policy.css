@@ -22,25 +22,25 @@
 }
 
 /*
- * A failed local Task photo must remain inspectable.
- * The React card deliberately keeps the captured object URL alive so staff can
- * judge the actual photo before deciding whether to retry or delete it. The
- * old full-card failure layer covered that preview and intercepted every tap.
+ * Failed local Task photos stay as normal, tappable evidence previews.
+ * The existing React image button already opens MediaLightbox; keep that button
+ * unobstructed and move the error/actions block into normal flow beneath it.
+ * Retry/Delete remain available without replacing or covering the photo.
  */
 [data-task-photo-ui] > button + [class*="absolute"][class*="inset-0"] {
-  top: auto !important;
-  right: 0 !important;
-  bottom: 0 !important;
-  left: 0 !important;
+  position: static !important;
+  inset: auto !important;
+  width: 100% !important;
   min-height: 0 !important;
-  border-radius: 0 0 .75rem .75rem !important;
+  margin-top: .4rem !important;
+  border-radius: .75rem !important;
   padding: .5rem !important;
   background: rgb(0 0 0 / .72) !important;
-  pointer-events: none;
+  pointer-events: auto !important;
 }
 
 [data-task-photo-ui] > button + [class*="absolute"][class*="inset-0"] button {
-  pointer-events: auto;
+  pointer-events: auto !important;
 }
 
 /* Upload/processing status is informative only; it must never block preview. */
