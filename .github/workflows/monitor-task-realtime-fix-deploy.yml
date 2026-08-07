@@ -11,16 +11,17 @@ permissions:
   actions: read
 
 jobs:
-  inspect-canonical-production:
+  inspect-direct-production:
     runs-on: ubuntu-latest
     steps:
-      - name: Persist canonical deploy workflow history
+      - name: Persist latest direct deploy workflow run
         env:
           GH_TOKEN: ${{ github.token }}
-          STATUS_PATH: .ops-deploy-status/canonical-deploy-history-20260807.json
+          STATUS_PATH: .ops-deploy-status/task-realtime-marker-run.json
         shell: bash
         run: |
           set -euo pipefail
-          result="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-stock-count-pwa-v38.yml --branch main --limit 20 --json databaseId,status,conclusion,url,headSha,createdAt,event,displayTitle)"
+          result="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-task-realtime-fix-once.yml --branch main --limit 10 --json databaseId,status,conclusion,url,headSha,createdAt,event,displayTitle -q '.[0]')"
+          if [[ -z "$result" || "$result" == "null" ]]; then result='{"found":false}'; fi
           encoded="$(printf '%s' "$result" | base64 -w0)"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record canonical deploy workflow history' -f content="$encoded"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record marker-triggered Task deploy run' -f content="$encoded"
