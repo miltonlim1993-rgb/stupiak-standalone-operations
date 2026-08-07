@@ -17,6 +17,9 @@ export async function handlePrimaryMediaUpload(request, env, url) {
       'X-ChefOps-Media-Upload-Path': UPLOAD_PATH,
     })
   } catch (error) {
+    if (Number(error?.status || 500) >= 500) {
+      error.publicMessage = `文件上传失败：${String(error?.message || '服务器无法保存照片').slice(0, 180)}`
+    }
     return errorResponse(request, env, error)
   }
 }
