@@ -1,0 +1,159 @@
+name: Deploy Task realtime fix once
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/deploy-task-realtime-fix-once.yml
+
+permissions:
+  contents: write
+  issues: write
+
+env:
+  OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
+  VITE_API_BASE_URL: https://stupiaks-ops.sporkburger19.workers.dev
+  VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
+  CLOUDFLARE_APP_DATA_PACKS_ID: ${{ secrets.CLOUDFLARE_APP_DATA_PACKS_ID }}
+  CLOUDFLARE_OPS_DB_ID: 080c13d7-e2f5-4c01-a1ca-aa00094d6fc0
+  CLOUDFLARE_SHEET_SYNC_QUEUE_NAME: stupiaks-ops-sheet-sync
+  CLOUDFLARE_SHEET_SYNC_DLQ_NAME: stupiaks-ops-sheet-sync-dlq
+  CLOUDFLARE_MEDIA_BUCKET_NAME: ${{ secrets.CLOUDFLARE_MEDIA_BUCKET_NAME }}
+  STATUS_PATH: .ops-deploy-status/task-realtime-direct-20260807.json
+
+jobs:
+  deploy-task-realtime-fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Resolve existing Cloudflare credentials safely
+        id: credentials
+        env:
+          ALL_SECRETS_JSON: ${{ toJSON(secrets) }}
+          ALL_VARS_JSON: ${{ toJSON(vars) }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs = require('node:fs')
+          const secrets = JSON.parse(process.env.ALL_SECRETS_JSON || '{}')
+          const vars = JSON.parse(process.env.ALL_VARS_JSON || '{}')
+          const combined = { ...vars, ...secrets }
+          const entries = Object.entries(combined)
+            .map(([name, value]) => [name, String(value || '').trim()])
+            .filter(([, value]) => value)
+
+          function byNames(names) {
+            for (const name of names) {
+              const value = String(combined[name] || '').trim()
+              if (value) return { name, value }
+            }
+            return null
+          }
+
+          function byPattern(pattern) {
+            for (const [name, value] of entries) {
+              if (pattern.test(name)) return { name, value }
+            }
+            return null
+          }
+
+          function appendEnv(name, value) {
+            const marker = `OPS_${name}_${Date.now()}_${Math.random().toString(16).slice(2)}`
+            fs.appendFileSync(process.env.GITHUB_ENV, `${name}<<${marker}\n${value}\n${marker}\n`)
+          }
+
+          const token = byNames([
+            'CLOUDFLARE_API_TOKEN', 'CF_API_TOKEN', 'WRANGLER_API_TOKEN',
+            'CLOUDFLARE_WORKERS_API_TOKEN', 'CLOUDFLARE_TOKEN', 'CF_TOKEN',
+          ]) || byPattern(/(?:cloudflare|wrangler|^cf[_-]).*(?:api[_-]?)?token|(?:api[_-]?)?token.*(?:cloudflare|wrangler|^cf[_-])/i)
+
+          const apiKey = byNames(['CLOUDFLARE_API_KEY', 'CF_API_KEY'])
+            || byPattern(/(?:cloudflare|^cf[_-]).*api.*key|api.*key.*(?:cloudflare|^cf[_-])/i)
+          const email = byNames(['CLOUDFLARE_EMAIL', 'CF_EMAIL'])
+            || byPattern(/(?:cloudflare|^cf[_-]).*email|email.*(?:cloudflare|^cf[_-])/i)
+          const account = byNames(['CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID', 'CLOUDFLARE_ACCOUNT'])
+            || byPattern(/(?:cloudflare|^cf[_-]).*account.*id|account.*id.*(?:cloudflare|^cf[_-])/i)
+
+          if (token) appendEnv('CLOUDFLARE_API_TOKEN', token.value)
+          else if (apiKey && email) {
+            appendEnv('CLOUDFLARE_API_KEY', apiKey.value)
+            appendEnv('CLOUDFLARE_EMAIL', email.value)
+          } else {
+            console.error('No usable Cloudflare credential is visible')
+            process.exit(2)
+          }
+
+          if (!account) {
+            console.error('No Cloudflare account ID is visible')
+            process.exit(3)
+          }
+          appendEnv('CLOUDFLARE_ACCOUNT_ID', account.value)
+          console.log(`Cloudflare auth resolved via ${token?.name || `${apiKey?.name}+${email?.name}`}`)
+          console.log(`Cloudflare account resolved via ${account.name}`)
+          NODE
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Validate source and architecture
+        run: npm run ops:audit:contract
+
+      - name: Build Web/PWA and validate Worker
+        run: npm run build
+
+      - name: Validate Label runtime contract
+        run: node --test worker/test/label-final-runtime-v1.test.mjs
+
+      - name: Render canonical production bindings
+        run: npm run cf:render
+
+      - name: Deploy Worker and Web/PWA assets
+        run: npx wrangler deploy --config worker/wrangler.production.jsonc
+
+      - name: Verify Task realtime fix on production
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            stamp="$(date +%s)"
+            index="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/?task_fix=${stamp}" || true)"
+            health="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}/api/health?task_fix=${stamp}" || true)"
+            asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' <<<"${index}" | head -n 1 | cut -d'\"' -f2 || true)"
+            bundle=""
+            if [[ -n "${asset}" ]]; then
+              bundle="$(curl -fsSL --retry 2 --retry-delay 2 "${OPS_PRODUCTION_ORIGIN}${asset}?task_fix=${stamp}" || true)"
+            fi
+            if [[ -n "${health}" ]] && grep -Fq 'chefops-task-realtime' <<<"${bundle}"; then
+              echo "verified=true" >> "$GITHUB_OUTPUT"
+              echo "PRODUCTION_TASK_REALTIME_FIX_VERIFIED=true"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "verified=false" >> "$GITHUB_OUTPUT"
+          exit 1
+
+      - name: Persist deploy result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_STATUS: ${{ job.status }}
+          VERIFIED: ${{ steps.verify.outputs.verified }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(node -e 'console.log(JSON.stringify({job_status:process.env.JOB_STATUS,verified:process.env.VERIFIED==="true",run_id:process.env.GITHUB_RUN_ID,run_url:`https://github.com/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,head_sha:process.env.GITHUB_SHA}))')"
+          encoded="$(printf '%s' "$payload" | base64 -w0)"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record direct Task production deploy result' -f content="$encoded"
+          gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "## Direct Task realtime production deploy\n\n\`${payload}\`"
