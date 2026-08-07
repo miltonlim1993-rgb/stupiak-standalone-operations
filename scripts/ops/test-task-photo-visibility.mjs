@@ -71,6 +71,7 @@ assert(!realtimePhotoSource.includes('listRecords('), 'TaskPhoto mutation must n
 const appSource = readFileSync('web/src/App.jsx', 'utf8')
 const cameraSource = readFileSync('web/src/components/NativeMediaCaptureBridge.jsx', 'utf8')
 const taskSource = readFileSync('web/src/pages/OperationalTasksRealtime.jsx', 'utf8')
+const taskPhotoCss = readFileSync('web/src/operational-task-policy.css', 'utf8')
 
 assert(!appSource.includes('TaskPhotoSyncStatus'), 'global TaskPhoto status overlay must not be mounted')
 assert(!cameraSource.includes('chefops:task-photo-sync-state'), 'camera bridge must not wait on global persistence state')
@@ -91,12 +92,19 @@ assert(!taskSource.includes('MutationObserver'), 'photo saving must not infer su
 assert(!taskSource.includes('setInterval('), 'Task page must not poll to confirm photos')
 assert(taskSource.includes('if (localPhotos.length)'), 'Complete must wait for pending/failed local photos')
 
+assert(taskPhotoCss.includes('position: static !important'), 'failed photo error/actions must render below the photo instead of covering it')
+assert(taskPhotoCss.includes('inset: auto !important'), 'failed photo error/actions must stop using the full-card inset overlay')
+assert(taskPhotoCss.includes('Retry/Delete remain available without replacing or covering the photo'), 'failed photo UI contract must preserve preview-first behavior')
+assert(!taskPhotoCss.includes('top: auto !important'), 'failed photo UI must not remain an absolute bottom overlay')
+
 console.log('TASK_PHOTO_VISIBILITY_TEST_OK=true')
 console.log('OFF_DUTY_TASK_VISIBILITY=true')
 console.log('ROSTER_FILTERS_TASKS=false')
 console.log('ROSTER_BLOCKS_TASK_BOOTSTRAP=false')
 console.log('CAPTURED_PHOTO_PREVIEW_IMMEDIATE=true')
 console.log('PHOTO_FAILURE_SCOPE=PHOTO_TILE')
+console.log('FAILED_PHOTO_PREVIEW_UNOBSTRUCTED=true')
+console.log('FAILED_PHOTO_ACTIONS_BELOW_PREVIEW=true')
 console.log('TASK_UPLOAD_FOLDER_RULE_MATCH=true')
 console.log('TASK_PHOTO_D1_ONLY=true')
 console.log('TASK_PHOTO_PUBLISHED_MEDIA_RULE=true')
