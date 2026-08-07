@@ -22,7 +22,7 @@ export async function handlePrimaryMediaUpload(request, env, url) {
     })
   } catch (error) {
     if (Number(error?.status || 500) >= 500) {
-      error.publicMessage = `文件上传失败，请重试。错误代码：${String(error?.code || 'internal_upload_error').slice(0, 80)}`
+      error.publicMessage = `文件上传失败：请重试（错误代码 ${String(error?.code || 'internal_upload_error').slice(0, 80)}）`
     }
     return errorResponse(request, env, error)
   }
