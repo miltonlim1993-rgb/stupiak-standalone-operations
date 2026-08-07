@@ -13,7 +13,7 @@ jobs:
   verify-live-task-bundle:
     runs-on: ubuntu-latest
     steps:
-      - name: Probe production bundle and persist marker result
+      - name: Verify production picks up Task no-remount fix
         env:
           GH_TOKEN: ${{ github.token }}
           ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
@@ -21,20 +21,32 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          stamp="$(date +%s)"
-          index="$(curl -fsSL --retry 3 --retry-delay 2 "${ORIGIN}/?task_bundle_probe=${stamp}")"
-          asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' <<<"${index}" | head -n 1 | cut -d'\"' -f2 || true)"
-          bundle=""
-          if [[ -n "$asset" ]]; then
-            bundle="$(curl -fsSL --retry 3 --retry-delay 2 "${ORIGIN}${asset}?task_bundle_probe=${stamp}")"
-          fi
-          if grep -Fq 'chefops-task-realtime' <<<"${bundle}"; then marker=true; else marker=false; fi
+          marker=false
+          asset=""
+          health_ok=false
+          for attempt in $(seq 1 18); do
+            stamp="$(date +%s)-${attempt}"
+            index="$(curl -fsSL --retry 2 --retry-delay 1 "${ORIGIN}/?task_bundle_probe=${stamp}" || true)"
+            health="$(curl -fsSL --retry 2 --retry-delay 1 "${ORIGIN}/api/health?task_bundle_probe=${stamp}" || true)"
+            [[ -n "$health" ]] && health_ok=true || health_ok=false
+            asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' <<<"${index}" | head -n 1 | cut -d'\"' -f2 || true)"
+            bundle=""
+            if [[ -n "$asset" ]]; then
+              bundle="$(curl -fsSL --retry 2 --retry-delay 1 "${ORIGIN}${asset}?task_bundle_probe=${stamp}" || true)"
+            fi
+            if grep -Fq 'chefops-task-realtime' <<<"${bundle}"; then
+              marker=true
+              break
+            fi
+            sleep 5
+          done
           checked_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-          payload="$(printf '{\"checked_at\":\"%s\",\"origin\":\"%s\",\"asset\":\"%s\",\"marker_present\":%s}' "$checked_at" "$ORIGIN" "$asset" "$marker")"
+          payload="$(printf '{\"checked_at\":\"%s\",\"origin\":\"%s\",\"asset\":\"%s\",\"health_ok\":%s,\"marker_present\":%s}' "$checked_at" "$ORIGIN" "$asset" "$health_ok" "$marker")"
           encoded="$(printf '%s' "$payload" | base64 -w0)"
           current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" --jq .sha 2>/dev/null || true)"
           if [[ -n "$current_sha" ]]; then
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update live Task bundle probe' -f content="$encoded" -f sha="$current_sha"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update live Task bundle verification' -f content="$encoded" -f sha="$current_sha"
           else
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record live Task bundle probe' -f content="$encoded"
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record live Task bundle verification' -f content="$encoded"
           fi
+          [[ "$marker" == true ]]
