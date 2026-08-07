@@ -24,6 +24,7 @@ env:
 jobs:
   deploy-task-realtime-fix:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - uses: actions/checkout@v4
         with:
@@ -35,72 +36,76 @@ jobs:
           node-version: 22
           cache: npm
 
-      - name: Resolve existing Cloudflare credentials safely
-        id: credentials
+      - name: Resolve explicit Cloudflare credential aliases
         env:
-          ALL_SECRETS_JSON: ${{ toJSON(secrets) }}
-          ALL_VARS_JSON: ${{ toJSON(vars) }}
+          TOKEN_1: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          TOKEN_2: ${{ secrets.CF_API_TOKEN }}
+          TOKEN_3: ${{ secrets.WRANGLER_API_TOKEN }}
+          TOKEN_4: ${{ secrets.CLOUDFLARE_WORKERS_API_TOKEN }}
+          TOKEN_5: ${{ secrets.CLOUDFLARE_WORKER_API_TOKEN }}
+          TOKEN_6: ${{ secrets.CLOUDFLARE_TOKEN }}
+          TOKEN_7: ${{ secrets.CF_TOKEN }}
+          TOKEN_8: ${{ secrets.WORKERS_API_TOKEN }}
+          TOKEN_9: ${{ secrets.WORKER_API_TOKEN }}
+          API_KEY_1: ${{ secrets.CLOUDFLARE_API_KEY }}
+          API_KEY_2: ${{ secrets.CF_API_KEY }}
+          API_KEY_3: ${{ secrets.CLOUDFLARE_GLOBAL_API_KEY }}
+          EMAIL_1: ${{ secrets.CLOUDFLARE_EMAIL }}
+          EMAIL_2: ${{ secrets.CF_EMAIL }}
+          ACCOUNT_1: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCOUNT_2: ${{ secrets.CF_ACCOUNT_ID }}
+          ACCOUNT_3: ${{ secrets.CLOUDFLARE_ACCOUNT }}
         shell: bash
         run: |
           set -euo pipefail
-          node <<'NODE'
-          const fs = require('node:fs')
-          const secrets = JSON.parse(process.env.ALL_SECRETS_JSON || '{}')
-          const vars = JSON.parse(process.env.ALL_VARS_JSON || '{}')
-          const combined = { ...vars, ...secrets }
-          const entries = Object.entries(combined)
-            .map(([name, value]) => [name, String(value || '').trim()])
-            .filter(([, value]) => value)
+          token=""
+          for name in TOKEN_1 TOKEN_2 TOKEN_3 TOKEN_4 TOKEN_5 TOKEN_6 TOKEN_7 TOKEN_8 TOKEN_9; do
+            if [[ -n "${!name:-}" ]]; then token="${!name}"; break; fi
+          done
+          account=""
+          for name in ACCOUNT_1 ACCOUNT_2 ACCOUNT_3; do
+            if [[ -n "${!name:-}" ]]; then account="${!name}"; break; fi
+          done
+          api_key=""
+          for name in API_KEY_1 API_KEY_2 API_KEY_3; do
+            if [[ -n "${!name:-}" ]]; then api_key="${!name}"; break; fi
+          done
+          email=""
+          for name in EMAIL_1 EMAIL_2; do
+            if [[ -n "${!name:-}" ]]; then email="${!name}"; break; fi
+          done
 
-          function byNames(names) {
-            for (const name of names) {
-              const value = String(combined[name] || '').trim()
-              if (value) return { name, value }
-            }
-            return null
-          }
+          if [[ -n "$token" ]]; then
+            {
+              echo 'CLOUDFLARE_API_TOKEN<<OPS_TOKEN'
+              echo "$token"
+              echo 'OPS_TOKEN'
+            } >> "$GITHUB_ENV"
+            echo 'CLOUDFLARE_AUTH_MODE=api-token'
+          elif [[ -n "$api_key" && -n "$email" ]]; then
+            {
+              echo 'CLOUDFLARE_API_KEY<<OPS_KEY'
+              echo "$api_key"
+              echo 'OPS_KEY'
+              echo 'CLOUDFLARE_EMAIL<<OPS_EMAIL'
+              echo "$email"
+              echo 'OPS_EMAIL'
+            } >> "$GITHUB_ENV"
+            echo 'CLOUDFLARE_AUTH_MODE=global-api-key'
+          else
+            echo 'No usable Cloudflare token or API-key/email pair is visible in the production environment' >&2
+            exit 2
+          fi
 
-          function byPattern(pattern) {
-            for (const [name, value] of entries) {
-              if (pattern.test(name)) return { name, value }
-            }
-            return null
-          }
-
-          function appendEnv(name, value) {
-            const marker = `OPS_${name}_${Date.now()}_${Math.random().toString(16).slice(2)}`
-            fs.appendFileSync(process.env.GITHUB_ENV, `${name}<<${marker}\n${value}\n${marker}\n`)
-          }
-
-          const token = byNames([
-            'CLOUDFLARE_API_TOKEN', 'CF_API_TOKEN', 'WRANGLER_API_TOKEN',
-            'CLOUDFLARE_WORKERS_API_TOKEN', 'CLOUDFLARE_TOKEN', 'CF_TOKEN',
-          ]) || byPattern(/(?:cloudflare|wrangler|^cf[_-]).*(?:api[_-]?)?token|(?:api[_-]?)?token.*(?:cloudflare|wrangler|^cf[_-])/i)
-
-          const apiKey = byNames(['CLOUDFLARE_API_KEY', 'CF_API_KEY'])
-            || byPattern(/(?:cloudflare|^cf[_-]).*api.*key|api.*key.*(?:cloudflare|^cf[_-])/i)
-          const email = byNames(['CLOUDFLARE_EMAIL', 'CF_EMAIL'])
-            || byPattern(/(?:cloudflare|^cf[_-]).*email|email.*(?:cloudflare|^cf[_-])/i)
-          const account = byNames(['CLOUDFLARE_ACCOUNT_ID', 'CF_ACCOUNT_ID', 'CLOUDFLARE_ACCOUNT'])
-            || byPattern(/(?:cloudflare|^cf[_-]).*account.*id|account.*id.*(?:cloudflare|^cf[_-])/i)
-
-          if (token) appendEnv('CLOUDFLARE_API_TOKEN', token.value)
-          else if (apiKey && email) {
-            appendEnv('CLOUDFLARE_API_KEY', apiKey.value)
-            appendEnv('CLOUDFLARE_EMAIL', email.value)
-          } else {
-            console.error('No usable Cloudflare credential is visible')
-            process.exit(2)
-          }
-
-          if (!account) {
-            console.error('No Cloudflare account ID is visible')
-            process.exit(3)
-          }
-          appendEnv('CLOUDFLARE_ACCOUNT_ID', account.value)
-          console.log(`Cloudflare auth resolved via ${token?.name || `${apiKey?.name}+${email?.name}`}`)
-          console.log(`Cloudflare account resolved via ${account.name}`)
-          NODE
+          if [[ -z "$account" ]]; then
+            echo 'No Cloudflare account ID is visible in the production environment' >&2
+            exit 3
+          fi
+          {
+            echo 'CLOUDFLARE_ACCOUNT_ID<<OPS_ACCOUNT'
+            echo "$account"
+            echo 'OPS_ACCOUNT'
+          } >> "$GITHUB_ENV"
 
       - name: Install exact dependencies
         run: npm ci
