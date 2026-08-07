@@ -12,6 +12,9 @@ cat <<'INFO'
 Stupiak's OPS — focused Task realtime no-remount deployment
 
 Scope:
+  - Fast-forward to current main
+  - Install exact locked dependencies
+  - Reuse the Mac's existing Wrangler login
   - Build current main
   - Render existing canonical production bindings
   - Deploy Worker + current Web/PWA assets
@@ -33,9 +36,6 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
   exit 1
 fi
 
-printf '\n==> Checking existing local Wrangler login\n'
-npx wrangler whoami
-
 printf '\n==> Updating to canonical main\n'
 git fetch origin main
 git switch main 2>/dev/null || git checkout main
@@ -45,6 +45,9 @@ echo "DEPLOY_SHA=$DEPLOY_SHA"
 
 printf '\n==> Installing exact dependencies\n'
 npm ci
+
+printf '\n==> Checking existing local Wrangler login\n'
+npx wrangler whoami
 
 printf '\n==> Running OPS contract checks\n'
 npm run ops:audit:contract
