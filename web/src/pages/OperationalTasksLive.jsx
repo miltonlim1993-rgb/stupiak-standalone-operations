@@ -104,11 +104,9 @@ function explicitSaveButton(target) {
 }
 
 export default function OperationalTasksLive() {
-  const [revision, setRevision] = useState(0)
   const [photoViewer, setPhotoViewer] = useState(null)
   const [photoScale, setPhotoScale] = useState(1)
   const refreshTimer = useRef(null)
-  const lastRefreshAt = useRef(0)
   const pendingRefresh = useRef(false)
   const settleObserver = useRef(null)
   const changeRevision = useRef(0)
@@ -128,8 +126,11 @@ export default function OperationalTasksLive() {
           return
         }
         pendingRefresh.current = false
-        lastRefreshAt.current = Date.now()
-        setRevision((value) => value + 1)
+        // OperationalTasksV2 already owns a silent foreground refresh path.
+        // Reuse that path instead of changing its React key and remounting the whole page.
+        window.dispatchEvent(new CustomEvent('focus', {
+          detail: { source: 'chefops-task-realtime' },
+        }))
       }, delay)
     }
 
@@ -324,7 +325,11 @@ export default function OperationalTasksLive() {
       if (closeButton) {
         const drawer = activeTaskDrawer()
         const hasLocalPhotos = localPhotoImages(drawer).length > 0
-        if (bypassClose.current || (!hasLocalPhotos && changeRevision.current <= savedRevision.current)) return
+        if (bypassClose.current) return
+        if (!hasLocalPhotos && changeRevision.current <= savedRevision.current) {
+          window.setTimeout(completeDeferredRefresh, 40)
+          return
+        }
         event.preventDefault()
         event.stopPropagation()
         event.stopImmediatePropagation()
@@ -353,6 +358,7 @@ export default function OperationalTasksLive() {
     const onTaskPageClick = (event) => {
       if (window.location.pathname !== '/tasks') return
       if (event.target instanceof Element && event.target.closest('.chefops-drawer-content')) return
+      completeDeferredRefresh()
       window.setTimeout(() => {
         window.dispatchEvent(new CustomEvent('chefops:task-state-changed', {
           detail: { entity: 'Task' },
@@ -360,20 +366,13 @@ export default function OperationalTasksLive() {
       }, 650)
     }
 
-    const onRealtime = (event) => {
+    const onRealtimeApplied = (event) => {
       if (!eventTouchesTasks(event.detail || {})) return
       if (activeTaskDrawer()) {
         pendingRefresh.current = true
         return
       }
       refresh(80)
-    }
-
-    const onActive = () => {
-      if (document.visibilityState !== 'visible') return
-      if (activeTaskDrawer()) return
-      if (Date.now() - lastRefreshAt.current < 1000) return
-      refresh(0)
     }
 
     const flushDirtyDraftOnce = () => {
@@ -383,23 +382,15 @@ export default function OperationalTasksLive() {
     }
 
     const onVisibility = () => {
-      if (document.visibilityState === 'hidden') {
-        flushDirtyDraftOnce()
-        return
-      }
-      onActive()
+      if (document.visibilityState === 'hidden') flushDirtyDraftOnce()
     }
 
     document.addEventListener('input', onDraftInput, true)
     document.addEventListener('change', onDraftChange, true)
     document.addEventListener('click', onDrawerClick, true)
     document.addEventListener('click', onTaskPageClick, true)
-    window.addEventListener('chefops:realtime', onRealtime)
-    window.addEventListener('chefops:realtime-applied', onRealtime)
-    window.addEventListener('pageshow', onActive)
+    window.addEventListener('chefops:realtime-applied', onRealtimeApplied)
     window.addEventListener('pagehide', flushDirtyDraftOnce)
-    window.addEventListener('focus', onActive)
-    window.addEventListener('online', onActive)
     document.addEventListener('visibilitychange', onVisibility)
 
     return () => {
@@ -410,19 +401,15 @@ export default function OperationalTasksLive() {
       document.removeEventListener('change', onDraftChange, true)
       document.removeEventListener('click', onDrawerClick, true)
       document.removeEventListener('click', onTaskPageClick, true)
-      window.removeEventListener('chefops:realtime', onRealtime)
-      window.removeEventListener('chefops:realtime-applied', onRealtime)
-      window.removeEventListener('pageshow', onActive)
+      window.removeEventListener('chefops:realtime-applied', onRealtimeApplied)
       window.removeEventListener('pagehide', flushDirtyDraftOnce)
-      window.removeEventListener('focus', onActive)
-      window.removeEventListener('online', onActive)
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [])
 
   return (
     <>
-      <OperationalTasksV2 key={revision} />
+      <OperationalTasksV2 />
       {photoViewer ? (
         <div
           className="fixed inset-0 z-[1200] flex items-center justify-center bg-black/95 p-4"
