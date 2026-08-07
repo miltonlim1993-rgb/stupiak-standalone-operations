@@ -11,17 +11,22 @@ permissions:
   actions: read
 
 jobs:
-  inspect-direct-production:
+  inspect-secret-names:
     runs-on: ubuntu-latest
     steps:
-      - name: Persist latest direct deploy workflow run
+      - name: Persist repository secret and variable names only
         env:
           GH_TOKEN: ${{ github.token }}
-          STATUS_PATH: .ops-deploy-status/task-realtime-marker-run.json
+          STATUS_PATH: .ops-deploy-status/github-secret-names-20260807.txt
         shell: bash
         run: |
           set -euo pipefail
-          result="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-task-realtime-fix-once.yml --branch main --limit 10 --json databaseId,status,conclusion,url,headSha,createdAt,event,displayTitle -q '.[0]')"
-          if [[ -z "$result" || "$result" == "null" ]]; then result='{"found":false}'; fi
-          encoded="$(printf '%s' "$result" | base64 -w0)"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record marker-triggered Task deploy run' -f content="$encoded"
+          {
+            echo '=== actions secrets ==='
+            gh secret list --repo "$GITHUB_REPOSITORY" 2>&1 || true
+            echo
+            echo '=== actions variables ==='
+            gh variable list --repo "$GITHUB_REPOSITORY" 2>&1 || true
+          } > /tmp/names.txt
+          encoded="$(base64 -w0 /tmp/names.txt)"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record GitHub secret names for deploy audit' -f content="$encoded"
