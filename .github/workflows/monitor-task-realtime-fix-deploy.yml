@@ -9,41 +9,19 @@ on:
 permissions:
   contents: write
   actions: read
-  issues: write
 
 jobs:
-  monitor-production:
+  inspect-direct-production:
     runs-on: ubuntu-latest
     steps:
-      - name: Wait for canonical production deployment and persist result
+      - name: Inspect direct deploy run and persist metadata
         env:
           GH_TOKEN: ${{ github.token }}
-          STARTED_AFTER: "2026-08-07T03:47:00Z"
-          STATUS_PATH: ".ops-deploy-status/task-realtime-20260807.json"
+          STATUS_PATH: .ops-deploy-status/task-realtime-direct-run-inspection.json
         shell: bash
         run: |
           set -euo pipefail
-          run_id=""
-          for attempt in $(seq 1 24); do
-            run_id="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-stock-count-pwa-v38.yml --event workflow_dispatch --branch main --limit 20 --json databaseId,createdAt -q ".[] | select(.createdAt >= \"${STARTED_AFTER}\") | .databaseId" | head -n 1)"
-            if [[ -n "$run_id" ]]; then break; fi
-            sleep 5
-          done
-
-          if [[ -z "$run_id" ]]; then
-            payload='{"found":false,"status":"not_found","conclusion":"failure"}'
-            encoded="$(printf '%s' "$payload" | base64 -w0)"
-            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record missing Task production deploy' -f content="$encoded"
-            gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "Production deploy monitor did not find a canonical workflow_dispatch run after ${STARTED_AFTER}."
-            exit 1
-          fi
-
-          set +e
-          gh run watch "$run_id" --repo "$GITHUB_REPOSITORY" --exit-status
-          watch_status=$?
-          set -e
-          result="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status,conclusion,url,headSha,databaseId)"
+          result="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-task-realtime-fix-once.yml --branch main --limit 10 --json databaseId,status,conclusion,url,headSha,createdAt,event -q '.[0]')"
+          if [[ -z "$result" || "$result" == "null" ]]; then result='{"found":false}'; fi
           encoded="$(printf '%s' "$result" | base64 -w0)"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record Task production deploy result' -f content="$encoded"
-          gh issue comment 77 --repo "$GITHUB_REPOSITORY" --body "## Task realtime production deploy monitor\n\n- Canonical run ID: \`${run_id}\`\n- Result: \`${result}\`"
-          exit "$watch_status"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record direct Task deploy run inspection' -f content="$encoded"
