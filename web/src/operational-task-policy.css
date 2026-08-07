@@ -21,33 +21,6 @@
   line-height: 1.45;
 }
 
-/*
- * Failed local Task photos stay as normal, tappable evidence previews.
- * The existing React image button already opens MediaLightbox; keep that button
- * unobstructed and move the error/actions block into normal flow beneath it.
- * Retry/Delete remain available without replacing or covering the photo.
- */
-[data-task-photo-ui] > button + [class*="absolute"][class*="inset-0"] {
-  position: static !important;
-  inset: auto !important;
-  width: 100% !important;
-  min-height: 0 !important;
-  margin-top: .4rem !important;
-  border-radius: .75rem !important;
-  padding: .5rem !important;
-  background: rgb(0 0 0 / .72) !important;
-  pointer-events: auto !important;
-}
-
-[data-task-photo-ui] > button + [class*="absolute"][class*="inset-0"] button {
-  pointer-events: auto !important;
-}
-
-/* Upload/processing status is informative only; it must never block preview. */
-[data-task-photo-ui] > button + [class*="absolute"][class*="bottom-1"] {
-  pointer-events: none;
-}
-
 @media (min-width: 640px) {
   .chefops-photo-policy-guidance {
     grid-template-columns: max-content minmax(0, 1fr);
