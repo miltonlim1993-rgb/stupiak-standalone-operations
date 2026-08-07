@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { readFileSync } from 'node:fs'
 
+// PR validation target: native camera -> Task evidence UI -> existing upload/D1 pipeline.
 const bridge = readFileSync('web/src/components/NativeMediaCaptureBridge.jsx', 'utf8')
 const channel = readFileSync('web/src/lib/task-photo-capture-channel.js', 'utf8')
 const taskPage = readFileSync('web/src/pages/OperationalTasksRealtime.jsx', 'utf8')
