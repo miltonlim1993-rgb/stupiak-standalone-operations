@@ -3,11 +3,15 @@ import { uploadDriveFile } from './drive.js'
 import { errorResponse, json } from './http.js'
 
 const UPLOAD_PATH = 'r2-primary-no-sheet-audit-v1'
+const TASK_PHOTO_FOLDER = 'Task Checklist Photos'
 
 export async function handlePrimaryMediaUpload(request, env, url) {
   if (url.pathname !== '/api/files/upload' || request.method !== 'POST') return null
 
   try {
+    const probe = await request.clone().formData()
+    if (String(probe.get('folderType') || 'Attachments') !== TASK_PHOTO_FOLDER) return null
+
     const user = await getCurrentUser(request, env)
     const uploaded = await uploadDriveFile(request, env, user)
     return json(request, env, {
