@@ -1,0 +1,38 @@
+=== HEADERS ===
+HTTP/2 200 
+date: Fri, 07 Aug 2026 04:19:36 GMT
+content-type: text/html
+cf-cache-status: HIT
+cache-control: public, max-age=0, must-revalidate
+nel: {"report_to":"cf-nel","success_fraction":0.0,"max_age":604800}
+report-to: {"group":"cf-nel","max_age":604800,"endpoints":[{"url":"https://a.nel.cloudflare.com/report/v4?s=t4KgYYWsUNkI0X62xiJtDdp0I0hi2P4pCtg4knfrBGRMNPderwPCJVIZ0ZZg1g7u54Lesa3J4%2BxCkG5i65F6%2BX6fT4y2j7gdousqoR1%2B65ES6Hhe4bPAhCctGGXuk7gV%2BXaBlzTwCCsqN7XrsjUVR6h3LSkal7%2Fwdg%3D%3D"}]}
+server: cloudflare
+cf-ray: a2737be5f97209ac-DFW
+alt-svc: h3=":443"; ma=86400
+
+
+=== ASSET REFS ===
+/assets/index-C6GvYwbB.js
+/assets/index-BZCnytGW.css
+
+=== BODY ===
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <meta name="theme-color" content="#F6B900" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="Stupiak's Ops" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <title>Stupiak’s Ops</title>
+    <script type="module" crossorigin src="/assets/index-C6GvYwbB.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-BZCnytGW.css">
+  </head>
+  <body>
+    <div id="root"></div>
+  </body>
+</html>
