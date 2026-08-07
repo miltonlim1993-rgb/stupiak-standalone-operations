@@ -9,19 +9,20 @@ on:
 permissions:
   contents: write
   actions: read
+  checks: read
 
 jobs:
   inspect-direct-production:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect direct deploy run and persist metadata
+      - name: Inspect action-required check and persist details
         env:
           GH_TOKEN: ${{ github.token }}
-          STATUS_PATH: .ops-deploy-status/task-realtime-direct-run-inspection.json
+          TARGET_SHA: a47dd8fb4dafcd32cb5c5fe301af1002b1d918b6
+          STATUS_PATH: .ops-deploy-status/task-realtime-action-required-detail.json
         shell: bash
         run: |
           set -euo pipefail
-          result="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-task-realtime-fix-once.yml --branch main --limit 10 --json databaseId,status,conclusion,url,headSha,createdAt,event -q '.[0]')"
-          if [[ -z "$result" || "$result" == "null" ]]; then result='{"found":false}'; fi
+          result="$(gh api -H 'Accept: application/vnd.github+json' "repos/${GITHUB_REPOSITORY}/commits/${TARGET_SHA}/check-runs" --jq '{total_count, check_runs: [.check_runs[] | {id,name,status,conclusion,details_url,started_at,completed_at,output,app:{slug:.app.slug,name:.app.name}}]}')"
           encoded="$(printf '%s' "$result" | base64 -w0)"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record direct Task deploy run inspection' -f content="$encoded"
+          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record Task deploy action-required details' -f content="$encoded"
