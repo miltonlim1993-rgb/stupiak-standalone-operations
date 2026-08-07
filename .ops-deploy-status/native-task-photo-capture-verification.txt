@@ -1,0 +1,1 @@
+Verification branch marker for native Task photo capture CI.
