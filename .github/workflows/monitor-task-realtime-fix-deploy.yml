@@ -8,20 +8,33 @@ on:
 
 permissions:
   contents: write
-  actions: read
 
 jobs:
-  inspect-direct-production:
+  verify-live-task-bundle:
     runs-on: ubuntu-latest
     steps:
-      - name: Persist latest direct deploy workflow run
+      - name: Probe production bundle and persist marker result
         env:
           GH_TOKEN: ${{ github.token }}
-          STATUS_PATH: .ops-deploy-status/task-realtime-production-env-run.json
+          ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
+          STATUS_PATH: .ops-deploy-status/task-realtime-live-bundle-20260807.json
         shell: bash
         run: |
           set -euo pipefail
-          result="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow deploy-task-realtime-fix-once.yml --branch main --limit 10 --json databaseId,status,conclusion,url,headSha,createdAt,event,displayTitle -q '.[0]')"
-          if [[ -z "$result" || "$result" == "null" ]]; then result='{"found":false}'; fi
-          encoded="$(printf '%s' "$result" | base64 -w0)"
-          gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record production-environment Task deploy run' -f content="$encoded"
+          stamp="$(date +%s)"
+          index="$(curl -fsSL --retry 3 --retry-delay 2 "${ORIGIN}/?task_bundle_probe=${stamp}")"
+          asset="$(grep -oE 'src=\"/assets/[^\"]+\.js\"' <<<"${index}" | head -n 1 | cut -d'\"' -f2 || true)"
+          bundle=""
+          if [[ -n "$asset" ]]; then
+            bundle="$(curl -fsSL --retry 3 --retry-delay 2 "${ORIGIN}${asset}?task_bundle_probe=${stamp}")"
+          fi
+          if grep -Fq 'chefops-task-realtime' <<<"${bundle}"; then marker=true; else marker=false; fi
+          payload="$(node -e 'console.log(JSON.stringify({checked_at:new Date().toISOString(),origin:process.env.ORIGIN,asset:process.env.ASSET||"",marker_present:process.env.MARKER==="true"}))' ASSET="$asset" MARKER="$marker")"
+          payload="$(printf '%s' "$payload" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const o=JSON.parse(s);o.asset=process.env.ASSET;o.marker_present=process.env.MARKER==="true";console.log(JSON.stringify(o))})' ASSET="$asset" MARKER="$marker")"
+          encoded="$(printf '%s' "$payload" | base64 -w0)"
+          current_sha="$(gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" --jq .sha 2>/dev/null || true)"
+          if [[ -n "$current_sha" ]]; then
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: update live Task bundle probe' -f content="$encoded" -f sha="$current_sha"
+          else
+            gh api "repos/${GITHUB_REPOSITORY}/contents/${STATUS_PATH}" -X PUT -f message='ci: record live Task bundle probe' -f content="$encoded"
+          fi
