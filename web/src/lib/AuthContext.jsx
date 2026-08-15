@@ -3,6 +3,7 @@ import { opsClient } from '@/api/opsClient'
 import { localAuthClient } from '@/api/localAuthClient'
 import { clearNativeSessionToken, saveNativeSessionToken } from '@/lib/native-session'
 import { parseOutletIds } from '@/lib/outlets'
+import { clearRealtimeReadCache } from '@/lib/realtime-read-cache'
 
 const AuthContext = createContext(null)
 const CACHED_USER_KEY = 'chefops.auth.cached-user'
@@ -10,6 +11,17 @@ const AUTH_CHECK_TIMEOUT_MS = 12_000
 
 function primaryOutlet(user) {
   return String(user?.outlet_id || parseOutletIds(user)[0] || '').trim()
+}
+
+function accessCacheKey(user) {
+  if (!user) return ''
+  return JSON.stringify({
+    identity: String(user?.id || user?.google_sub || user?.email || '').trim(),
+    status: user?.status || '',
+    role: user?.role || '',
+    outlet_id: user?.outlet_id || '',
+    outlet_ids: user?.outlet_ids || user?.assigned_outlet_ids || '',
+  })
 }
 
 function rememberOutlet(user) {
@@ -59,6 +71,10 @@ export function AuthProvider({ children }) {
   const [authChecked, setAuthChecked] = useState(Boolean(initialUser))
 
   const applyUser = useCallback((nextUser) => {
+    const previousUser = readCachedUser()
+    if (previousUser && accessCacheKey(previousUser) !== accessCacheKey(nextUser)) {
+      clearRealtimeReadCache().catch(() => undefined)
+    }
     setUser(nextUser)
     persistUser(nextUser)
     if (nextUser) rememberOutlet(nextUser)
@@ -79,6 +95,7 @@ export function AuthProvider({ children }) {
     } catch (error) {
       const status = Number(error?.status || 0)
       if (status === 401 || status === 403) {
+        await clearRealtimeReadCache().catch(() => undefined)
         applyUser(null)
         if (status === 401) clearNativeSessionToken()
         return null
@@ -167,6 +184,7 @@ export function AuthProvider({ children }) {
     } finally {
       clearNativeSessionToken()
       localAuthClient.clearPendingApproval()
+      await clearRealtimeReadCache().catch(() => undefined)
       persistUser(null)
       try {
         navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
