@@ -16,6 +16,7 @@ import { installNativeLabelPrintBridge } from '@/lib/native-label-print'
 import { installFinalLabelRuntime } from '@/lib/install-final-label-runtime'
 import { installRealtimeClientHeader } from '@/lib/client-id'
 import { installRealtimeMutationQueue } from '@/lib/realtime-mutations'
+import { installSpecializedOperationClient } from '@/lib/specialized-operation-client'
 import { installMediaUiRepair } from '@/lib/media-ui'
 import { installViewportGeometry } from '@/lib/viewport-geometry'
 import { installOperationalTaskPolicy } from '@/lib/operational-task-policy'
@@ -130,6 +131,7 @@ markRuntime()
 installNativeSessionFetch()
 installRealtimeClientHeader()
 installRealtimeMutationQueue()
+installSpecializedOperationClient()
 installOperationalTaskPolicy()
 installNativeLabelPrintBridge()
 installFinalLabelRuntime()

@@ -6,7 +6,7 @@ OPS uses Cloudflare D1 as the canonical structured runtime database and Cloudfla
 
 The device outbox reduces Worker request pressure and protects user-entered realtime mutations when the network or Cloudflare is temporarily unavailable. The persistent read cache reduces repeated D1/Worker reads while keeping D1 authoritative.
 
-## Write path
+## Generic realtime write path
 
 For migrated realtime entities:
 
@@ -20,6 +20,35 @@ For migrated realtime entities:
 
 The batching layer reduces HTTP Worker invocations. It does not convert many logical records into one D1 record and does not weaken per-record auditability.
 
+## Specialized operation write path
+
+Operational Task actions, StockCount batch saves, and CloseUp upserts keep their existing Worker endpoints and domain validation, but the client now places the full operation in a separate authenticated IndexedDB outbox before attempting the HTTP request.
+
+- Task: `/api/tasks/operational/action`
+- Stock Count: `/api/stock-counts/batch`
+- Close Up: `/api/close-up/upsert`
+
+Every staged request gets a stable `mutation_id` that is reused in the request body and `X-ChefOps-Mutation-Id` header. The server's existing idempotency/replay behavior therefore remains authoritative when a device retries after a timeout, Worker quota interruption, network loss, or application restart.
+
+Pending Task autosaves for the same Task are coalesced on-device by item patch. Pending StockCount saves for the same outlet/date are coalesced by stock-list item. Pending CloseUp saves for the same event are replaced with the latest draft. Coalescing only applies while the operation is still waiting on the device; after D1 confirms a commit, a later user action receives a new mutation identity.
+
+Transient network, 408, 425, 429, and 5xx failures remain queued with bounded exponential backoff. Permanent validation, permission, or conflict failures remain on the device as `needs_attention` instead of retrying forever or being reported as a successful D1 commit.
+
+The staff-facing device sync indicator uses four states:
+
+- `Saved on device` / `已保存在设备 · 待同步`
+- `Syncing` / `正在同步`
+- `Synced` / `已同步`
+- `Needs attention` / `需要处理`
+
+A queued operation is not described as D1-synced until the Worker returns a successful canonical commit.
+
+## Operational Task snapshot fallback
+
+The assembled Operational Task bootstrap response is stored in a separate identity/outlet/date IndexedDB snapshot. If the Worker is temporarily unreachable, a previously loaded Task workspace can reopen from that device snapshot. Queued Task patches update the snapshot immediately; later canonical commits reconcile the same Task snapshot.
+
+This fallback does not make the device authoritative. D1 remains the source of truth, and server-side Task time windows, completion validation, permissions, photo requirements, and optimistic concurrency still run when the queued operation reaches the Worker.
+
 ## Identity safety
 
 New outbox rows include the cached authenticated user identity key. Automatic background flush only sends rows owned by the current cached identity. This prevents newly queued work from being silently replayed under a different login on a shared device.
@@ -30,19 +59,13 @@ Legacy outbox rows created before identity scoping have no actor key and retain 
 
 ## TaskPhoto exception
 
-TaskPhoto continues to use the existing direct upload/confirmation path. Image bytes and media acknowledgement have different durability requirements from small JSON mutations and are not placed into this JSON outbox slice.
+TaskPhoto continues to use the existing direct upload/confirmation path. Image bytes and media acknowledgement have different durability requirements from small JSON mutations and are not placed into either JSON operation outbox.
 
 ## Google Sheet behavior
 
 Google Sheet mirroring happens only after canonical D1 mutation persistence. Sheet failure must never undo or block the D1 commit. The D1 `sheet_sync_outbox` remains the single bounded retry owner for Sheet backup work.
 
 Realtime staff reads from the device cache use D1-only `/api/realtime/records` requests with `legacy_seed=0`. A staff read must not cause Sheet bootstrap, migration or hydration.
-
-## Retry behavior
-
-Device retries are intended for network failures, HTTP 401 session interruption, 408, 425, 429, and 5xx responses. Permanent validation/permission/conflict failures are surfaced instead of being retried forever.
-
-A visible, online app periodically checks the outbox, but each failed row has `next_attempt_at`, so the 30-second check does not imply a 30-second network retry storm.
 
 ## Read path
 
@@ -61,12 +84,8 @@ This is stale-while-revalidate behavior: D1 remains authoritative, but routine n
 
 ## Follow-up slices
 
-The next planned slices are:
-
-1. adapt specialized operational Task action, StockCount batch, and CloseUp D1 endpoints to the same device-first durability contract without changing their domain response semantics;
-2. add a staff-facing sync state such as `Saved on device`, `Syncing`, `Synced`, or `Needs attention`;
-3. review high-frequency non-realtime endpoints (notifications/bootstrap/status) separately and apply bounded caching only where their domain semantics allow it.
+The next planned slice is to review high-frequency non-realtime endpoints such as notifications, bootstrap and status calls separately, then apply bounded caching only where their domain semantics permit it.
 
 ## No migration
 
-These device outbox/read-cache phases require no D1 schema migration and no historical backfill.
+These device outbox, specialized-operation outbox, Task snapshot and read-cache phases require no D1 schema migration and no historical backfill.

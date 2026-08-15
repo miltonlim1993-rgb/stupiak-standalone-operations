@@ -31,6 +31,8 @@ Never substitute a Cloudflare Pages project, Pages preview URL, or Pages setting
 - Staff page success must not wait for Google Sheets.
 - Queue or Sheet failure must not undo a valid D1 commit.
 - Staff reads must not trigger legacy Sheet bootstrap, migration, or hydration.
+- Operational Task actions, StockCount batch saves, and CloseUp upserts must be staged in the authenticated device operation outbox before network delivery. Retries must preserve `mutation_id`; only a Worker-confirmed D1 commit may be described as synced.
+- TaskPhoto media remains outside the JSON device operation outbox and must keep its direct R2 upload plus D1 registration/confirmation semantics.
 - Do not describe all 35 original entities as fully migrated; check the source map in the canonical runbook.
 
 ## D1 migration rule
