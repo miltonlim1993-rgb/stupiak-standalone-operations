@@ -66,6 +66,17 @@ function openDatabase() {
   return databasePromise
 }
 
+async function getOperation(id) {
+  const database = await openDatabase()
+  if (!database || !id) return null
+  return new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readonly')
+    const request = transaction.objectStore(STORE_NAME).get(id)
+    request.onsuccess = () => resolve(request.result || null)
+    request.onerror = () => reject(request.error)
+  }).catch(() => null)
+}
+
 async function putOperation(operation) {
   const database = await openDatabase()
   if (!database) return false
@@ -275,7 +286,16 @@ async function markNeedsAttention(operation, error) {
 }
 
 export async function submitSpecializedOperation(input, { queuedResult: queuedFactory } = {}) {
-  const operation = normalizeOperation(input)
+  let operation = normalizeOperation(input)
+  const existing = input.operation_id ? await getOperation(input.operation_id) : null
+  if (existing && existing.actor_key === operation.actor_key && existing.mutation_id === operation.mutation_id) {
+    operation = {
+      ...operation,
+      queued_at: existing.queued_at || operation.queued_at,
+      attempts: Number(existing.attempts || 0),
+      last_attempt_at: existing.last_attempt_at || '',
+    }
+  }
   await clearAttention(operation)
   const stored = await putOperation(operation)
   if (!stored) {
@@ -314,7 +334,7 @@ export async function listSpecializedOperations({ kind = '', outletId = '', stat
     .filter((row) => !kind || row.kind === kind)
     .filter((row) => !outletId || String(row.outlet_id || '') === String(outletId))
     .filter((row) => !scopeKey || row.scope_key === scopeKey)
-    .filter((row) => !statuses.size || statuses.has(String(row.status || '')))
+    .filter((row) => !statuses.size || statuses.has(String(row.status || ''))
     .sort((left, right) => String(left.queued_at || '').localeCompare(String(right.queued_at || '')))
 }
 
@@ -326,8 +346,15 @@ export async function flushSpecializedOperationQueue() {
     if (!actorKey) return { flushed: 0, pending: 0, blocked_auth: true }
 
     const nowMs = Date.now()
-    const rows = (await actorOperations(actorKey))
+    const allRows = await actorOperations(actorKey)
+    const blockedAttentionKeys = new Set(
+      allRows
+        .filter((operation) => operation.status === 'needs_attention' && operation.attention_key)
+        .map((operation) => operation.attention_key),
+    )
+    const rows = allRows
       .filter((operation) => operation.status !== 'needs_attention')
+      .filter((operation) => !operation.attention_key || !blockedAttentionKeys.has(operation.attention_key))
       .filter((operation) => {
         const nextAttempt = Date.parse(String(operation.next_attempt_at || operation.queued_at || ''))
         return !Number.isFinite(nextAttempt) || nextAttempt <= nowMs
@@ -337,6 +364,7 @@ export async function flushSpecializedOperationQueue() {
 
     let flushed = 0
     for (const operation of rows) {
+      if (operation.attention_key && blockedAttentionKeys.has(operation.attention_key)) continue
       try {
         const syncing = { ...operation, status: 'syncing', last_attempt_at: new Date().toISOString() }
         await putOperation(syncing)
@@ -350,6 +378,7 @@ export async function flushSpecializedOperationQueue() {
           break
         }
         await markNeedsAttention(operation, error)
+        if (operation.attention_key) blockedAttentionKeys.add(operation.attention_key)
       }
     }
 
