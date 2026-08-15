@@ -3,6 +3,7 @@ import { opsClient } from '@/api/opsClient'
 import { localAuthClient } from '@/api/localAuthClient'
 import { clearNativeSessionToken, saveNativeSessionToken } from '@/lib/native-session'
 import { parseOutletIds } from '@/lib/outlets'
+import { clearRealtimeReadCache } from '@/lib/realtime-read-cache'
 
 const AuthContext = createContext(null)
 const CACHED_USER_KEY = 'chefops.auth.cached-user'
@@ -79,6 +80,7 @@ export function AuthProvider({ children }) {
     } catch (error) {
       const status = Number(error?.status || 0)
       if (status === 401 || status === 403) {
+        await clearRealtimeReadCache().catch(() => undefined)
         applyUser(null)
         if (status === 401) clearNativeSessionToken()
         return null
@@ -167,6 +169,7 @@ export function AuthProvider({ children }) {
     } finally {
       clearNativeSessionToken()
       localAuthClient.clearPendingApproval()
+      await clearRealtimeReadCache().catch(() => undefined)
       persistUser(null)
       try {
         navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_DATA_CACHE' })
