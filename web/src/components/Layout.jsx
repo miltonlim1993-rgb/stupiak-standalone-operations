@@ -7,6 +7,7 @@ import {
 import { useAuth } from '@/lib/AuthContext'
 import { parseOutletIds } from '@/lib/outlets'
 import { ROLE_LABELS } from '@/lib/ops-helpers'
+import { getWorkerPressureState } from '@/lib/worker-pressure-circuit'
 import AppFoundation from '@/components/AppFoundation'
 import NotificationBell from '@/components/NotificationBell'
 import DataPackGate from '@/components/DataPackGate'
@@ -70,8 +71,10 @@ export default function Layout() {
   const { user } = useAuth()
   const [mode, setMode] = useState(initialMode)
   const [online, setOnline] = useState(() => navigator.onLine)
+  const [workerPressure, setWorkerPressure] = useState(() => getWorkerPressureState())
   const [taskBadgeCount, setTaskBadgeCount] = useState(() => Number(window.__chefopsTaskBadgeCount || 0))
   const headerOutlet = String(user?.outlet_id || parseOutletIds(user)[0] || '').trim()
+  const cachedMode = online && Boolean(workerPressure?.open)
 
   useEffect(() => {
     if (!nativeAndroid()) return
@@ -82,6 +85,7 @@ export default function Layout() {
   useEffect(() => {
     const onlineHandler = () => setOnline(true)
     const offlineHandler = () => setOnline(false)
+    const pressureHandler = (event) => setWorkerPressure(event?.detail || getWorkerPressureState())
     const modeHandler = (event) => {
       if (nativeAndroid()) {
         setMode('mobile')
@@ -93,11 +97,13 @@ export default function Layout() {
     const taskBadgeHandler = (event) => setTaskBadgeCount(Number(event?.detail?.count || 0))
     window.addEventListener('online', onlineHandler)
     window.addEventListener('offline', offlineHandler)
+    window.addEventListener('chefops:worker-pressure-state', pressureHandler)
     window.addEventListener('chefops:display-mode', modeHandler)
     window.addEventListener('chefops:task-badge', taskBadgeHandler)
     return () => {
       window.removeEventListener('online', onlineHandler)
       window.removeEventListener('offline', offlineHandler)
+      window.removeEventListener('chefops:worker-pressure-state', pressureHandler)
       window.removeEventListener('chefops:display-mode', modeHandler)
       window.removeEventListener('chefops:task-badge', taskBadgeHandler)
     }
@@ -134,7 +140,9 @@ export default function Layout() {
           </nav>
           <div className="chefops-sidebar-user mt-auto rounded-2xl border border-border bg-muted/50 p-3">
             <div className="chefops-sidebar-user-copy"><p className="truncate text-sm font-semibold">{user?.full_name || user?.email}</p><p className="mt-1 text-xs text-muted-foreground">{ROLE_LABELS[user?.role] || user?.role}</p></div>
-            <p className={`chefops-sidebar-online mt-2 text-[11px] ${online ? 'text-emerald-600' : 'text-amber-600'}`}>{online ? '● Online' : '● Offline · cached data'}</p>
+            <p className={`chefops-sidebar-online mt-2 text-[11px] ${online && !cachedMode ? 'text-emerald-600' : 'text-amber-600'}`}>
+              {!online ? '● Offline · cached data' : cachedMode ? '● Online · server busy · cached mode' : '● Online'}
+            </p>
           </div>
         </aside>
 
@@ -149,6 +157,7 @@ export default function Layout() {
               <div className="chefops-desktop-heading hidden min-w-0"><p className="truncate text-sm font-semibold">{user?.full_name || 'Operations'}</p><p className="text-[11px] text-muted-foreground">{headerOutlet || 'No assigned outlet'}</p></div>
               <div className="flex items-center gap-2">
                 {!online ? <span className="hidden rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-800 sm:inline">Offline</span> : null}
+                {cachedMode ? <span className="hidden rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-800 sm:inline">Server busy · cached</span> : null}
                 <NotificationBell />
               </div>
             </div>
