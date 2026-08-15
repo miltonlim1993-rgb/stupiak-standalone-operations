@@ -1,0 +1,36 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const cacheSource = fs.readFileSync('web/src/lib/realtime-read-cache.js', 'utf8')
+const clientSource = fs.readFileSync('web/src/api/opsClient.js', 'utf8')
+const agentSource = fs.readFileSync('AGENTS.md', 'utf8')
+
+assert.match(cacheSource, /const DATABASE_NAME = 'chefops-realtime-read-cache'/)
+assert.match(cacheSource, /const CACHE_FRESH_MS = 60_000/)
+assert.match(cacheSource, /const CACHE_DELTA_LIMIT = 5000/)
+assert.match(cacheSource, /records\.createIndex\('scope_key', 'scope_key'\)/)
+assert.match(cacheSource, /const actorKey = cachedActorKey\(\)/)
+assert.match(cacheSource, /since: cursor/)
+assert.match(cacheSource, /includeDeleted: true/)
+assert.match(cacheSource, /legacySeed: cursor \? false : legacySeed/)
+assert.match(cacheSource, /cursor && rows\.length >= CACHE_DELTA_LIMIT/)
+assert.match(cacheSource, /complete: rows\.length < CACHE_DELTA_LIMIT/)
+assert.match(cacheSource, /document\.visibilityState === 'visible'/)
+assert.match(cacheSource, /refreshInflight\.has\(scope\)/)
+assert.match(cacheSource, /chefops:mutation-committed/)
+assert.match(cacheSource, /chefops:mutation-queued/)
+
+assert.match(clientSource, /from '@\/lib\/realtime-read-cache'/)
+assert.match(clientSource, /readRealtimeRowsCached\(/)
+assert.match(clientSource, /if \(since\) \{/)
+assert.match(clientSource, /source: 'device-cache'/)
+assert.match(clientSource, /force: options\?\.force === true/)
+
+assert.match(agentSource, /Staff reads must not trigger legacy Sheet bootstrap, migration, or hydration\./)
+assert.match(clientSource, /legacy_seed: remoteLegacySeed \? '1' : '0'/)
+
+console.log('DEVICE_READ_CACHE_DELTA_SYNC_TEST_OK=true')
+console.log('REALTIME_READ_CACHE_PERSISTENT=true')
+console.log('REALTIME_READ_CACHE_FRESH_MS=60000')
+console.log('REALTIME_DELTA_LIMIT=5000')
+console.log('REALTIME_CACHE_IDENTITY_SCOPED=true')
