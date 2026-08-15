@@ -1,0 +1,63 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const budgetSource = fs.readFileSync('web/src/lib/global-request-budget.js', 'utf8')
+const mainSource = fs.readFileSync('web/src/main.jsx', 'utf8')
+
+assert.match(budgetSource, /const VERSION = 'bounded-global-sync-v1'/)
+assert.match(budgetSource, /const TASK_BOOTSTRAP_TTL_MS = 10 \* 60_000/)
+assert.match(budgetSource, /const REALTIME_ENTITY_TTL_MS = 10 \* 60_000/)
+assert.match(budgetSource, /const NOTIFICATION_TTL_MS = 5 \* 60_000/)
+assert.match(budgetSource, /const PACK_MANIFEST_TTL_MS = 10 \* 60_000/)
+assert.match(budgetSource, /const RELEASE_MANIFEST_TTL_MS = 5 \* 60_000/)
+assert.match(budgetSource, /const USER_ACTION_BYPASS_MS = 2_000/)
+
+assert.match(budgetSource, /opsClient\.tasks\.operationalBootstrap = async/)
+assert.match(budgetSource, /Boolean\(args\?\.refresh\) && recentUserAction\(\)/)
+assert.match(budgetSource, /opsClient\.entities = new Proxy/)
+assert.match(budgetSource, /'Attendance'/)
+assert.match(budgetSource, /'TrainingAssignment'/)
+assert.match(budgetSource, /'TrainingProgress'/)
+assert.match(budgetSource, /opsClient\.notifications\.list =/)
+assert.match(budgetSource, /opsClient\.notifications\.read = async/)
+assert.match(budgetSource, /opsClient\.notifications\.push = async/)
+
+assert.match(budgetSource, /url\.pathname === '\/api\/app\/v4\/pack\/manifest'/)
+assert.match(budgetSource, /url\.pathname === '\/app-release\.json'/)
+assert.match(budgetSource, /params\.delete\('_'\)/)
+assert.match(budgetSource, /document\.visibilityState === 'hidden'/)
+assert.match(budgetSource, /window\.addEventListener\('pointerdown', markUserAction/)
+assert.match(budgetSource, /window\.addEventListener\('online', onOnline\)/)
+assert.match(budgetSource, /window\.addEventListener\('chefops:realtime', onRealtime\)/)
+assert.match(budgetSource, /status !== 401 && status !== 403/)
+
+assert.doesNotMatch(budgetSource, /opsClient\.auth\.me\s*=/)
+assert.doesNotMatch(budgetSource, /operationalAction\s*=/)
+assert.doesNotMatch(budgetSource, /stockCounts\.saveBatch\s*=/)
+assert.doesNotMatch(budgetSource, /closeUp\.upsert\s*=/)
+assert.doesNotMatch(budgetSource, /\/api\/files\/upload/)
+
+assert.match(mainSource, /import \{ installGlobalRequestBudget \} from '@\/lib\/global-request-budget'/)
+assert.match(mainSource, /installGlobalRequestBudget\(\)/)
+const specializedIndex = mainSource.indexOf('installSpecializedOperationClient()')
+const budgetIndex = mainSource.indexOf('installGlobalRequestBudget()')
+const reactIndex = mainSource.indexOf('ReactDOM.createRoot')
+assert(specializedIndex >= 0 && budgetIndex > specializedIndex, 'request budget must wrap the specialized operational client')
+assert(reactIndex > budgetIndex, 'request budget must install before global React managers mount')
+
+const day = 24 * 60 * 60_000
+const taskCallsPerKey = Math.ceil(day / (10 * 60_000))
+const notificationCalls = Math.ceil(day / (5 * 60_000))
+const packCalls = Math.ceil(day / (10 * 60_000))
+assert.equal(taskCallsPerKey, 144)
+assert.equal(notificationCalls, 288)
+assert.equal(packCalls, 144)
+
+console.log('GLOBAL_REQUEST_BUDGET_TEST_OK=true')
+console.log('TASK_BOOTSTRAP_BACKGROUND_CAP_PER_KEY_PER_DAY=144')
+console.log('NOTIFICATION_BACKGROUND_CAP_PER_DAY=288')
+console.log('PACK_MANIFEST_BACKGROUND_CAP_PER_DAY=144')
+console.log('USER_ACTION_REFRESH_BYPASS=true')
+console.log('HIDDEN_TAB_STALE_REUSE=true')
+console.log('AUTH_REQUEST_BUDGETED=false')
+console.log('WRITE_REQUEST_BUDGETED=false')
