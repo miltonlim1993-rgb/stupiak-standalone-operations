@@ -405,6 +405,7 @@ export const opsClient = {
           limit: String(limit),
           filter: JSON.stringify(filter || {}),
           sort: String(sort || ''),
+          legacy_seed: '0',
           _: String(Date.now()),
         })
         params.set('since', since)
