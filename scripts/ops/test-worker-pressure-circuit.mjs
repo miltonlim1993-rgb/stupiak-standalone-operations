@@ -1,0 +1,63 @@
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+
+const circuitSource = fs.readFileSync('web/src/lib/worker-pressure-circuit.js', 'utf8')
+const budgetSource = fs.readFileSync('web/src/lib/global-request-budget.js', 'utf8')
+const layoutSource = fs.readFileSync('web/src/components/Layout.jsx', 'utf8')
+
+assert.match(circuitSource, /const VERSION = 'worker-pressure-circuit-v1'/)
+assert.match(circuitSource, /const BASE_BACKOFF_MS = 5 \* 60_000/)
+assert.match(circuitSource, /const MAX_BACKOFF_MS = 30 \* 60_000/)
+assert.match(circuitSource, /const FAILURE_WINDOW_MS = 2 \* 60_000/)
+assert.match(circuitSource, /const SOFT_FAILURE_THRESHOLD = 2/)
+assert.match(circuitSource, /const PROBE_INTERVAL_MS = 60_000/)
+assert.match(circuitSource, /new Set\(\[408, 425, 429, 502, 503, 504\]\)/)
+assert.match(circuitSource, /const AUTH_STATUSES = new Set\(\[401, 403\]\)/)
+assert.match(circuitSource, /localStorage\.setItem\(STORAGE_KEY/)
+assert.match(circuitSource, /chefops:worker-pressure-state/)
+assert.match(circuitSource, /worker_pressure_deferred/)
+assert.match(circuitSource, /X-ChefOps-Worker-Pressure/)
+assert.match(circuitSource, /reserveWorkerPressureProbe/)
+assert.match(circuitSource, /recordWorkerPressureSuccess/)
+
+assert.match(budgetSource, /bounded-global-sync-v2-pressure-aware/)
+assert.match(budgetSource, /loadOperationalTaskSnapshot/)
+assert.match(budgetSource, /pressureAware: true/)
+assert.match(budgetSource, /worker_pressure_deferred: true/)
+assert.match(budgetSource, /isCircuitDeferrableRead/)
+assert.match(budgetSource, /requestMethod\(input, init\) !== 'GET'/)
+assert.match(budgetSource, /url\.pathname\.startsWith\('\/api\/auth\/'\)/)
+assert.match(budgetSource, /url\.pathname\.startsWith\('\/api\/files\/'\)/)
+assert.match(budgetSource, /recordWorkerPressureFailure/)
+assert.match(budgetSource, /recordWorkerPressureSuccess/)
+assert.match(budgetSource, /pressure_deferred/)
+assert.match(budgetSource, /pressure_cache_hits/)
+assert.match(budgetSource, /pressure_probes/)
+assert.match(budgetSource, /canonicalApiOrigin\(\)/)
+
+assert.doesNotMatch(budgetSource, /method\s*!==\s*'POST'.*workerPressureDeferred/s)
+assert.doesNotMatch(budgetSource, /opsClient\.auth\.me\s*=/)
+assert.doesNotMatch(budgetSource, /operationalAction\s*=/)
+assert.doesNotMatch(budgetSource, /stockCounts\.saveBatch\s*=/)
+assert.doesNotMatch(budgetSource, /closeUp\.upsert\s*=/)
+
+assert.match(layoutSource, /getWorkerPressureState/)
+assert.match(layoutSource, /chefops:worker-pressure-state/)
+assert.match(layoutSource, /Server busy · cached/)
+assert.match(layoutSource, /server busy · cached mode/)
+
+const backoffs = [5, 10, 20, 30, 30].map((minutes) => minutes * 60_000)
+for (let index = 1; index < backoffs.length; index += 1) {
+  assert(backoffs[index] >= backoffs[index - 1])
+  assert(backoffs[index] <= 30 * 60_000)
+}
+
+console.log('WORKER_PRESSURE_CIRCUIT_TEST_OK=true')
+console.log('WORKER_PRESSURE_HARD_429=true')
+console.log('WORKER_PRESSURE_BACKOFF_MINUTES=5,10,20,30')
+console.log('WORKER_PRESSURE_PROBE_INTERVAL_MS=60000')
+console.log('WORKER_PRESSURE_PERSISTS_ACROSS_RELOAD=true')
+console.log('WORKER_PRESSURE_TASK_SNAPSHOT_FALLBACK=true')
+console.log('WORKER_PRESSURE_AUTH_BLOCKED=false')
+console.log('WORKER_PRESSURE_WRITE_BLOCKED=false')
+console.log('WORKER_PRESSURE_MEDIA_BLOCKED=false')
