@@ -6,6 +6,7 @@ import { handleD1DirectoryApi } from './d1-directory-api.js'
 import { handleD1DirectoryBootstrap } from './d1-directory-bootstrap.js'
 import { processDirectoryMirrorQueue } from './d1-directory-mirror.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
+import { handleRealtimeMutationBatch } from './realtime-mutation-batch.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'
@@ -36,7 +37,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v22-sheet-backup-single-retry-owner'
+const WORKER_REVISION = 'realtime-resilience-v23-device-outbox-batch-sync'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -251,6 +252,9 @@ export default {
 
       const taskPhotoResponse = await handleRealtimeTaskPhotoMutation(request, runEnv, url)
       if (taskPhotoResponse) return withApiHeaders(request, env, taskPhotoResponse)
+
+      const realtimeBatchResponse = await handleRealtimeMutationBatch(request, runEnv, url)
+      if (realtimeBatchResponse) return withApiHeaders(request, env, realtimeBatchResponse)
 
       const runtimeUrl = new URL(url)
       runtimeUrl.searchParams.set('legacy_seed', '0')
