@@ -13,7 +13,15 @@ const refreshInflight = new Map()
 function cachedActorKey() {
   try {
     const user = JSON.parse(localStorage.getItem(CACHED_USER_KEY) || 'null')
-    return String(user?.id || user?.google_sub || user?.email || '').trim()
+    const identity = String(user?.id || user?.google_sub || user?.email || '').trim()
+    if (!identity) return ''
+    const accessFingerprint = JSON.stringify({
+      status: user?.status || '',
+      role: user?.role || '',
+      outlet_id: user?.outlet_id || '',
+      outlet_ids: user?.outlet_ids || user?.assigned_outlet_ids || '',
+    })
+    return `${identity}::${accessFingerprint}`
   } catch {
     return ''
   }
@@ -281,6 +289,20 @@ function installMutationListeners() {
     const mutation = event.detail?.mutation || {}
     markScopeStale(scopeKey(mutation.entity, mutation.outlet_id)).catch(() => undefined)
   })
+}
+
+export async function clearRealtimeReadCache() {
+  refreshInflight.clear()
+  const database = await openDatabase()
+  if (!database) return
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction([RECORD_STORE, META_STORE], 'readwrite')
+    transaction.objectStore(RECORD_STORE).clear()
+    transaction.objectStore(META_STORE).clear()
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+  }).catch(() => undefined)
 }
 
 installMutationListeners()
