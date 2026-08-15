@@ -293,7 +293,10 @@ export async function submitSpecializedOperation(input, { queuedResult: queuedFa
       ...operation,
       queued_at: existing.queued_at || operation.queued_at,
       attempts: Number(existing.attempts || 0),
+      last_error: existing.last_error || '',
+      last_status: Number(existing.last_status || 0),
       last_attempt_at: existing.last_attempt_at || '',
+      next_attempt_at: existing.next_attempt_at || operation.next_attempt_at,
     }
   }
   await clearAttention(operation)
@@ -307,7 +310,9 @@ export async function submitSpecializedOperation(input, { queuedResult: queuedFa
   dispatch('chefops:specialized-operation-queued', { operation })
   dispatch('chefops:specialized-operation-state', { operation, phase: 'device_saved' })
 
-  if (!navigator.onLine) return queuedResult(operation, queuedFactory)
+  const nextAttemptMs = Date.parse(String(operation.next_attempt_at || ''))
+  const backoffActive = Number.isFinite(nextAttemptMs) && nextAttemptMs > Date.now()
+  if (!navigator.onLine || backoffActive) return queuedResult(operation, queuedFactory)
 
   try {
     const syncing = { ...operation, status: 'syncing', last_attempt_at: new Date().toISOString() }
@@ -334,7 +339,7 @@ export async function listSpecializedOperations({ kind = '', outletId = '', stat
     .filter((row) => !kind || row.kind === kind)
     .filter((row) => !outletId || String(row.outlet_id || '') === String(outletId))
     .filter((row) => !scopeKey || row.scope_key === scopeKey)
-    .filter((row) => !statuses.size || statuses.has(String(row.status || ''))
+    .filter((row) => !statuses.size || statuses.has(String(row.status || '')))
     .sort((left, right) => String(left.queued_at || '').localeCompare(String(right.queued_at || '')))
 }
 
