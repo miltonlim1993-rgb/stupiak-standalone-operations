@@ -34,9 +34,9 @@ import {
   flushPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue,
-} from './realtime-store.js'
+} from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v21-live-task-photo-confirmation'
+const WORKER_REVISION = 'realtime-resilience-v22-sheet-backup-single-retry-owner'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
