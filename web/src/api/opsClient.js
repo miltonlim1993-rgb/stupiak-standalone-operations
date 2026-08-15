@@ -1,5 +1,6 @@
 import { getPackedEntity, getPackedLabelCatalog } from '@/lib/app-pack'
 import { submitRealtimeMutation } from '@/lib/realtime-mutations'
+import { readRealtimeRowsCached } from '@/lib/realtime-read-cache'
 
 const configuredApiUrl = String(import.meta.env.VITE_API_BASE_URL || '').trim()
 const API_BASE_URL = (configuredApiUrl || (import.meta.env.DEV ? 'http://localhost:8787' : window.location.origin)).replace(/\/$/, '')
@@ -165,22 +166,40 @@ async function realtimeRows(entity, outletId, {
   limit = 500,
   year,
   legacySeed = true,
+  force = false,
 } = {}) {
   if (!REALTIME_ENTITIES.has(entity) || !outletId) return []
-  const params = new URLSearchParams({
-    entity,
-    outlet_id: outletId,
-    include_deleted: '1',
-    limit: String(Math.max(1, Math.min(Number(limit) || 500, 5000))),
-    filter: JSON.stringify(filter || {}),
-    sort: String(sort || ''),
-    legacy_seed: legacySeed ? '1' : '0',
-    _: String(Date.now()),
-  })
-  if (year) params.set('year', String(year))
+
+  const fetchRemote = async ({
+    since = '',
+    includeDeleted = true,
+    limit: remoteLimit = 5000,
+    legacySeed: remoteLegacySeed = legacySeed,
+  } = {}) => {
+    const params = new URLSearchParams({
+      entity,
+      outlet_id: outletId,
+      include_deleted: includeDeleted ? '1' : '0',
+      limit: String(Math.max(1, Math.min(Number(remoteLimit) || 5000, 5000))),
+      filter: JSON.stringify(filter || {}),
+      sort: String(sort || ''),
+      legacy_seed: remoteLegacySeed ? '1' : '0',
+      _: String(Date.now()),
+    })
+    if (since) params.set('since', since)
+    if (year) params.set('year', String(year))
+    return request(`/api/realtime/records?${params}`)
+  }
+
   try {
-    const result = await request(`/api/realtime/records?${params}`)
-    return Array.isArray(result?.records) ? result.records : []
+    return await readRealtimeRowsCached({
+      entity,
+      outletId,
+      fetchRemote,
+      legacySeed,
+      force,
+      requestedLimit: Math.max(1, Math.min(Number(limit) || 500, 5000)),
+    })
   } catch (error) {
     if (Number(error?.status || 0) === 401 || Number(error?.status || 0) === 403) throw error
     console.error(`Realtime ${entity} read unavailable`, error)
@@ -242,6 +261,7 @@ function entityClient(entity) {
           limit: Math.max(Number(limit) || 100, 500),
           year: options?.year,
           legacySeed: options?.legacySeed !== false,
+          force: options?.force === true,
         })
         return visibleRealtimeRows(rows, { sort, limit })
       }
@@ -259,6 +279,7 @@ function entityClient(entity) {
           limit: Math.max(Number(limit) || 100, 500),
           year: options?.year,
           legacySeed: options?.legacySeed !== false,
+          force: options?.force === true,
         })
         return visibleRealtimeRows(rows, { filter, sort, limit })
       }
@@ -377,19 +398,31 @@ export const opsClient = {
     status() {
       return request(`/api/realtime/data/status?_=${Date.now()}`)
     },
-    list({ entity, outletId, since = '', includeDeleted = false, limit = 100, filter = {}, sort = '', year } = {}) {
-      const params = new URLSearchParams({
-        entity,
-        outlet_id: outletId,
-        limit: String(limit),
-        filter: JSON.stringify(filter || {}),
-        sort: String(sort || ''),
-        _: String(Date.now()),
-      })
-      if (since) params.set('since', since)
-      if (includeDeleted) params.set('include_deleted', '1')
-      if (year) params.set('year', String(year))
-      return request(`/api/realtime/records?${params}`)
+    async list({ entity, outletId, since = '', includeDeleted = false, limit = 100, filter = {}, sort = '', year, force = false } = {}) {
+      if (since) {
+        const params = new URLSearchParams({
+          entity,
+          outlet_id: outletId,
+          limit: String(limit),
+          filter: JSON.stringify(filter || {}),
+          sort: String(sort || ''),
+          _: String(Date.now()),
+        })
+        params.set('since', since)
+        if (includeDeleted) params.set('include_deleted', '1')
+        if (year) params.set('year', String(year))
+        return request(`/api/realtime/records?${params}`)
+      }
+      const rows = await realtimeRows(entity, outletId, { filter, sort, limit, year, force })
+      const records = includeDeleted
+        ? sortedRows((rows || []).filter((row) => matchesFilter(row, filter)), sort).slice(0, Math.max(1, Number(limit) || 100))
+        : visibleRealtimeRows(rows, { filter, sort, limit })
+      return {
+        records,
+        count: records.length,
+        source: 'device-cache',
+        server_time: new Date().toISOString(),
+      }
     },
     mutate(payload, options) {
       return submitRealtimeMutation(payload, options)
