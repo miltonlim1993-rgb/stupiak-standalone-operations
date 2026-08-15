@@ -301,6 +301,10 @@ function installMutationListeners() {
   })
 }
 
+export async function stageRealtimeReadCacheMutation(mutation, { committed = false } = {}) {
+  return applyLocalMutation(mutation || {}, committed)
+}
+
 export async function invalidateRealtimeReadCache(entity, outletId) {
   await markScopeStale(scopeKey(entity, outletId))
 }
