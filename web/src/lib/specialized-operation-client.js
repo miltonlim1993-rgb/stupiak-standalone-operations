@@ -48,7 +48,9 @@ function stockScope(payload) {
 }
 
 function closeUpScope(payload) {
-  const identity = payload.record_id || payload.event_key || payload.shift_id || 'entry'
+  const identity = payload.event_key
+    ? `closeup-${safeKey(payload.event_key)}`
+    : (payload.record_id || payload.shift_id || 'entry')
   return `closeup:${payload.outlet_id || ''}:${payload.business_date || ''}:${identity}`
 }
 
@@ -69,19 +71,6 @@ function mergeTaskResponsePatches(previous = [], incoming = []) {
     rows.set(id, { ...(rows.get(id) || {}), ...row, item_id: id })
   }
   return [...rows.values()]
-}
-
-function mergeTaskSavePayload(previous = {}, incoming = {}) {
-  const merged = { ...previous, ...incoming }
-  merged.response_patches = mergeTaskResponsePatches(previous.response_patches, incoming.response_patches)
-  if (!Object.prototype.hasOwnProperty.call(incoming, 'completion_notes_patch')) {
-    if (Object.prototype.hasOwnProperty.call(previous, 'completion_notes_patch')) {
-      merged.completion_notes_patch = previous.completion_notes_patch
-    } else {
-      delete merged.completion_notes_patch
-    }
-  }
-  return merged
 }
 
 function mergeStockPayload(previous = {}, incoming = {}) {
@@ -373,9 +362,6 @@ function installOperationEvents() {
 
 function installOpsClientWrappers() {
   const originalTaskBootstrap = opsClient.tasks.operationalBootstrap.bind(opsClient.tasks)
-  const originalTaskAction = opsClient.tasks.operationalAction.bind(opsClient.tasks)
-  const originalStockSave = opsClient.stockCounts.saveBatch.bind(opsClient.stockCounts)
-  const originalCloseUp = opsClient.closeUp.upsert.bind(opsClient.closeUp)
 
   opsClient.tasks.operationalBootstrap = async ({ outletId, date, refresh = false } = {}) => {
     try {
@@ -400,7 +386,7 @@ function installOpsClientWrappers() {
     const action = String(payload.action || '').toLowerCase()
     const coalesceScope = taskScope(payload, action === 'save' ? 'save' : action)
     const attentionKey = taskScope(payload)
-    let pending = action === 'save' ? await pendingOperation('task-action', coalesceScope) : null
+    const pending = action === 'save' ? await pendingOperation('task-action', coalesceScope) : null
     if (pending) {
       payload.response_patches = mergeTaskResponsePatches(pending.payload?.response_patches, payload.response_patches)
       if (!Object.prototype.hasOwnProperty.call(payload, 'completion_notes_patch')
@@ -473,7 +459,7 @@ function installOpsClientWrappers() {
         saved: (operation.payload.items || []).length,
         created: 0,
         updated: 0,
-        list_items: (operation.payload.items || []).length,
+        list_items: 0,
         records: queuedStockRecords(operation.payload, operation.mutation_id).map((row) => ({
           stock_list_id: row.stock_list_id,
           stock_count_id: row.id,
@@ -515,25 +501,20 @@ function installOpsClientWrappers() {
       scope_key: scopeKey,
       attention_key: scopeKey,
     }, {
-      queuedResult: (operation) => queuedCloseUpPreview(operation.payload, operation.mutation_id),
+      queuedResult: (operation, base) => ({
+        ...base,
+        ...queuedCloseUpPreview(operation.payload, operation.mutation_id),
+      }),
     })
 
     if (response?.sync_status === 'queued_device') {
       await stageQueuedRecord('CloseUp', response, {
-        mutation_id: response?.__device_sync?.mutation_id || pending?.mutation_id || '',
+        mutation_id: response.mutation_id || response?.__device_sync?.mutation_id || pending?.mutation_id || '',
         outlet_id: payload.outlet_id,
-        queued_at: response?.__device_sync?.saved_at || now(),
+        queued_at: response.queued_at || response?.__device_sync?.saved_at || now(),
       })
     }
     return response
-  }
-
-  // Keep references to the original functions available for diagnostics without exposing secrets.
-  window.__chefopsSpecializedOriginals = {
-    taskBootstrap: originalTaskBootstrap,
-    taskAction: originalTaskAction,
-    stockSave: originalStockSave,
-    closeUp: originalCloseUp,
   }
 }
 
