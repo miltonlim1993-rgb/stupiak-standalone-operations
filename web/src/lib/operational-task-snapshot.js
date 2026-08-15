@@ -2,6 +2,7 @@ const DATABASE_NAME = 'chefops-operational-task-snapshots'
 const DATABASE_VERSION = 1
 const STORE_NAME = 'snapshots'
 const CACHED_USER_KEY = 'chefops.auth.cached-user'
+const MAX_SNAPSHOTS_PER_OUTLET = 14
 
 let databasePromise = null
 
@@ -42,6 +43,29 @@ function openDatabase() {
   return databasePromise
 }
 
+async function pruneSnapshots(database, actor, outletId) {
+  if (!database || !actor || !outletId) return
+  const rows = await new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readonly')
+    const request = transaction.objectStore(STORE_NAME).index('actor_key').getAll(actor)
+    request.onsuccess = () => resolve(request.result || [])
+    request.onerror = () => reject(request.error)
+  }).catch(() => [])
+  const expired = rows
+    .filter((row) => String(row.outlet_id || '') === String(outletId))
+    .sort((left, right) => String(right.saved_at || '').localeCompare(String(left.saved_at || '')))
+    .slice(MAX_SNAPSHOTS_PER_OUTLET)
+  if (!expired.length) return
+  await new Promise((resolve, reject) => {
+    const transaction = database.transaction(STORE_NAME, 'readwrite')
+    const store = transaction.objectStore(STORE_NAME)
+    for (const row of expired) store.delete(row.snapshot_key)
+    transaction.oncomplete = () => resolve()
+    transaction.onerror = () => reject(transaction.error)
+    transaction.onabort = () => reject(transaction.error)
+  }).catch(() => undefined)
+}
+
 export async function saveOperationalTaskSnapshot(outletId, date, data) {
   const database = await openDatabase()
   const key = snapshotKey(outletId, date)
@@ -61,6 +85,7 @@ export async function saveOperationalTaskSnapshot(outletId, date, data) {
     transaction.onerror = () => reject(transaction.error)
     transaction.onabort = () => reject(transaction.error)
   })
+  await pruneSnapshots(database, actor, outletId)
   return true
 }
 
@@ -92,4 +117,4 @@ export async function updateOperationalTaskSnapshot(outletId, date, task) {
   })
 }
 
-export { DATABASE_NAME as OPERATIONAL_TASK_SNAPSHOT_DATABASE_NAME }
+export { DATABASE_NAME as OPERATIONAL_TASK_SNAPSHOT_DATABASE_NAME, MAX_SNAPSHOTS_PER_OUTLET }
