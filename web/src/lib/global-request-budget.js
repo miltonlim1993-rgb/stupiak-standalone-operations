@@ -142,6 +142,12 @@ async function deferredMethodValue(cached, fallback) {
   throw workerPressureDeferredError()
 }
 
+function canonicalMethodProbeSucceeded(value) {
+  if (!value || typeof value !== 'object') return true
+  if (value.worker_pressure_deferred || value.device_snapshot) return false
+  return String(value.storage || '').toLowerCase() !== 'device-snapshot'
+}
+
 async function boundedMethodCall(key, ttlMs, factory, {
   bypass = false,
   pressureAware = false,
@@ -178,10 +184,11 @@ async function boundedMethodCall(key, ttlMs, factory, {
   }
 
   const pending = (async () => {
-    stats.network_calls += 1
-    publishDiagnostics()
     try {
       const value = await factory()
+      if (pressureProbe && canonicalMethodProbeSucceeded(value)) {
+        recordWorkerPressureSuccess({ probe: true })
+      }
       methodCache.set(key, {
         value,
         saved_at: Date.now(),
