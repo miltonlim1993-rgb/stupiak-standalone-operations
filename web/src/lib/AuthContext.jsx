@@ -13,6 +13,17 @@ function primaryOutlet(user) {
   return String(user?.outlet_id || parseOutletIds(user)[0] || '').trim()
 }
 
+function accessCacheKey(user) {
+  if (!user) return ''
+  return JSON.stringify({
+    identity: String(user?.id || user?.google_sub || user?.email || '').trim(),
+    status: user?.status || '',
+    role: user?.role || '',
+    outlet_id: user?.outlet_id || '',
+    outlet_ids: user?.outlet_ids || user?.assigned_outlet_ids || '',
+  })
+}
+
 function rememberOutlet(user) {
   const nextOutlet = primaryOutlet(user)
   if (nextOutlet) {
@@ -60,6 +71,10 @@ export function AuthProvider({ children }) {
   const [authChecked, setAuthChecked] = useState(Boolean(initialUser))
 
   const applyUser = useCallback((nextUser) => {
+    const previousUser = readCachedUser()
+    if (previousUser && accessCacheKey(previousUser) !== accessCacheKey(nextUser)) {
+      clearRealtimeReadCache().catch(() => undefined)
+    }
     setUser(nextUser)
     persistUser(nextUser)
     if (nextUser) rememberOutlet(nextUser)
