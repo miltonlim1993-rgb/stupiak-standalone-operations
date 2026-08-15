@@ -114,7 +114,7 @@ The request budget reduces normal traffic, but a quota/rate-limit or temporary W
 
 `worker-pressure-circuit.js` records only canonical OPS Worker failures. It persists a small circuit state in local storage so reloading the page or reopening the PWA does not immediately restart a request storm.
 
-The circuit opens immediately for 408, 425, 429, 502, 503 or 504 responses. Other selected 5xx responses require two failures inside a two-minute window. Authentication failures 401/403 never open the circuit.
+The circuit opens immediately for 429, 502 or 504 responses. 408, 425, 500, 501, 503 and 505 responses are treated as softer pressure signals and require two failures inside a two-minute window before opening the circuit. Authentication failures 401/403 never open the circuit.
 
 When open, the cooldown expands from 5 minutes to 10, 20 and finally 30 minutes. Automatic GET reads to the canonical OPS Worker are deferred while the circuit is open. `/api/auth/*`, media/file GETs and the realtime stream are excluded. POST/PUT/PATCH/DELETE writes are never blocked by this read circuit; operational writes continue through their device-first outbox/retry contracts.
 
