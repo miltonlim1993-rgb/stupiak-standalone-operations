@@ -8,6 +8,7 @@ const CACHE_DELTA_LIMIT = 5000
 
 let databasePromise = null
 let listenersInstalled = false
+let cacheGeneration = 0
 const refreshInflight = new Map()
 
 function cachedActorKey() {
@@ -171,8 +172,10 @@ async function refreshScope({ entity, outletId, fetchRemote }) {
   }
   if (refreshInflight.has(scope)) return refreshInflight.get(scope)
 
+  const refreshGeneration = cacheGeneration
   const refresh = (async () => {
     const meta = await getMeta(scope)
+    if (refreshGeneration !== cacheGeneration) return []
     const cursor = String(meta?.cursor || '')
     const response = await fetchRemote({
       since: cursor,
@@ -180,6 +183,7 @@ async function refreshScope({ entity, outletId, fetchRemote }) {
       limit: CACHE_DELTA_LIMIT,
       legacySeed: false,
     })
+    if (refreshGeneration !== cacheGeneration) return []
     let rows = Array.isArray(response?.records) ? response.records : []
 
     if (cursor && rows.length >= CACHE_DELTA_LIMIT) {
@@ -189,8 +193,10 @@ async function refreshScope({ entity, outletId, fetchRemote }) {
         limit: CACHE_DELTA_LIMIT,
         legacySeed: false,
       })
+      if (refreshGeneration !== cacheGeneration) return []
       rows = Array.isArray(full?.records) ? full.records : []
       await replaceRows(scope, rows)
+      if (refreshGeneration !== cacheGeneration) return []
       await putMeta(scope, {
         cursor: maxCursor(rows),
         last_synced_at: Date.now(),
@@ -199,6 +205,7 @@ async function refreshScope({ entity, outletId, fetchRemote }) {
       })
     } else if (cursor) {
       await mergeRows(scope, rows)
+      if (refreshGeneration !== cacheGeneration) return []
       await putMeta(scope, {
         cursor: maxCursor(rows, cursor),
         last_synced_at: Date.now(),
@@ -206,6 +213,7 @@ async function refreshScope({ entity, outletId, fetchRemote }) {
       })
     } else {
       await replaceRows(scope, rows)
+      if (refreshGeneration !== cacheGeneration) return []
       await putMeta(scope, {
         cursor: maxCursor(rows),
         last_synced_at: Date.now(),
@@ -214,7 +222,9 @@ async function refreshScope({ entity, outletId, fetchRemote }) {
       })
     }
 
+    if (refreshGeneration !== cacheGeneration) return []
     const cached = await getRows(scope)
+    if (refreshGeneration !== cacheGeneration) return []
     window.dispatchEvent(new CustomEvent('chefops:realtime-cache-updated', {
       detail: { entity, outlet_id: outletId, count: cached.length, delta_count: rows.length },
     }))
@@ -292,6 +302,7 @@ function installMutationListeners() {
 }
 
 export async function clearRealtimeReadCache() {
+  cacheGeneration += 1
   refreshInflight.clear()
   const database = await openDatabase()
   if (!database) return
