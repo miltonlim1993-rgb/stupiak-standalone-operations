@@ -196,9 +196,7 @@ async function realtimeRows(entity, outletId, {
       entity,
       outletId,
       fetchRemote,
-      legacySeed,
       force,
-      requestedLimit: Math.max(1, Math.min(Number(limit) || 500, 5000)),
     })
   } catch (error) {
     if (Number(error?.status || 0) === 401 || Number(error?.status || 0) === 403) throw error
@@ -229,6 +227,7 @@ async function realtimeRecord(entity, outletId, id, options = {}) {
     filter: { id: String(id) },
     limit: 5000,
     year: options?.year,
+    force: true,
   })
   return rows.find((row) => recordId(row) === String(id)) || null
 }
