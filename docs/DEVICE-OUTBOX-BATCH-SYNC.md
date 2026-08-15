@@ -82,10 +82,36 @@ For migrated realtime entities:
 
 This is stale-while-revalidate behavior: D1 remains authoritative, but routine navigation and polling no longer require a network read every time.
 
+## Global request budget
+
+Always-mounted UI managers previously requested the same operational data on short independent timers. In a single-outlet session this included current/future Operational Task bootstraps, Duty Roster reads, training assignments/progress, unread notifications, Data Pack manifest checks and Android release checks. Multiple open devices could therefore multiply otherwise small polling loops into a large Worker request total.
+
+`global-request-budget.js` is installed after the specialized operation client and before React global managers mount. It bounds only repeatable read/check traffic:
+
+- automatic Operational Task bootstrap responses are reused for up to 10 minutes per authenticated user, outlet and business date;
+- Attendance, TrainingAssignment and TrainingProgress list/filter results are reused for up to 10 minutes and are invalidated by matching realtime/mutation events;
+- unread Notification lists are reused for up to 5 minutes and invalidated after read, push or realtime Notification activity;
+- timestamp-busted Data Pack manifest GETs are normalized and a successful response is reused for up to 10 minutes;
+- `app-release.json` is reused for up to 5 minutes;
+- a hidden tab may continue using its last successful cached read instead of performing background Worker traffic;
+- reconnect clears authenticated operational read-budget entries so the next online pass revalidates.
+
+A recent explicit pointer/touch/keyboard interaction bypasses the relevant read budget. This keeps user-triggered refresh/navigation responsive while background timers are bounded.
+
+The budget deliberately does **not** cache or delay `/api/auth/me`, operational mutation endpoints, StockCount/CloseUp writes, TaskPhoto registration, file uploads or other write paths. A 401/403 from a budgeted method is never replaced by cached authenticated data.
+
+The static contract records the following theoretical fallback ceilings when there are no explicit user refreshes or realtime invalidations:
+
+- Task bootstrap: 144 network checks/day for each user + outlet + date key;
+- Notification list: 288 network checks/day for each authenticated user;
+- Data Pack manifest: 144 network checks/day for each normalized manifest key.
+
+Runtime counters are exposed at `window.__chefopsRequestBudget` so production request/cache-hit behavior can be compared against Cloudflare metrics without adding a new telemetry request.
+
 ## Follow-up slices
 
-The next planned slice is to review high-frequency non-realtime endpoints such as notifications, bootstrap and status calls separately, then apply bounded caching only where their domain semantics permit it.
+The next planned slice is to verify production request-rate reduction from Cloudflare metrics, then audit any remaining high-frequency endpoint that still materially contributes to Worker invocations. Endpoint-specific caching should only be added where domain semantics permit it.
 
 ## No migration
 
-These device outbox, specialized-operation outbox, Task snapshot and read-cache phases require no D1 schema migration and no historical backfill.
+These device outbox, specialized-operation outbox, Task snapshot, read-cache and global request-budget phases require no D1 schema migration and no historical backfill.
