@@ -75,6 +75,10 @@ function visibleUserAction() {
   return recentUserAction() && document.visibilityState !== 'hidden'
 }
 
+function canonicalApiOrigin() {
+  try { return new URL(opsClient.apiBaseUrl, window.location.href).origin } catch { return window.location.origin }
+}
+
 function publishDiagnostics() {
   window.__chefopsRequestBudget = {
     version: VERSION,
@@ -310,11 +314,16 @@ function requestMethod(input, init = {}) {
   return String(init.method || input?.method || 'GET').toUpperCase()
 }
 
+function isCanonicalWorkerRequest(input) {
+  const url = requestUrl(input)
+  if (!url) return false
+  return url.origin === canonicalApiOrigin() && url.pathname.startsWith('/api/')
+}
+
 function isCircuitDeferrableRead(input, init = {}) {
   if (requestMethod(input, init) !== 'GET') return false
   const url = requestUrl(input)
-  if (!url || url.origin !== window.location.origin) return false
-  if (url.pathname === '/app-release.json') return true
+  if (!url || url.origin !== canonicalApiOrigin()) return false
   if (!url.pathname.startsWith('/api/')) return false
   if (url.pathname.startsWith('/api/auth/')) return false
   if (url.pathname.startsWith('/api/files/')) return false
@@ -325,9 +334,9 @@ function isCircuitDeferrableRead(input, init = {}) {
 function responseCacheDescriptor(input, init = {}) {
   if (requestMethod(input, init) !== 'GET') return null
   const url = requestUrl(input)
-  if (!url || url.origin !== window.location.origin) return null
+  if (!url) return null
 
-  if (url.pathname === '/api/app/v4/pack/manifest') {
+  if (url.origin === canonicalApiOrigin() && url.pathname === '/api/app/v4/pack/manifest') {
     const params = new URLSearchParams(url.search)
     params.delete('_')
     const normalized = `${url.pathname}?${params.toString()}`
@@ -335,14 +344,16 @@ function responseCacheDescriptor(input, init = {}) {
       key: `fetch::${actorKey()}::${normalized}`,
       ttl: PACK_MANIFEST_TTL_MS,
       explicit: params.get('refresh') === '1',
+      worker: true,
     }
   }
 
-  if (url.pathname === '/app-release.json') {
+  if (url.origin === window.location.origin && url.pathname === '/app-release.json') {
     return {
       key: `fetch::release::${url.pathname}`,
       ttl: RELEASE_MANIFEST_TTL_MS,
       explicit: false,
+      worker: url.origin === canonicalApiOrigin(),
     }
   }
   return null
@@ -377,6 +388,7 @@ function installFetchBudget() {
   originalFetch = window.fetch.bind(window)
   window.fetch = async (input, init = {}) => {
     const descriptor = responseCacheDescriptor(input, init)
+    const workerRequest = isCanonicalWorkerRequest(input)
     const circuitRead = isCircuitDeferrableRead(input, init)
     const now = Date.now()
     const cached = descriptor ? responseCache.get(descriptor.key) : null
@@ -409,14 +421,18 @@ function installFetchBudget() {
     }
 
     const run = async () => {
-      stats.network_calls += 1
-      publishDiagnostics()
+      if (workerRequest || descriptor?.worker) {
+        stats.network_calls += 1
+        publishDiagnostics()
+      }
       try {
         const response = await originalFetch(input, init)
-        observeWorkerResponse(response, {
-          probe: pressureProbe,
-          source: requestUrl(input)?.pathname || 'worker_fetch',
-        })
+        if (workerRequest) {
+          observeWorkerResponse(response, {
+            probe: pressureProbe,
+            source: requestUrl(input)?.pathname || 'worker_fetch',
+          })
+        }
         if (descriptor && response.ok) {
           responseCache.set(descriptor.key, {
             response: response.clone(),
@@ -427,7 +443,7 @@ function installFetchBudget() {
         }
         return response
       } catch (error) {
-        if (typeof navigator === 'undefined' || navigator.onLine) {
+        if (workerRequest && (typeof navigator === 'undefined' || navigator.onLine)) {
           recordWorkerPressureFailure(error, requestUrl(input)?.pathname || 'worker_fetch_network')
           publishDiagnostics()
         }
