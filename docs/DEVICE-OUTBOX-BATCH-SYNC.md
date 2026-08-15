@@ -108,10 +108,28 @@ The static contract records the following theoretical fallback ceilings when the
 
 Runtime counters are exposed at `window.__chefopsRequestBudget` so production request/cache-hit behavior can be compared against Cloudflare metrics without adding a new telemetry request.
 
+## Worker pressure circuit breaker
+
+The request budget reduces normal traffic, but a quota/rate-limit or temporary Worker failure still needs a second safety layer so multiple open devices do not keep retrying an already unhealthy Worker.
+
+`worker-pressure-circuit.js` records only canonical OPS Worker failures. It persists a small circuit state in local storage so reloading the page or reopening the PWA does not immediately restart a request storm.
+
+The circuit opens immediately for 408, 425, 429, 502, 503 or 504 responses. Other selected 5xx responses require two failures inside a two-minute window. Authentication failures 401/403 never open the circuit.
+
+When open, the cooldown expands from 5 minutes to 10, 20 and finally 30 minutes. Automatic GET reads to the canonical OPS Worker are deferred while the circuit is open. `/api/auth/*`, media/file GETs and the realtime stream are excluded. POST/PUT/PATCH/DELETE writes are never blocked by this read circuit; operational writes continue through their device-first outbox/retry contracts.
+
+Operational Task bootstrap is a read-like POST and is handled separately: while the circuit is open it reuses the in-memory Task result or the authenticated IndexedDB Task snapshot instead of calling the Worker. The returned Task snapshot is marked `worker_pressure_deferred` and is not described as a canonical D1 commit.
+
+A visible explicit user action may make one recovery probe at most once per minute. A successful canonical Worker probe closes the circuit. Continued failure reopens/extends the cooldown. Hidden tabs do not probe.
+
+The shell displays `Server busy · cached` while the circuit is open, distinguishing this state from true device offline mode. Runtime state is available without extra network telemetry at `window.__chefopsWorkerPressure`, while request-budget counters continue at `window.__chefopsRequestBudget`.
+
+The circuit intentionally does not treat failures from external services such as GitHub release metadata as OPS Worker pressure. Canonical Worker detection follows `opsClient.apiBaseUrl`, which also preserves the behavior when the Android shell uses a different local origin.
+
 ## Follow-up slices
 
-The next planned slice is to verify production request-rate reduction from Cloudflare metrics, then audit any remaining high-frequency endpoint that still materially contributes to Worker invocations. Endpoint-specific caching should only be added where domain semantics permit it.
+The next planned slice is production activation and controlled measurement: deploy the merged request-budget/circuit changes through the trusted production deployment path, confirm the production build marker, then compare Cloudflare request rate and local cache/defer counters over a fixed observation window. Any remaining high-frequency endpoint should be isolated before adding more caching.
 
 ## No migration
 
-These device outbox, specialized-operation outbox, Task snapshot, read-cache and global request-budget phases require no D1 schema migration and no historical backfill.
+These device outbox, specialized-operation outbox, Task snapshot, read-cache, global request-budget and Worker pressure-circuit phases require no D1 schema migration and no historical backfill.
