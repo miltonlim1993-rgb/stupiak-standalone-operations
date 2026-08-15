@@ -301,6 +301,10 @@ function installMutationListeners() {
   })
 }
 
+export async function invalidateRealtimeReadCache(entity, outletId) {
+  await markScopeStale(scopeKey(entity, outletId))
+}
+
 export async function clearRealtimeReadCache() {
   cacheGeneration += 1
   refreshInflight.clear()
