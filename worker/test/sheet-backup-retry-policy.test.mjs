@@ -11,7 +11,7 @@ test('D1 outbox is the single retry owner for Google Sheet backup failures', asy
   const queue = await source('worker/src/sheet-backup-queue.js')
 
   assert.match(entry, /from '\.\/sheet-backup-queue\.js'/)
-  assert.match(entry, /realtime-resilience-v22-sheet-backup-single-retry-owner/)
+  assert.match(entry, /realtime-resilience-v23-device-outbox-batch-sync/)
   assert.match(queue, /retry: \(\) => message\.ack\(\)/)
   assert.match(queue, /Cloudflare D1 remains canonical/)
   assert.doesNotMatch(queue, /retry: \(\) => message\.retry\(\)/)
