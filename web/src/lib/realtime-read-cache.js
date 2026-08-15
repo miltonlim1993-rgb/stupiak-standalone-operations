@@ -155,10 +155,10 @@ async function markScopeStale(scope) {
   await putMeta(scope, { last_synced_at: 0 })
 }
 
-async function refreshScope({ entity, outletId, fetchRemote, legacySeed = true }) {
+async function refreshScope({ entity, outletId, fetchRemote }) {
   const scope = scopeKey(entity, outletId)
   if (!scope) {
-    const response = await fetchRemote({ since: '', includeDeleted: true, limit: CACHE_DELTA_LIMIT, legacySeed })
+    const response = await fetchRemote({ since: '', includeDeleted: true, limit: CACHE_DELTA_LIMIT, legacySeed: false })
     return Array.isArray(response?.records) ? response.records : []
   }
   if (refreshInflight.has(scope)) return refreshInflight.get(scope)
@@ -170,7 +170,7 @@ async function refreshScope({ entity, outletId, fetchRemote, legacySeed = true }
       since: cursor,
       includeDeleted: true,
       limit: CACHE_DELTA_LIMIT,
-      legacySeed: cursor ? false : legacySeed,
+      legacySeed: false,
     })
     let rows = Array.isArray(response?.records) ? response.records : []
 
@@ -179,7 +179,7 @@ async function refreshScope({ entity, outletId, fetchRemote, legacySeed = true }
         since: '',
         includeDeleted: true,
         limit: CACHE_DELTA_LIMIT,
-        legacySeed,
+        legacySeed: false,
       })
       rows = Array.isArray(full?.records) ? full.records : []
       await replaceRows(scope, rows)
@@ -217,9 +217,9 @@ async function refreshScope({ entity, outletId, fetchRemote, legacySeed = true }
   try { return await refresh } finally { if (refreshInflight.get(scope) === refresh) refreshInflight.delete(scope) }
 }
 
-export async function readRealtimeRowsCached({ entity, outletId, fetchRemote, legacySeed = true, force = false } = {}) {
+export async function readRealtimeRowsCached({ entity, outletId, fetchRemote, force = false } = {}) {
   const scope = scopeKey(entity, outletId)
-  if (!scope) return refreshScope({ entity, outletId, fetchRemote, legacySeed })
+  if (!scope) return refreshScope({ entity, outletId, fetchRemote })
 
   const [meta, cached] = await Promise.all([getMeta(scope), getRows(scope)])
   const age = meta?.last_synced_at ? Date.now() - Number(meta.last_synced_at) : Number.POSITIVE_INFINITY
@@ -228,11 +228,11 @@ export async function readRealtimeRowsCached({ entity, outletId, fetchRemote, le
 
   if (!meta || meta.complete === false || force || !cached.length) {
     if (!navigator.onLine && meta) return cached
-    return refreshScope({ entity, outletId, fetchRemote, legacySeed })
+    return refreshScope({ entity, outletId, fetchRemote })
   }
 
   if (navigator.onLine && document.visibilityState === 'visible') {
-    refreshScope({ entity, outletId, fetchRemote, legacySeed }).catch((error) => {
+    refreshScope({ entity, outletId, fetchRemote }).catch((error) => {
       console.warn(`Realtime ${entity} delta refresh failed`, error)
     })
   }
