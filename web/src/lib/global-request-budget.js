@@ -1,6 +1,15 @@
 import { opsClient } from '@/api/opsClient'
+import { loadOperationalTaskSnapshot } from '@/lib/operational-task-snapshot'
+import {
+  getWorkerPressureState,
+  recordWorkerPressureFailure,
+  recordWorkerPressureSuccess,
+  shouldDeferWorkerRead,
+  workerPressureDeferredError,
+  workerPressureDeferredResponse,
+} from '@/lib/worker-pressure-circuit'
 
-const VERSION = 'bounded-global-sync-v1'
+const VERSION = 'bounded-global-sync-v2-pressure-aware'
 const USER_ACTION_BYPASS_MS = 2_000
 const TASK_BOOTSTRAP_TTL_MS = 10 * 60_000
 const REALTIME_ENTITY_TTL_MS = 10 * 60_000
@@ -29,6 +38,9 @@ const stats = {
   network_calls: 0,
   stale_hidden_hits: 0,
   invalidations: 0,
+  pressure_deferred: 0,
+  pressure_cache_hits: 0,
+  pressure_probes: 0,
 }
 
 function actorKey() {
@@ -59,6 +71,10 @@ function hiddenWithCached(entry) {
   return Boolean(entry) && typeof document !== 'undefined' && document.visibilityState === 'hidden'
 }
 
+function visibleUserAction() {
+  return recentUserAction() && document.visibilityState !== 'hidden'
+}
+
 function publishDiagnostics() {
   window.__chefopsRequestBudget = {
     version: VERSION,
@@ -70,6 +86,7 @@ function publishDiagnostics() {
       pack_manifest_ttl_ms: PACK_MANIFEST_TTL_MS,
       release_manifest_ttl_ms: RELEASE_MANIFEST_TTL_MS,
     },
+    worker_pressure: getWorkerPressureState(),
     stats: { ...stats },
     cached_methods: methodCache.size,
     cached_responses: responseCache.size,
@@ -103,7 +120,29 @@ function deleteResponseKeys(predicate) {
   }
 }
 
-async function boundedMethodCall(key, ttlMs, factory, { bypass = false } = {}) {
+async function deferredMethodValue(cached, fallback) {
+  stats.pressure_deferred += 1
+  if (cached) {
+    stats.method_cache_hits += 1
+    stats.pressure_cache_hits += 1
+    publishDiagnostics()
+    return cached.value
+  }
+  if (typeof fallback === 'function') {
+    const value = await fallback()
+    stats.pressure_cache_hits += 1
+    publishDiagnostics()
+    return value
+  }
+  publishDiagnostics()
+  throw workerPressureDeferredError()
+}
+
+async function boundedMethodCall(key, ttlMs, factory, {
+  bypass = false,
+  pressureAware = false,
+  pressureFallback = null,
+} = {}) {
   const now = Date.now()
   const cached = methodCache.get(key)
   if (methodInflight.has(key)) {
@@ -124,6 +163,16 @@ async function boundedMethodCall(key, ttlMs, factory, { bypass = false } = {}) {
     return cached.value
   }
 
+  let pressureProbe = false
+  if (pressureAware && getWorkerPressureState().open) {
+    if (shouldDeferWorkerRead({ explicit: bypass })) {
+      return deferredMethodValue(cached, pressureFallback)
+    }
+    pressureProbe = true
+    stats.pressure_probes += 1
+    publishDiagnostics()
+  }
+
   const pending = (async () => {
     stats.network_calls += 1
     publishDiagnostics()
@@ -138,6 +187,7 @@ async function boundedMethodCall(key, ttlMs, factory, { bypass = false } = {}) {
       return value
     } catch (error) {
       const status = Number(error?.status || 0)
+      if (pressureProbe) recordWorkerPressureFailure(error, 'budgeted_method_probe_failed')
       if (cached && status !== 401 && status !== 403) return cached.value
       throw error
     }
@@ -159,16 +209,32 @@ function notificationKey(args) {
   return `notifications::${actorKey()}::${stable(args)}`
 }
 
+async function taskSnapshotFallback(args = {}) {
+  const snapshot = await loadOperationalTaskSnapshot(args.outletId, args.date)
+  if (!snapshot) throw workerPressureDeferredError()
+  return {
+    ...snapshot,
+    storage: 'device-snapshot',
+    device_snapshot: true,
+    worker_pressure_deferred: true,
+    server_time: snapshot.server_time || snapshot.device_snapshot_updated_at || new Date().toISOString(),
+  }
+}
+
 function installTaskBudget() {
   const original = opsClient.tasks.operationalBootstrap.bind(opsClient.tasks)
   opsClient.tasks.operationalBootstrap = async (args = {}) => {
     const key = taskKey(args)
-    const explicitUserRefresh = Boolean(args?.refresh) && recentUserAction()
+    const explicitUserRefresh = Boolean(args?.refresh) && visibleUserAction()
     return boundedMethodCall(
       key,
       TASK_BOOTSTRAP_TTL_MS,
       () => original(args),
-      { bypass: explicitUserRefresh },
+      {
+        bypass: explicitUserRefresh,
+        pressureAware: true,
+        pressureFallback: () => taskSnapshotFallback(args),
+      },
     )
   }
 }
@@ -189,7 +255,7 @@ function installEntityBudget() {
             key,
             REALTIME_ENTITY_TTL_MS,
             () => client.list(...args),
-            { bypass: recentUserAction() },
+            { bypass: visibleUserAction() },
           )
         },
         filter(...args) {
@@ -198,7 +264,7 @@ function installEntityBudget() {
             key,
             REALTIME_ENTITY_TTL_MS,
             () => client.filter(...args),
-            { bypass: recentUserAction() },
+            { bypass: visibleUserAction() },
           )
         },
       }
@@ -215,7 +281,7 @@ function installNotificationBudget() {
     notificationKey(args),
     NOTIFICATION_TTL_MS,
     () => originalList(...args),
-    { bypass: recentUserAction() },
+    { bypass: visibleUserAction() },
   )
 
   opsClient.notifications.read = async (...args) => {
@@ -231,87 +297,149 @@ function installNotificationBudget() {
   }
 }
 
-function responseCacheDescriptor(input, init = {}) {
-  const method = String(init.method || input?.method || 'GET').toUpperCase()
-  if (method !== 'GET') return null
+function requestUrl(input) {
   try {
     const raw = typeof input === 'string' || input instanceof URL ? String(input) : String(input?.url || '')
-    const url = new URL(raw, window.location.href)
-    if (url.origin !== window.location.origin) return null
+    return new URL(raw, window.location.href)
+  } catch {
+    return null
+  }
+}
 
-    if (url.pathname === '/api/app/v4/pack/manifest') {
-      const params = new URLSearchParams(url.search)
-      params.delete('_')
-      const normalized = `${url.pathname}?${params.toString()}`
-      return {
-        key: `fetch::${actorKey()}::${normalized}`,
-        ttl: PACK_MANIFEST_TTL_MS,
-        explicit: params.get('refresh') === '1',
-      }
-    }
+function requestMethod(input, init = {}) {
+  return String(init.method || input?.method || 'GET').toUpperCase()
+}
 
-    if (url.pathname === '/app-release.json') {
-      return {
-        key: `fetch::release::${url.pathname}`,
-        ttl: RELEASE_MANIFEST_TTL_MS,
-        explicit: false,
-      }
+function isCircuitDeferrableRead(input, init = {}) {
+  if (requestMethod(input, init) !== 'GET') return false
+  const url = requestUrl(input)
+  if (!url || url.origin !== window.location.origin) return false
+  if (url.pathname === '/app-release.json') return true
+  if (!url.pathname.startsWith('/api/')) return false
+  if (url.pathname.startsWith('/api/auth/')) return false
+  if (url.pathname.startsWith('/api/files/')) return false
+  if (url.pathname === '/api/realtime/stream') return false
+  return true
+}
+
+function responseCacheDescriptor(input, init = {}) {
+  if (requestMethod(input, init) !== 'GET') return null
+  const url = requestUrl(input)
+  if (!url || url.origin !== window.location.origin) return null
+
+  if (url.pathname === '/api/app/v4/pack/manifest') {
+    const params = new URLSearchParams(url.search)
+    params.delete('_')
+    const normalized = `${url.pathname}?${params.toString()}`
+    return {
+      key: `fetch::${actorKey()}::${normalized}`,
+      ttl: PACK_MANIFEST_TTL_MS,
+      explicit: params.get('refresh') === '1',
     }
-  } catch {}
+  }
+
+  if (url.pathname === '/app-release.json') {
+    return {
+      key: `fetch::release::${url.pathname}`,
+      ttl: RELEASE_MANIFEST_TTL_MS,
+      explicit: false,
+    }
+  }
   return null
+}
+
+function pressureCachedResponse(cached) {
+  stats.pressure_deferred += 1
+  if (cached) {
+    stats.response_cache_hits += 1
+    stats.pressure_cache_hits += 1
+    publishDiagnostics()
+    return cached.response.clone()
+  }
+  publishDiagnostics()
+  return workerPressureDeferredResponse()
+}
+
+function observeWorkerResponse(response, { probe = false, source = '' } = {}) {
+  if (!response) return
+  if ([408, 425, 429, 500, 501, 502, 503, 504, 505].includes(Number(response.status))) {
+    recordWorkerPressureFailure(response, source || `http_${response.status}`)
+    publishDiagnostics()
+    return
+  }
+  if (probe && response.ok) {
+    recordWorkerPressureSuccess({ probe: true })
+    publishDiagnostics()
+  }
 }
 
 function installFetchBudget() {
   originalFetch = window.fetch.bind(window)
   window.fetch = async (input, init = {}) => {
     const descriptor = responseCacheDescriptor(input, init)
-    if (!descriptor) return originalFetch(input, init)
-
-    const { key, ttl, explicit } = descriptor
+    const circuitRead = isCircuitDeferrableRead(input, init)
     const now = Date.now()
-    const cached = responseCache.get(key)
-    const bypass = (explicit || recentUserAction()) && document.visibilityState !== 'hidden'
+    const cached = descriptor ? responseCache.get(descriptor.key) : null
 
-    if (responseInflight.has(key)) {
+    if (descriptor && responseInflight.has(descriptor.key)) {
       stats.inflight_joins += 1
       publishDiagnostics()
-      const response = await responseInflight.get(key)
+      const response = await responseInflight.get(descriptor.key)
       return response.clone()
     }
-    if (!bypass && cached && cached.expires_at > now) {
+    if (descriptor && !descriptor.explicit && !visibleUserAction() && cached && cached.expires_at > now) {
       stats.response_cache_hits += 1
       publishDiagnostics()
       return cached.response.clone()
     }
-    if (!bypass && hiddenWithCached(cached)) {
+    if (descriptor && !descriptor.explicit && !visibleUserAction() && hiddenWithCached(cached)) {
       stats.response_cache_hits += 1
       stats.stale_hidden_hits += 1
       publishDiagnostics()
       return cached.response.clone()
     }
 
-    const pending = (async () => {
+    let pressureProbe = false
+    if (circuitRead && getWorkerPressureState().open) {
+      const explicit = Boolean(descriptor?.explicit) || visibleUserAction()
+      if (shouldDeferWorkerRead({ explicit })) return pressureCachedResponse(cached)
+      pressureProbe = true
+      stats.pressure_probes += 1
+      publishDiagnostics()
+    }
+
+    const run = async () => {
       stats.network_calls += 1
       publishDiagnostics()
       try {
         const response = await originalFetch(input, init)
-        if (response.ok) {
-          responseCache.set(key, {
+        observeWorkerResponse(response, {
+          probe: pressureProbe,
+          source: requestUrl(input)?.pathname || 'worker_fetch',
+        })
+        if (descriptor && response.ok) {
+          responseCache.set(descriptor.key, {
             response: response.clone(),
             saved_at: Date.now(),
-            expires_at: Date.now() + ttl,
+            expires_at: Date.now() + descriptor.ttl,
           })
           publishDiagnostics()
         }
         return response
       } catch (error) {
-        if (cached) return cached.response.clone()
+        if (typeof navigator === 'undefined' || navigator.onLine) {
+          recordWorkerPressureFailure(error, requestUrl(input)?.pathname || 'worker_fetch_network')
+          publishDiagnostics()
+        }
+        if (descriptor && cached) return cached.response.clone()
         throw error
       }
-    })()
+    }
 
-    responseInflight.set(key, pending)
-    try { return await pending } finally { if (responseInflight.get(key) === pending) responseInflight.delete(key) }
+    if (!descriptor) return run()
+    const pending = run()
+    responseInflight.set(descriptor.key, pending)
+    try { return await pending } finally { if (responseInflight.get(descriptor.key) === pending) responseInflight.delete(descriptor.key) }
   }
 }
 
@@ -375,6 +503,7 @@ function installInvalidationEvents() {
   window.addEventListener('chefops:realtime-applied', onRealtime)
   window.addEventListener('chefops:mutation-committed', onMutation)
   window.addEventListener('chefops:data-pack-updated', onPack)
+  window.addEventListener('chefops:worker-pressure-state', publishDiagnostics)
   window.addEventListener('online', onOnline)
 }
 
