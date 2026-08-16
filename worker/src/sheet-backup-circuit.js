@@ -17,11 +17,6 @@ function timestamp(value) {
   return Number.isFinite(parsed) ? parsed : 0
 }
 
-function positiveInteger(value, fallback) {
-  const number = Number(value)
-  return Number.isInteger(number) && number > 0 ? number : fallback
-}
-
 function defaultState() {
   return {
     version: 1,
@@ -236,7 +231,10 @@ export async function recordSheetBackupFailure(env, {
   lastError = '',
   mutationId = '',
 } = {}) {
-  const state = await readState(env, { force: true })
+  // Keep the in-isolate state authoritative during a Queue batch. KV is the
+  // cross-isolate persistence layer, but forcing an immediate KV read after
+  // every write can observe eventual-consistency lag and lose burst counts.
+  const state = await readState(env)
   const now = Date.now()
   const plan = failurePlan(decision)
   const retryAfter = timestamp(state.retry_after)
@@ -305,7 +303,7 @@ export async function recordSheetBackupFailure(env, {
 }
 
 export async function recordSheetBackupSuccess(env, { mutationId = '' } = {}) {
-  const state = await readState(env, { force: true })
+  const state = await readState(env)
   const now = Date.now()
   const retryAfter = timestamp(state.retry_after)
   const successfulProbe = state.mode === 'open'
