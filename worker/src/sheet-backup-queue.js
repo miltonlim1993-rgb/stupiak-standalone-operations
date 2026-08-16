@@ -1,10 +1,16 @@
 import {
-  flushPendingSheetMirrors,
+  flushPendingSheetMirrors as flushLegacyPendingSheetMirrors,
   handleRealtimeDataApi,
   processSheetMirrorQueue as processLegacySheetMirrorQueue,
 } from './realtime-store.js'
+import {
+  gateSheetBackupAttempt,
+  getSheetBackupCircuitState,
+  recordSheetBackupFailure,
+  recordSheetBackupSuccess,
+} from './sheet-backup-circuit.js'
 
-export { flushPendingSheetMirrors, handleRealtimeDataApi }
+export { handleRealtimeDataApi }
 
 const DEFAULT_MAX_ATTEMPTS = 8
 const DEFAULT_BASE_DELAY_MINUTES = 60
@@ -72,7 +78,7 @@ export function sheetBackupFailurePolicy(lastError, attempts, env = {}) {
 }
 
 async function finalizeOutboxFailure(env, mutationId) {
-  if (!env.OPS_DB?.prepare || !mutationId) return null
+  if (!env.OPS_DB?.prepare || !mutationId) return { status: 'missing', decision: null, lastError: '' }
 
   const row = await env.OPS_DB.prepare(`
     SELECT status, attempts, last_error
@@ -81,7 +87,14 @@ async function finalizeOutboxFailure(env, mutationId) {
     LIMIT 1
   `).bind(mutationId).first()
 
-  if (!row || String(row.status || '') !== 'pending') return null
+  if (!row) return { status: 'missing', decision: null, lastError: '' }
+  if (String(row.status || '') !== 'pending') {
+    return {
+      status: String(row.status || ''),
+      decision: null,
+      lastError: String(row.last_error || ''),
+    }
+  }
 
   const decision = sheetBackupFailurePolicy(row.last_error, row.attempts, env)
   const timestamp = new Date().toISOString()
@@ -101,6 +114,7 @@ async function finalizeOutboxFailure(env, mutationId) {
       attempts: Number(row.attempts || 0),
       reason: decision.reason,
       upstream_status: decision.upstreamStatus || undefined,
+      last_error: String(row.last_error || '').slice(0, 500),
     })
   } else {
     console.warn('Sheet backup deferred by D1 outbox', {
@@ -108,39 +122,100 @@ async function finalizeOutboxFailure(env, mutationId) {
       attempts: Number(row.attempts || 0),
       retry_in_minutes: decision.delayMinutes,
       reason: decision.reason,
+      upstream_status: decision.upstreamStatus || undefined,
     })
   }
 
-  return decision
+  return {
+    status: decision.status,
+    decision,
+    lastError: String(row.last_error || ''),
+  }
+}
+
+async function deferOutboxForCircuit(env, mutationId, gate) {
+  if (!env.OPS_DB?.prepare || !mutationId) return
+  const nextAttemptAt = String(gate?.nextAttemptAt || '').trim()
+    || new Date(Date.now() + 15 * 60_000).toISOString()
+  await env.OPS_DB.prepare(`
+    UPDATE sheet_sync_outbox
+    SET status = 'pending', next_attempt_at = ?
+    WHERE mutation_id = ? AND status IN ('queued', 'pending')
+  `).bind(nextAttemptAt, mutationId).run()
+}
+
+/**
+ * The hourly D1 outbox flush stops feeding the Queue while the optional Google
+ * backup circuit is open. Once the cooldown expires, only one row is queued as
+ * a recovery probe. Canonical D1/R2 data is not touched by this gate.
+ */
+export async function flushPendingSheetMirrors(env, limit = 50) {
+  const circuit = await getSheetBackupCircuitState(env)
+  if (circuit.is_deferred) {
+    return {
+      queued: 0,
+      sheet_backup_circuit: 'open',
+      retry_after: circuit.retry_after || '',
+    }
+  }
+
+  const effectiveLimit = circuit.is_half_open
+    ? 1
+    : Math.max(1, Math.min(Number(limit) || 50, 100))
+  const result = await flushLegacyPendingSheetMirrors(env, effectiveLimit)
+  return {
+    ...result,
+    sheet_backup_circuit: circuit.is_half_open ? 'half_open' : 'closed',
+  }
 }
 
 /**
  * Google Sheets is a downstream backup only. The durable D1 outbox owns retry
  * scheduling, so a Google failure must not also enter Cloudflare Queue retry.
  *
- * The legacy mirror processor already records failures in sheet_sync_outbox.
- * We replace message.retry() with message.ack() after that durable write, then
- * apply bounded backoff/dead-letter policy to the outbox row. If recording the
- * failure in D1 itself throws, the legacy processor still throws and Cloudflare
- * Queue may retry the delivery because canonical retry state was not persisted.
+ * Repeated upstream failures also open a KV-backed circuit. Messages arriving
+ * while that circuit is open are acknowledged and returned to the D1 outbox
+ * without touching Google. This keeps Cloudflare D1/R2 canonical writes live
+ * even if Sheet permissions, schema, quota, or upstream availability is bad.
+ *
+ * If recording retry state in D1 itself throws, the consumer still throws and
+ * Cloudflare Queue may retry because durable retry ownership was not persisted.
  */
 export async function processSheetMirrorQueue(batch, env) {
-  const mutationIds = new Set()
-  const messages = (batch.messages || []).map((message) => {
+  for (const message of batch.messages || []) {
     const body = message.body || {}
     const mutationId = String(body.mutation_id || '').trim()
-    if (mutationId) mutationIds.add(mutationId)
 
-    return {
+    if (mutationId) {
+      const gate = await gateSheetBackupAttempt(env, {
+        mutationId,
+        allowProbe: true,
+      })
+      if (!gate.allowed) {
+        await deferOutboxForCircuit(env, mutationId, gate)
+        message.ack()
+        continue
+      }
+    }
+
+    const wrappedMessage = {
       body,
       ack: () => message.ack(),
       retry: () => message.ack(),
     }
-  })
 
-  await processLegacySheetMirrorQueue({ messages }, env)
+    await processLegacySheetMirrorQueue({ messages: [wrappedMessage] }, env)
 
-  for (const mutationId of mutationIds) {
-    await finalizeOutboxFailure(env, mutationId)
+    if (!mutationId) continue
+    const outcome = await finalizeOutboxFailure(env, mutationId)
+    if (outcome.decision) {
+      await recordSheetBackupFailure(env, {
+        decision: outcome.decision,
+        lastError: outcome.lastError,
+        mutationId,
+      })
+    } else if (outcome.status === 'synced') {
+      await recordSheetBackupSuccess(env, { mutationId })
+    }
   }
 }
