@@ -24,6 +24,8 @@ const CANONICAL_ONLY_EXACT = new Map([
   ['POST /api/auth/logout', 'auth_d1'],
   ['GET /api/auth/me', 'auth_d1'],
   ['PATCH /api/auth/me', 'auth_d1'],
+  ['GET /api/notifications', 'notifications_d1'],
+  ['POST /api/notifications/push', 'notifications_d1'],
   ['GET /api/labels/catalog', 'labels_d1'],
   ['POST /api/labels/create', 'labels_d1'],
   ['GET /api/labels/printer-profile', 'labels_d1'],
@@ -44,6 +46,11 @@ function canonicalRealtimeEntityWrite(method, pathname) {
   const match = pathname.match(/^\/api\/entities\/([^/]+)(?:\/([^/]+))?$/)
   if (!match || !REALTIME_ENTITIES.has(decodeURIComponent(match[1]))) return ''
   return 'realtime_d1'
+}
+
+function canonicalNotificationRoute(method, pathname) {
+  if (method === 'PATCH' && /^\/api\/notifications\/[^/]+\/read$/.test(pathname)) return 'notifications_d1'
+  return ''
 }
 
 function canonicalLabelRoute(method, pathname) {
@@ -69,6 +76,7 @@ export function canonicalOnlyOwner(request, url) {
   const pathname = String(url?.pathname || '')
   return CANONICAL_ONLY_EXACT.get(`${method} ${pathname}`)
     || canonicalDirectoryRoute(method, pathname)
+    || canonicalNotificationRoute(method, pathname)
     || canonicalLabelRoute(method, pathname)
     || canonicalCloseUpSyncRoute(method, pathname)
     || canonicalRealtimeEntityWrite(method, pathname)
