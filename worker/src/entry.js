@@ -1,4 +1,5 @@
 import app from './index.js'
+import { canonicalFallbackBlockedResponse } from './canonical-route-fence.js'
 import { errorResponse, json, readJson } from './http.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleCloudflareAuth } from './cloudflare-auth.js'
@@ -36,7 +37,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v24-d1-directory-only'
+const WORKER_REVISION = 'realtime-resilience-v25-canonical-route-fence'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -262,6 +263,9 @@ export default {
 
       const webhookResponse = await handleDataPackDirtyWebhook(request, runEnv, url.pathname)
       if (webhookResponse) return withApiHeaders(request, env, webhookResponse)
+
+      const canonicalFallbackResponse = canonicalFallbackBlockedResponse(request, url)
+      if (canonicalFallbackResponse) return withApiHeaders(request, env, canonicalFallbackResponse)
 
       const bootstrapRequest = url.pathname === '/api/tasks/operational/bootstrap' && request.method === 'POST'
         ? request.clone()
