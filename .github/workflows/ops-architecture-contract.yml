@@ -11,8 +11,10 @@ on:
       - 'deploy/**'
       - 'scripts/ops/**'
       - 'scripts/setup-android.mjs'
-      - 'scripts/deploy-realtime-ops-now.sh'
+      - 'scripts/deploy-master-watch-now.sh'
       - 'worker/src/entry.js'
+      - 'worker/src/index.js'
+      - 'worker/src/d1-directory-*.js'
       - 'worker/src/label-d1-*.js'
       - 'worker/src/realtime-labels-d1.js'
       - 'web/public/app-release.json'
@@ -36,8 +38,10 @@ on:
       - 'deploy/**'
       - 'scripts/ops/**'
       - 'scripts/setup-android.mjs'
-      - 'scripts/deploy-realtime-ops-now.sh'
+      - 'scripts/deploy-master-watch-now.sh'
       - 'worker/src/entry.js'
+      - 'worker/src/index.js'
+      - 'worker/src/d1-directory-*.js'
       - 'worker/src/label-d1-*.js'
       - 'worker/src/realtime-labels-d1.js'
       - 'web/public/app-release.json'
@@ -74,7 +78,7 @@ jobs:
         run: |
           bash -n scripts/ops/d1-readonly-audit.sh
           bash -n scripts/ops/run-approved-backfill.sh
-          bash -n scripts/deploy-realtime-ops-now.sh
+          bash -n scripts/deploy-master-watch-now.sh
           node --check scripts/ops/audit-architecture-contract.mjs
           node --check scripts/ops/verify-production-release.mjs
           node --check scripts/ops/build-safe-backfill.mjs
