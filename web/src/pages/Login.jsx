@@ -16,6 +16,11 @@ import AuthLayout from '@/components/AuthLayout'
 import { useAuth } from '@/lib/AuthContext'
 
 const SCRIPT_ID = 'google-identity-services'
+const STAGING_OWNER_EMAIL = 'staging-owner@stupiak.invalid'
+
+function isStagingHost() {
+  return String(window.location.hostname || '').startsWith('stupiaks-ops-staging.')
+}
 
 function loadGoogleIdentityScript() {
   if (window.google?.accounts?.id) return Promise.resolve()
@@ -163,6 +168,7 @@ function GoogleFallback({ clientId, loading, onLoading, onError, onSuccess }) {
 export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
+  const staging = isStagingHost()
   const {
     isAuthenticated,
     startEmailAccess,
@@ -174,7 +180,7 @@ export default function Login() {
     getAuthConfig,
   } = useAuth()
   const [stage, setStage] = useState('email')
-  const [email, setEmail] = useState('')
+  const [email, setEmail] = useState(() => staging ? STAGING_OWNER_EMAIL : '')
   const [secret, setSecret] = useState('')
   const [confirmSecret, setConfirmSecret] = useState('')
   const [credentialKind, setCredentialKind] = useState('password')
@@ -253,6 +259,15 @@ export default function Login() {
     setError('')
     setNotice('')
     try {
+      const normalized = String(email || '').trim().toLowerCase()
+      if (staging && normalized === STAGING_OWNER_EMAIL) {
+        setCredentialKind('password')
+        setSecret('')
+        setStage('credential')
+        setNotice('Staging Owner found. Enter the test password.')
+        return
+      }
+
       const result = await startEmailAccess({ email })
       if (result?.status === 'pending') {
         setStage('pending')
@@ -338,7 +353,9 @@ export default function Login() {
     ? 'After approval, set your login here and enter OPS'
     : stage === 'setup'
       ? 'One quick setup. You will enter OPS immediately after saving.'
-      : 'Use your work email. New accounts are sent to the Owner automatically.'
+      : staging
+        ? 'Staging test access. Production accounts and data are not used here.'
+        : 'Use your work email. New accounts are sent to the Owner automatically.'
 
   return (
     <AuthLayout
@@ -369,8 +386,12 @@ export default function Login() {
                 <div className="flex gap-3">
                   <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary"><Mail className="h-5 w-5" /></span>
                   <div>
-                    <p className="text-sm font-semibold">One simple login</p>
-                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">Existing approved email without a local login: create your PIN or password immediately. New email: Owner approval first.</p>
+                    <p className="text-sm font-semibold">{staging ? 'Staging test login' : 'One simple login'}</p>
+                    <p className="mt-0.5 text-xs leading-5 text-muted-foreground">
+                      {staging
+                        ? 'Use the synthetic staging Owner account. New account registration is intentionally disabled here.'
+                        : 'Existing approved email without a local login: create your PIN or password immediately. New email: Owner approval first.'}
+                    </p>
                   </div>
                 </div>
               </div>

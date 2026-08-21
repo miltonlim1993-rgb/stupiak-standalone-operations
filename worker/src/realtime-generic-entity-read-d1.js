@@ -16,6 +16,7 @@ const D1_GENERIC_READ_ENTITIES = new Set([
   'TrainingProgress',
   'TrainingAcknowledgement',
   'TrainingAttempt',
+  'AuditLog',
 ])
 
 function parseJson(value, fallback = null) {
@@ -93,6 +94,37 @@ function recordFromRow(row) {
   }
 }
 
+function auditRecordFromMutation(row) {
+  const committedAt = String(row?.committed_at || row?.requested_at || '')
+  return {
+    id: String(row?.mutation_id || ''),
+    outlet_id: String(row?.outlet_id || ''),
+    created_date: committedAt,
+    created_by: String(row?.actor_email || ''),
+    updated_date: committedAt,
+    updated_by: String(row?.actor_email || ''),
+    deleted_at: '',
+    version: 1,
+    actor_sub: '',
+    actor_email: String(row?.actor_email || ''),
+    actor_name: String(row?.actor_name || row?.actor_email || ''),
+    action: String(row?.operation || ''),
+    entity: String(row?.entity || ''),
+    entity_id: String(row?.entity_id || ''),
+    summary: `${String(row?.operation || 'mutation')} ${String(row?.entity || '')}`.trim(),
+    payload_json: String(row?.result_json || '{}'),
+    __realtime: {
+      entity: 'AuditLog',
+      entity_id: String(row?.mutation_id || ''),
+      outlet_id: String(row?.outlet_id || ''),
+      version: 1,
+      updated_at: committedAt,
+      deleted_at: '',
+      source: 'ops_mutations',
+    },
+  }
+}
+
 function requestedEntity(pathname) {
   const match = pathname.match(/^\/api\/entities\/([^/]+)$/)
   if (!match) return ''
@@ -104,6 +136,32 @@ function requestedLimit(url) {
   return Math.max(1, Math.min(Number(url.searchParams.get('limit') || 100), 5000))
 }
 
+async function loadAuditRows(env, scopedFilter) {
+  const clauses = ['1 = 1']
+  const bindings = []
+  const outlet = scopedFilter?.outlet_id
+  if (typeof outlet === 'string' && outlet) {
+    clauses.push('outlet_id = ?')
+    bindings.push(outlet)
+  } else if (outlet && typeof outlet === 'object' && Array.isArray(outlet.$in) && outlet.$in.length) {
+    const values = outlet.$in.map(String).filter(Boolean).slice(0, 100)
+    if (values.length) {
+      clauses.push(`outlet_id IN (${values.map(() => '?').join(',')})`)
+      bindings.push(...values)
+    }
+  }
+
+  const response = await env.OPS_DB.prepare(`
+    SELECT mutation_id, outlet_id, entity, entity_id, operation,
+           actor_email, actor_name, requested_at, committed_at, result_json
+    FROM ops_mutations
+    WHERE ${clauses.join(' AND ')}
+    ORDER BY committed_at DESC
+    LIMIT 5000
+  `).bind(...bindings).all()
+  return (response.results || []).map(auditRecordFromMutation)
+}
+
 async function loadRows(env, entity, scopedFilter) {
   if (!env.OPS_DB?.prepare) {
     const error = new Error('Canonical D1 database is unavailable')
@@ -111,6 +169,8 @@ async function loadRows(env, entity, scopedFilter) {
     error.code = 'realtime_database_unavailable'
     throw error
   }
+
+  if (entity === 'AuditLog') return loadAuditRows(env, scopedFilter)
 
   const clauses = ["entity = ?", "deleted_at = ''"]
   const bindings = [entity]
@@ -164,7 +224,7 @@ export async function handleD1GenericRealtimeEntityRead(request, env, url) {
 
     const response = json(request, env, rows)
     const headers = new Headers(response.headers)
-    headers.set('X-ChefOps-Entity-Read-Path', 'd1-only-v1')
+    headers.set('X-ChefOps-Entity-Read-Path', entity === 'AuditLog' ? 'd1-mutation-journal-v1' : 'd1-only-v1')
     headers.set('Cache-Control', 'no-store')
     return new Response(response.body, {
       status: response.status,

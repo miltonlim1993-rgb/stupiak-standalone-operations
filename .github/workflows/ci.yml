@@ -20,3 +20,12 @@ jobs:
       - run: npm run build
       - name: Validate Worker runtime contracts
         run: node --test worker/test/*.test.mjs
+      - name: Validate isolated staging package
+        run: |
+          node --check scripts/staging/build-fixtures.mjs
+          node --check scripts/staging/provision-and-deploy.mjs
+          node --check worker/src/entry-staging.js
+          npm run staging:fixtures
+          cp worker/wrangler.staging.example.jsonc worker/wrangler.staging.jsonc
+          npx wrangler deploy --dry-run --config worker/wrangler.staging.jsonc
+          rm -f worker/wrangler.staging.jsonc

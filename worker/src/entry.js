@@ -7,6 +7,7 @@ import { handleD1DirectoryApi } from './d1-directory-api.js'
 import { handleD1Notifications } from './realtime-notifications-d1.js'
 import { handleD1OperationalBootstrap } from './realtime-task-bootstrap-d1.js'
 import { handleD1GenericRealtimeEntityRead } from './realtime-generic-entity-read-d1.js'
+import { handleD1DeviceRegistration } from './realtime-device-registration-d1.js'
 import { processDirectoryMirrorQueue } from './d1-directory-mirror.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { handleRealtimeMutationBatch } from './realtime-mutation-batch.js'
@@ -36,7 +37,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v30-d1-generic-reads'
+const WORKER_REVISION = 'realtime-resilience-v31-d1-device-audit'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -109,7 +110,7 @@ function apiCorsHeaders(request, env) {
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Client-Id, X-ChefOps-Mutation-Id, X-Requested-With',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
-    'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision, X-ChefOps-Media-Upload-Path, X-ChefOps-Task-Bootstrap-Path, X-ChefOps-Entity-Read-Path',
+    'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision, X-ChefOps-Media-Upload-Path, X-ChefOps-Task-Bootstrap-Path, X-ChefOps-Entity-Read-Path, X-ChefOps-Device-Registration-Path',
     'Vary': 'Origin',
     'X-ChefOps-Worker-Revision': WORKER_REVISION,
   }
@@ -193,6 +194,9 @@ export default {
 
       const genericRealtimeReadResponse = await handleD1GenericRealtimeEntityRead(request, runEnv, url)
       if (genericRealtimeReadResponse) return withApiHeaders(request, env, genericRealtimeReadResponse)
+
+      const deviceRegistrationResponse = await handleD1DeviceRegistration(request, runEnv, url)
+      if (deviceRegistrationResponse) return withApiHeaders(request, env, deviceRegistrationResponse)
 
       const primaryMediaUploadResponse = await handlePrimaryMediaUpload(request, runEnv, url)
       if (primaryMediaUploadResponse) return withApiHeaders(request, env, primaryMediaUploadResponse)

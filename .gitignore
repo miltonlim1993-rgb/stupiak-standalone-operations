@@ -9,6 +9,8 @@ worker/.wrangler/
 .env.*
 !.env.example
 worker/wrangler.production.jsonc
+worker/wrangler.staging.jsonc
+.staging/
 *.jks
 *.keystore
 *.apk
