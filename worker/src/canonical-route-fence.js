@@ -1,3 +1,20 @@
+const REALTIME_ENTITIES = new Set([
+  'Task',
+  'TaskPhoto',
+  'UrgentIssue',
+  'StockCount',
+  'CloseUp',
+  'FoodLabel',
+  'LabelPrintLog',
+  'Attendance',
+  'Receipt',
+  'Notification',
+  'TrainingAssignment',
+  'TrainingProgress',
+  'TrainingAcknowledgement',
+  'TrainingAttempt',
+])
+
 const CANONICAL_ONLY_EXACT = new Map([
   ['POST /api/close-up/upsert', 'close_up_d1'],
   ['POST /api/tasks/operational/action', 'task_action_d1'],
@@ -20,6 +37,13 @@ function canonicalDirectoryRoute(method, pathname) {
   if (!match) return ''
   if (['GET', 'POST', 'PATCH', 'DELETE'].includes(method)) return 'directory_d1'
   return ''
+}
+
+function canonicalRealtimeEntityWrite(method, pathname) {
+  if (!['POST', 'PATCH', 'DELETE'].includes(method)) return ''
+  const match = pathname.match(/^\/api\/entities\/([^/]+)(?:\/([^/]+))?$/)
+  if (!match || !REALTIME_ENTITIES.has(decodeURIComponent(match[1]))) return ''
+  return 'realtime_d1'
 }
 
 function canonicalLabelRoute(method, pathname) {
@@ -47,6 +71,7 @@ export function canonicalOnlyOwner(request, url) {
     || canonicalDirectoryRoute(method, pathname)
     || canonicalLabelRoute(method, pathname)
     || canonicalCloseUpSyncRoute(method, pathname)
+    || canonicalRealtimeEntityWrite(method, pathname)
     || ''
 }
 
