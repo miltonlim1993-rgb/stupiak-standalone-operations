@@ -17,7 +17,6 @@ import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.j
 import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
 import { handlePrimaryMediaUpload } from './realtime-media-upload.js'
 import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
-import { handleRealtimeWorkflowApi } from './realtime-workflows.js'
 import { withSubmissionLock } from './submission-locks.js'
 import { augmentHealthResponse } from './realtime-health.js'
 import { handleBundledSopMedia } from './bundled-sop-media.js'
@@ -37,7 +36,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v26-no-legacy-scheduled-runtime'
+const WORKER_REVISION = 'realtime-resilience-v27-no-hybrid-workflow-router'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -240,9 +239,6 @@ export default {
           )
         : await handleD1CloseUpUpsert(workflowRequest, runEnv, url)
       if (d1CloseUpResponse) return withApiHeaders(request, env, d1CloseUpResponse)
-
-      const realtimeWorkflowResponse = await handleRealtimeWorkflowApi(workflowRequest, runEnv, url)
-      if (realtimeWorkflowResponse) return withApiHeaders(request, env, realtimeWorkflowResponse)
 
       const taskPhotoAssignmentResponse = await guardOperationalTaskPhotoAssignment(request, runEnv, url)
       if (taskPhotoAssignmentResponse) return withApiHeaders(request, env, taskPhotoAssignmentResponse)
