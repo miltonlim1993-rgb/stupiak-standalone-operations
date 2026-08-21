@@ -1,0 +1,98 @@
+name: Emergency pause OPS web access
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/emergency-web-maintenance-deploy.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: emergency-ops-web-maintenance
+  cancel-in-progress: false
+
+env:
+  OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
+  CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID || 'bb2ac1970975a5018a17c878e61cb88f' }}
+  CLOUDFLARE_APP_DATA_PACKS_ID: f62696e1a2f14b8a9e0b84a540c7e997
+  CLOUDFLARE_OPS_DB_ID: 080c13d7-e2f5-4c01-a1ca-aa00094d6fc0
+  CLOUDFLARE_SHEET_SYNC_QUEUE_NAME: stupiaks-ops-sheet-sync
+  CLOUDFLARE_SHEET_SYNC_DLQ_NAME: stupiaks-ops-sheet-sync-dlq
+  VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
+
+jobs:
+  deploy-maintenance-gate:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Checkout isolated maintenance branch
+        uses: actions/checkout@v4
+        with:
+          ref: emergency/web-maintenance-2026-08-21
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Require existing Cloudflare deployment credential
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || {
+            echo "CLOUDFLARE_API_TOKEN is unavailable; refusing to guess or recreate credentials." >&2
+            exit 1
+          }
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
+      - name: Install exact dependencies
+        run: npm ci
+
+      - name: Validate maintenance entry and normal build
+        run: |
+          node --check worker/src/entry-web-maintenance.js
+          npm run build
+
+      - name: Render canonical production bindings
+        run: npm run cf:render
+
+      - name: Switch only the deployed entry to maintenance and force Worker-first assets
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'worker/wrangler.production.jsonc'
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'))
+          config.main = 'src/entry-web-maintenance.js'
+          config.assets = config.assets || {}
+          config.assets.run_worker_first = true
+          fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n')
+          NODE
+          grep -Fq '"main": "src/entry-web-maintenance.js"' worker/wrangler.production.jsonc
+          grep -Fq '"run_worker_first": true' worker/wrangler.production.jsonc
+          grep -Fq '"database_id": "080c13d7-e2f5-4c01-a1ca-aa00094d6fc0"' worker/wrangler.production.jsonc
+          echo "D1_MIGRATION_RUN=false"
+          echo "D1_BACKFILL_RUN=false"
+          echo "D1_RESOURCE_CREATION_RUN=false"
+          echo "PRODUCTION_BUSINESS_DATA_MUTATION=false"
+
+      - name: Deploy maintenance gate only
+        run: npx wrangler deploy --config worker/wrangler.production.jsonc
+
+      - name: Verify web is paused and health remains available
+        run: |
+          root_code="$(curl -sS -o /tmp/root.html -w '%{http_code}' "$OPS_PRODUCTION_ORIGIN/")"
+          test "$root_code" = "503"
+          grep -Fq 'Stupiak OPS web access is paused' /tmp/root.html
+
+          api_code="$(curl -sS -o /tmp/api.json -w '%{http_code}' "$OPS_PRODUCTION_ORIGIN/api/auth/me")"
+          test "$api_code" = "503"
+          grep -Fq 'web_maintenance' /tmp/api.json
+
+          health_code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$OPS_PRODUCTION_ORIGIN/api/health")"
+          test "$health_code" = "200"
+          grep -Fq 'web-maintenance-2026-08-21-v1' <(curl -sSI "$OPS_PRODUCTION_ORIGIN/api/health")
+
+          echo "WEB_MAINTENANCE_ACTIVE=true"
+          echo "PRODUCTION_URL_CHANGED=false"
+          echo "PRODUCTION_DATABASE_CHANGED=false"
