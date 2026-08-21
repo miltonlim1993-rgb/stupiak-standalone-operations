@@ -1,8 +1,4 @@
 import { getSchema } from './schema.js'
-import {
-  findLegacyDirectoryUserDuringBootstrap,
-  listLegacyDirectoryRecordsDuringBootstrap,
-} from './d1-directory-bootstrap-state.js'
 
 const DIRECTORY_ENTITIES = new Set(['User', 'Outlet'])
 const USER_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
@@ -143,8 +139,7 @@ export async function findDirectoryUser(env, { id = '', googleSub = '', email = 
       ORDER BY updated_at DESC LIMIT 1
     `).bind(String(email).trim().toLowerCase()).first()
   }
-  if (row) return recordFromRow(row)
-  return findLegacyDirectoryUserDuringBootstrap(env, { googleSub, email })
+  return recordFromRow(row)
 }
 
 export async function listDirectoryRecords(env, entityValue, { includeDeleted = false, limit = 5000 } = {}) {
@@ -156,9 +151,7 @@ export async function listDirectoryRecords(env, entityValue, { includeDeleted = 
     ORDER BY updated_at DESC
     LIMIT ?
   `).bind(entity, Math.max(1, Math.min(Number(limit) || 5000, 5000))).all()
-  const records = (response.results || []).map(recordFromRow)
-  if (records.length) return records
-  return listLegacyDirectoryRecordsDuringBootstrap(env, entity, { limit })
+  return (response.results || []).map(recordFromRow)
 }
 
 async function queueMirror(env, message) {
