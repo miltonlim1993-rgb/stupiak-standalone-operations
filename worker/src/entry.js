@@ -3,7 +3,6 @@ import { errorResponse, json, readJson } from './http.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleCloudflareAuth } from './cloudflare-auth.js'
 import { handleD1DirectoryApi } from './d1-directory-api.js'
-import { handleD1DirectoryBootstrap } from './d1-directory-bootstrap.js'
 import { processDirectoryMirrorQueue } from './d1-directory-mirror.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { handleRealtimeMutationBatch } from './realtime-mutation-batch.js'
@@ -37,7 +36,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v23-device-outbox-batch-sync'
+const WORKER_REVISION = 'realtime-resilience-v24-d1-directory-only'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -107,7 +106,7 @@ function apiCorsHeaders(request, env) {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Directory-Migration-Secret, X-ChefOps-Client-Id, X-ChefOps-Mutation-Id, X-Requested-With',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Client-Id, X-ChefOps-Mutation-Id, X-Requested-With',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
     'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision, X-ChefOps-Media-Upload-Path',
@@ -179,9 +178,6 @@ export default {
           headers: apiCorsHeaders(request, env),
         })
       }
-
-      const directoryBootstrapResponse = await handleD1DirectoryBootstrap(request, runEnv, url)
-      if (directoryBootstrapResponse) return withApiHeaders(request, env, directoryBootstrapResponse)
 
       const authResponse = await handleCloudflareAuth(request, runEnv, url)
       if (authResponse) return withApiHeaders(request, env, authResponse)
