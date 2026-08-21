@@ -150,7 +150,7 @@ assert(
     < entrySource.indexOf('await applyOperationalTaskAudienceResponse'),
   'audience decoration must run after canonical task policy filtering',
 )
-assert.match(entrySource, /realtime-resilience-v23-device-outbox-batch-sync/)
+assert.match(entrySource, /const WORKER_REVISION = 'realtime-resilience-v\d+-[^']+'/)
 assert.match(audienceSource, /attendance_required: false/)
 assert.match(audienceSource, /visibility_scope: 'assigned_outlet_members'/)
 assert.match(audienceSource, /unassigned_access: 'view_only'/)
