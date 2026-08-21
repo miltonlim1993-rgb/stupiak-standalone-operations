@@ -14,6 +14,7 @@
     "build": "npm run build -w web && npm run check -w worker",
     "staging:fixtures": "node scripts/staging/build-fixtures.mjs",
     "staging:provision": "node scripts/staging/provision-and-deploy.mjs",
+    "staging:reset-login": "node scripts/staging/reset-owner-login.mjs",
     "setup:google": "node scripts/setup-google.mjs",
     "audit:base44": "node scripts/audit-base44.mjs",
     "package:zip": "node scripts/package-project.mjs",
