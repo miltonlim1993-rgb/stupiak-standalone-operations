@@ -17,11 +17,12 @@
     { "method": "GET", "path": "/api/auth/me", "owner": "cloudflare-auth", "store": "d1-directory" },
     { "method": "PATCH", "path": "/api/auth/me", "owner": "cloudflare-auth", "store": "d1-directory" },
     { "method": "POST", "path": "/api/users/:id/access", "owner": "d1-directory-api", "store": "d1-directory" },
-    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/User[/...]​", "owner": "d1-directory-api", "store": "d1-directory" },
-    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/Outlet[/...]​", "owner": "d1-directory-api", "store": "d1-directory" },
+    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/User[/...]", "owner": "d1-directory-api", "store": "d1-directory" },
+    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/Outlet[/...]", "owner": "d1-directory-api", "store": "d1-directory" },
 
     { "method": "POST", "path": "/api/tasks/operational/bootstrap", "owner": "realtime-task-bootstrap-d1", "store": "d1+published-app-pack" },
     { "method": "POST", "path": "/api/tasks/operational/action", "owner": "realtime-task-action-d1", "store": "d1" },
+    { "method": "POST", "path": "/api/tasks/ensure", "owner": "canonical-route-fence", "store": "retired", "replacement": "/api/tasks/operational/bootstrap" },
     { "method": "POST", "path": "/api/realtime/mutations[TaskPhoto]", "owner": "realtime-task-photo", "store": "d1+r2" },
 
     { "method": "POST", "path": "/api/stock-counts/batch", "owner": "realtime-stock-batch-json", "store": "d1" },
@@ -39,17 +40,17 @@
     { "method": "POST", "path": "/api/labels/:id/reprint", "owner": "realtime-labels-d1", "store": "d1" },
     { "method": "POST", "path": "/api/labels/source/:id/finish", "owner": "realtime-labels-d1", "store": "d1" },
     { "method": "GET|POST|PUT", "path": "/api/labels/printer-profile", "owner": "realtime-labels-d1", "store": "d1" },
-    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/PrinterProfile[/...]​", "owner": "realtime-labels-d1", "store": "d1" },
+    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/PrinterProfile[/...]", "owner": "realtime-labels-d1", "store": "d1" },
 
     { "method": "GET", "path": "/api/entities/{Task,TaskPhoto,UrgentIssue,StockCount,CloseUp,FoodLabel,Attendance,Receipt,TrainingAssignment,TrainingProgress,TrainingAcknowledgement,TrainingAttempt}", "owner": "realtime-generic-entity-read-d1", "store": "d1" },
-    { "method": "POST|PATCH|DELETE", "path": "/api/entities/{REALTIME_ENTITY}[/...]​", "owner": "canonical-route-fence", "store": "blocked-legacy-write", "replacement": "/api/realtime/mutations or dedicated D1 workflow route" },
+    { "method": "POST|PATCH|DELETE", "path": "/api/entities/{REALTIME_ENTITY}[/...]", "owner": "canonical-route-fence", "store": "blocked-legacy-write", "replacement": "/api/realtime/mutations or dedicated D1 workflow route" },
 
     { "method": "POST", "path": "/api/realtime/mutations", "owner": "realtime-store", "store": "d1", "side_effect": "d1-outbox->queue->sheet-mirror" },
     { "method": "GET", "path": "/api/realtime/records", "owner": "realtime-store", "store": "d1", "staff_legacy_seed_forced_off": true },
     { "method": "POST", "path": "/api/realtime/mutations/batch", "owner": "realtime-mutation-batch", "store": "d1" },
     { "method": "POST", "path": "/api/realtime/data/sync/retry", "owner": "realtime-store", "store": "d1-outbox" },
 
-    { "method": "POST", "path": "/api/files/upload", "owner": "realtime-media-upload", "store": "r2-primary" },
+    { "method": "POST", "path": "/api/files/upload", "owner": "realtime-media-upload/drive.js", "store": "r2-primary", "drive_role": "optional-backup" },
     { "method": "GET", "path": "/api/realtime/ticket|/api/realtime/connect|/api/realtime/status", "owner": "realtime", "store": "durable-object+kv-ticket" }
   ],
   "async_mirror_and_reporting": [
@@ -68,6 +69,14 @@
       "destination": "yearly Google Sales report",
       "retained": true,
       "reason": "writes _RelationDaily/_CashShiftLog and yearly reporting outputs; not operational source of truth"
+    },
+    {
+      "name": "google_drive_media_backup",
+      "authority": "non-canonical",
+      "source": "r2 media object",
+      "destination": "google-drive",
+      "retained": true,
+      "enabled_only_when_configured": true
     }
   ],
   "master_configuration_compatibility": {
@@ -96,6 +105,7 @@
   "retired_runtime": [
     "d1-directory runtime bootstrap/import/hydration",
     "/api/internal/d1-directory/migrate-once",
+    "/api/tasks/ensure",
     "realtime-workflows.js canonical entry routing",
     "index.js scheduled runtime from canonical entry",
     "generic REALTIME entity Sheet writes",
@@ -109,16 +119,16 @@
       "goal": "classify every remaining reachable route as master/config compatibility, dedicated external integration, or dead runtime; remove dead operational implementations"
     },
     {
-      "area": "/api/tasks/ensure",
-      "goal": "prove no live consumer remains, then retire or replace with canonical D1 behavior"
-    },
-    {
       "area": "master/config generic entity mutations",
       "goal": "ensure admin-only scope and define migration order; do not mislabel them as operational D1 migration"
     },
     {
       "area": "FeedMe-named Sales registry identifiers",
       "goal": "decouple OPS outlet identity from POS-specific identifiers while preserving reporting compatibility"
+    },
+    {
+      "area": "media naming compatibility",
+      "goal": "rename Drive-era helper terminology only after callers are proven safe; preserve R2-primary behavior"
     }
   ],
   "hard_gates": [
