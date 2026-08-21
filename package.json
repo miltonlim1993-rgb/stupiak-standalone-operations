@@ -12,6 +12,8 @@
     "dev:web": "npm run dev -w web",
     "dev:api": "npm run dev -w worker",
     "build": "npm run build -w web && npm run check -w worker",
+    "staging:fixtures": "node scripts/staging/build-fixtures.mjs",
+    "staging:provision": "node scripts/staging/provision-and-deploy.mjs",
     "setup:google": "node scripts/setup-google.mjs",
     "audit:base44": "node scripts/audit-base44.mjs",
     "package:zip": "node scripts/package-project.mjs",
