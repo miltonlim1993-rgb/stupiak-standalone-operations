@@ -15,6 +15,7 @@ assert.equal(owner('POST', '/api/close-up/closeup-1/sync'), 'close_up_d1')
 assert.equal(owner('GET', '/api/close-up/closeup-1/sync-status'), 'close_up_d1')
 assert.equal(owner('POST', '/api/tasks/operational/bootstrap'), 'task_bootstrap_d1')
 assert.equal(owner('POST', '/api/tasks/operational/action'), 'task_action_d1')
+assert.equal(owner('POST', '/api/tasks/ensure'), 'retired_task_ensure')
 assert.equal(owner('POST', '/api/attendance/import'), 'attendance_roster_d1')
 assert.equal(owner('POST', '/api/stock-counts/batch'), 'stock_count_d1')
 
@@ -64,11 +65,10 @@ for (const entity of [
   assert.equal(owner('POST', `/api/entities/${entity}`), 'realtime_d1')
   assert.equal(owner('PATCH', `/api/entities/${entity}/record-1`), 'realtime_d1')
   assert.equal(owner('DELETE', `/api/entities/${entity}/record-1`), 'realtime_d1')
-  assert.equal(owner('GET', `/api/entities/${entity}`), '', `${entity} generic reads remain compatibility-only until migration is proven complete`)
+  assert.equal(owner('GET', `/api/entities/${entity}`), '', `${entity} GET is owned by the pre-fence D1 compatibility reader`)
 }
 
-// These routes still intentionally use the remaining compatibility runtime.
-// Do not fence them until their complete canonical replacements are proven.
+// These routes still intentionally use the remaining Master/config compatibility runtime.
 assert.equal(owner('GET', '/api/entities/LabelRule'), '')
 assert.equal(owner('POST', '/api/entities/InventoryCatalog'), '')
 
@@ -80,6 +80,11 @@ assert.deepEqual(await blocked.json(), {
   code: 'canonical_route_unhandled',
   canonical_owner: 'stock_count_d1',
 })
+
+const retiredTaskRequest = new Request('https://ops.invalid/api/tasks/ensure', { method: 'POST' })
+const retiredTaskResponse = canonicalFallbackBlockedResponse(retiredTaskRequest, new URL(retiredTaskRequest.url))
+assert.equal(retiredTaskResponse.status, 503)
+assert.equal((await retiredTaskResponse.json()).canonical_owner, 'retired_task_ensure')
 
 const entry = fs.readFileSync('worker/src/entry.js', 'utf8')
 assert.match(entry, /canonicalFallbackBlockedResponse/)
@@ -122,12 +127,13 @@ assert.doesNotMatch(taskBootstrap, /findRecord\(/)
 console.log('CANONICAL_ROUTE_FENCE_TEST_OK=true')
 console.log('D1_CANONICAL_ROUTES_CANNOT_FALL_BACK_TO_SHEETS=true')
 console.log('TASK_OPERATIONAL_BOOTSTRAP_D1_ONLY=true')
+console.log('LEGACY_TASK_ENSURE_RETIRED=true')
 console.log('NOTIFICATION_DEDICATED_API_D1_ONLY=true')
 console.log('GENERIC_REALTIME_SHEET_WRITES_BLOCKED=true')
-console.log('GENERIC_REALTIME_COMPAT_READS_REMAIN=true')
+console.log('GENERIC_REALTIME_GETS_PRE_FENCE_D1=true')
 console.log('HYBRID_WORKFLOW_ROUTER_ACTIVE=false')
 console.log('LEGACY_SCHEDULED_RUNTIME_ACTIVE=false')
 console.log('D1_OUTBOX_SCHEDULED_RETRY_OWNER=true')
-console.log('UNMIGRATED_ROUTES_REMAIN_UNFENCED=true')
+console.log('UNMIGRATED_MASTER_CONFIG_ROUTES_REMAIN_UNFENCED=true')
 console.log('PRODUCTION_DEPLOY_RUN=false')
 console.log('D1_MIGRATION_RUN=false')
