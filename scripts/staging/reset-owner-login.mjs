@@ -11,6 +11,8 @@ const stagingUrl = 'https://stupiaks-ops-staging.sporkburger19.workers.dev'
 const ownerLogin = 'staging-owner@stupiak.invalid'
 const stagingDir = path.join(root, '.staging')
 const credentialsPath = path.join(stagingDir, 'credentials.txt')
+const bootstrapRetryDelayMs = 3000
+const bootstrapRetryAttempts = 30
 
 function fail(message) {
   console.error(`STAGING_LOGIN_RESET_ERROR=${message}`)
@@ -38,16 +40,58 @@ function randomSecret(bytes = 32) {
   return randomBytes(bytes).toString('base64url')
 }
 
-async function requestJson(url, options = {}) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function request(url, options = {}) {
   const response = await fetch(url, options)
   const text = await response.text()
   let body = null
   try { body = JSON.parse(text) } catch { body = { raw: text } }
+  return { response, body }
+}
+
+async function requestJson(url, options = {}) {
+  const { response, body } = await request(url, options)
   if (!response.ok) {
     console.error(JSON.stringify(body, null, 2))
     fail(`HTTP ${response.status} from ${url}`)
   }
   return body
+}
+
+async function resetOwnerWhenSecretIsLive(bootstrapSecret, ownerPassword) {
+  const url = `${stagingUrl}/api/internal/local-auth/bootstrap-owner`
+  for (let attempt = 1; attempt <= bootstrapRetryAttempts; attempt += 1) {
+    const { response, body } = await request(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-ChefOps-Local-Auth-Bootstrap-Secret': bootstrapSecret,
+      },
+      body: JSON.stringify({ login_id: ownerLogin, password: ownerPassword }),
+    })
+
+    if (response.ok) {
+      console.log(`STAGING_BOOTSTRAP_SECRET_ACTIVE_AFTER_ATTEMPT=${attempt}`)
+      return body
+    }
+
+    const code = String(body?.code || '')
+    if (response.status !== 403 || code !== 'local_auth_bootstrap_forbidden') {
+      console.error(JSON.stringify(body, null, 2))
+      fail(`HTTP ${response.status} from ${url}`)
+    }
+
+    if (attempt === bootstrapRetryAttempts) {
+      console.error(JSON.stringify(body, null, 2))
+      fail('rotated staging bootstrap secret did not become active within 90 seconds')
+    }
+
+    console.log(`Waiting for rotated staging secret to become active... ${attempt}/${bootstrapRetryAttempts}`)
+    await sleep(bootstrapRetryDelayMs)
+  }
 }
 
 const branch = run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { quiet: true }).trim()
@@ -70,15 +114,8 @@ run('npx', ['wrangler', 'secret', 'put', 'LOCAL_AUTH_BOOTSTRAP_SECRET', '--confi
   input: `${bootstrapSecret}\n`,
 })
 
-console.log('=== RESET SYNTHETIC STAGING OWNER PASSWORD ===')
-await requestJson(`${stagingUrl}/api/internal/local-auth/bootstrap-owner`, {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    'X-ChefOps-Local-Auth-Bootstrap-Secret': bootstrapSecret,
-  },
-  body: JSON.stringify({ login_id: ownerLogin, password: ownerPassword }),
-})
+console.log('=== WAIT FOR SECRET DEPLOYMENT + RESET SYNTHETIC OWNER PASSWORD ===')
+await resetOwnerWhenSecretIsLive(bootstrapSecret, ownerPassword)
 
 console.log('=== VERIFY NEW STAGING LOGIN ===')
 const login = await requestJson(`${stagingUrl}/api/auth/local/login`, {
