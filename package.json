@@ -13,7 +13,6 @@
     "dev:api": "npm run dev -w worker",
     "build": "npm run build -w web && npm run check -w worker",
     "setup:google": "node scripts/setup-google.mjs",
-    "deploy:secrets": "node scripts/push-worker-secrets.mjs",
     "audit:base44": "node scripts/audit-base44.mjs",
     "package:zip": "node scripts/package-project.mjs",
     "deploy": "npm run ops:deploy:verified",
@@ -43,18 +42,14 @@
     "ops:test:static-asset-worker-routing": "node scripts/ops/test-static-asset-worker-routing.mjs",
     "ops:test:local-auth": "node scripts/ops/test-local-auth.mjs",
     "ops:test:email-approval-login": "node scripts/ops/test-email-approval-login.mjs",
-    "ops:test:local-auth-production": "node scripts/ops/test-local-auth-production-activation.mjs",
-    "ops:audit:contract": "node scripts/ops/audit-architecture-contract.mjs && npm run ops:test:task-policy && npm run ops:test:task-audience && npm run ops:test:task-realtime-state-model && npm run ops:test:native-task-photo-capture && npm run ops:test:task-photo-visibility && npm run ops:test:task-photo-save-gate && npm run ops:test:roster-import && npm run ops:test:master-data-watch && npm run ops:test:master-watch-deploy && npm run ops:test:autonomous-runtime && npm run ops:test:device-outbox-batch-sync && npm run ops:test:device-read-cache-delta-sync && npm run ops:test:specialized-device-first-outbox && npm run ops:test:global-request-budget && npm run ops:test:worker-pressure-circuit && npm run ops:test:static-asset-worker-routing && npm run ops:test:local-auth && npm run ops:test:email-approval-login && npm run ops:test:local-auth-production",
+    "ops:audit:contract": "node scripts/ops/audit-architecture-contract.mjs && npm run ops:test:task-policy && npm run ops:test:task-audience && npm run ops:test:task-realtime-state-model && npm run ops:test:native-task-photo-capture && npm run ops:test:task-photo-visibility && npm run ops:test:task-photo-save-gate && npm run ops:test:roster-import && npm run ops:test:master-data-watch && npm run ops:test:master-watch-deploy && npm run ops:test:autonomous-runtime && npm run ops:test:device-outbox-batch-sync && npm run ops:test:device-read-cache-delta-sync && npm run ops:test:specialized-device-first-outbox && npm run ops:test:global-request-budget && npm run ops:test:worker-pressure-circuit && npm run ops:test:static-asset-worker-routing && npm run ops:test:local-auth && npm run ops:test:email-approval-login",
     "ops:audit:d1": "bash scripts/ops/d1-readonly-audit.sh",
     "ops:verify:production": "node scripts/ops/verify-production-release.mjs",
     "ops:bootstrap:autonomous": "bash scripts/bootstrap-autonomous-runtime.sh",
     "ops:deploy:verified": "bash scripts/deploy-master-watch-now.sh",
-    "ops:migrate:local-auth": "bash scripts/ops/apply-local-auth-migration.sh",
-    "ops:activate:local-auth": "bash scripts/ops/activate-local-auth-production.sh",
     "ops:backfill:build": "node scripts/ops/build-safe-backfill.mjs",
     "ops:backfill:run": "bash scripts/ops/run-approved-backfill.sh",
     "mobile:open": "cd web && npx cap open android",
-    "mobile:apk:debug": "npm run mobile:sync && cd web/android && ./gradlew assembleDebug",
-    "deploy:workers-builds": "npm run ops:audit:contract && npm run build && npm run cf:render && npx wrangler deploy --config worker/wrangler.production.jsonc"
+    "mobile:apk:debug": "npm run mobile:sync && cd web/android && ./gradlew assembleDebug"
   }
 }
