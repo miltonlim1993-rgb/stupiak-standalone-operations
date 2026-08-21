@@ -8,7 +8,6 @@ on:
       - 'web/**'
       - 'worker/**'
       - 'scripts/ops/**'
-      - 'scripts/deploy-realtime-ops-now.sh'
       - 'scripts/render-wrangler-production.mjs'
       - 'package.json'
       - 'package-lock.json'
