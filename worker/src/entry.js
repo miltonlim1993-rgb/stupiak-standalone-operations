@@ -4,6 +4,7 @@ import { errorResponse, json, readJson } from './http.js'
 import { markAppPackDirty } from './app-pack.js'
 import { handleCloudflareAuth } from './cloudflare-auth.js'
 import { handleD1DirectoryApi } from './d1-directory-api.js'
+import { handleD1Notifications } from './realtime-notifications-d1.js'
 import { processDirectoryMirrorQueue } from './d1-directory-mirror.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { handleRealtimeMutationBatch } from './realtime-mutation-batch.js'
@@ -36,7 +37,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v27-no-hybrid-workflow-router'
+const WORKER_REVISION = 'realtime-resilience-v28-d1-notifications'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -184,6 +185,9 @@ export default {
 
       const directoryResponse = await handleD1DirectoryApi(request, runEnv, url)
       if (directoryResponse) return withApiHeaders(request, env, directoryResponse)
+
+      const notificationResponse = await handleD1Notifications(request, runEnv, url)
+      if (notificationResponse) return withApiHeaders(request, env, notificationResponse)
 
       const primaryMediaUploadResponse = await handlePrimaryMediaUpload(request, runEnv, url)
       if (primaryMediaUploadResponse) return withApiHeaders(request, env, primaryMediaUploadResponse)
