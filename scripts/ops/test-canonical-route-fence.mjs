@@ -49,6 +49,17 @@ for (const [method, pathname] of [
   ['DELETE', '/api/entities/PrinterProfile/printer-1'],
 ]) assert.equal(owner(method, pathname), 'labels_d1')
 
+for (const entity of [
+  'Task', 'TaskPhoto', 'UrgentIssue', 'StockCount', 'CloseUp', 'FoodLabel',
+  'LabelPrintLog', 'Attendance', 'Receipt', 'Notification', 'TrainingAssignment',
+  'TrainingProgress', 'TrainingAcknowledgement', 'TrainingAttempt',
+]) {
+  assert.equal(owner('POST', `/api/entities/${entity}`), 'realtime_d1')
+  assert.equal(owner('PATCH', `/api/entities/${entity}/record-1`), 'realtime_d1')
+  assert.equal(owner('DELETE', `/api/entities/${entity}/record-1`), 'realtime_d1')
+  assert.equal(owner('GET', `/api/entities/${entity}`), '', `${entity} reads remain compatibility-only until migration is proven complete`)
+}
+
 // These routes still intentionally use the remaining compatibility runtime.
 // Do not fence them until their complete canonical replacements are proven.
 assert.equal(owner('POST', '/api/tasks/operational/bootstrap'), '')
@@ -81,6 +92,8 @@ assert.match(entry, /return flushPendingSheetMirrors\(runEnv, 50\)/)
 
 console.log('CANONICAL_ROUTE_FENCE_TEST_OK=true')
 console.log('D1_CANONICAL_ROUTES_CANNOT_FALL_BACK_TO_SHEETS=true')
+console.log('GENERIC_REALTIME_SHEET_WRITES_BLOCKED=true')
+console.log('GENERIC_REALTIME_COMPAT_READS_REMAIN=true')
 console.log('HYBRID_WORKFLOW_ROUTER_ACTIVE=false')
 console.log('LEGACY_SCHEDULED_RUNTIME_ACTIVE=false')
 console.log('D1_OUTBOX_SCHEDULED_RETRY_OWNER=true')
