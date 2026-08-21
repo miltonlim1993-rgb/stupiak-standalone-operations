@@ -5,6 +5,7 @@ import { markAppPackDirty } from './app-pack.js'
 import { handleCloudflareAuth } from './cloudflare-auth.js'
 import { handleD1DirectoryApi } from './d1-directory-api.js'
 import { handleD1Notifications } from './realtime-notifications-d1.js'
+import { handleD1OperationalBootstrap } from './realtime-task-bootstrap-d1.js'
 import { processDirectoryMirrorQueue } from './d1-directory-mirror.js'
 import { handleRealtimeApi, publishMutationEvent } from './realtime.js'
 import { handleRealtimeMutationBatch } from './realtime-mutation-batch.js'
@@ -14,7 +15,6 @@ import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
 import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
 import { handleD1OperationalTaskAction } from './realtime-task-action-d1.js'
-import { overlayOperationalBootstrapResponse } from './realtime-task-bootstrap.js'
 import { handleRealtimeTaskPhotoMutation } from './realtime-task-photo.js'
 import { handlePrimaryMediaUpload } from './realtime-media-upload.js'
 import { withStableWorkflowMutationId } from './realtime-workflow-idempotency.js'
@@ -25,9 +25,7 @@ import { handleD1Labels } from './realtime-labels-d1.js'
 import { handleRealtimeAttendanceRosterImport } from './realtime-attendance-roster.js'
 import { processAttendanceRosterMirrorQueue } from './realtime-attendance-roster-mirror.js'
 import { handleDutyRosterSourceUpload } from './realtime-attendance-roster-source.js'
-import { applyOperationalTaskPolicyResponse } from './operational-task-policy.js'
 import {
-  applyOperationalTaskAudienceResponse,
   guardOperationalTaskAssignment,
   guardOperationalTaskPhotoAssignment,
 } from './operational-task-audience.js'
@@ -37,7 +35,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v28-d1-notifications'
+const WORKER_REVISION = 'realtime-resilience-v29-d1-task-bootstrap'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -110,7 +108,7 @@ function apiCorsHeaders(request, env) {
     'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Client-Id, X-ChefOps-Mutation-Id, X-Requested-With',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
-    'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision, X-ChefOps-Media-Upload-Path',
+    'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision, X-ChefOps-Media-Upload-Path, X-ChefOps-Task-Bootstrap-Path',
     'Vary': 'Origin',
     'X-ChefOps-Worker-Revision': WORKER_REVISION,
   }
@@ -188,6 +186,9 @@ export default {
 
       const notificationResponse = await handleD1Notifications(request, runEnv, url)
       if (notificationResponse) return withApiHeaders(request, env, notificationResponse)
+
+      const taskBootstrapResponse = await handleD1OperationalBootstrap(request, runEnv, url)
+      if (taskBootstrapResponse) return withApiHeaders(request, env, taskBootstrapResponse)
 
       const primaryMediaUploadResponse = await handlePrimaryMediaUpload(request, runEnv, url)
       if (primaryMediaUploadResponse) return withApiHeaders(request, env, primaryMediaUploadResponse)
@@ -267,17 +268,7 @@ export default {
       const canonicalFallbackResponse = canonicalFallbackBlockedResponse(request, url)
       if (canonicalFallbackResponse) return withApiHeaders(request, env, canonicalFallbackResponse)
 
-      const bootstrapRequest = url.pathname === '/api/tasks/operational/bootstrap' && request.method === 'POST'
-        ? request.clone()
-        : null
-      const appResponse = await app.fetch(request, runEnv, ctx)
-      let response = bootstrapRequest
-        ? await overlayOperationalBootstrapResponse(bootstrapRequest, url, runEnv, appResponse)
-        : appResponse
-      if (bootstrapRequest) {
-        response = await applyOperationalTaskPolicyResponse(bootstrapRequest, url, response)
-        response = await applyOperationalTaskAudienceResponse(bootstrapRequest, url, runEnv, response)
-      }
+      let response = await app.fetch(request, runEnv, ctx)
       if (url.pathname === '/api/health' && request.method === 'GET') {
         response = await augmentHealthResponse(response, runEnv)
       }
