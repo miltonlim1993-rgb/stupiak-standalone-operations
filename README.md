@@ -70,6 +70,8 @@ Use only the reviewed no-migration deployment command:
 npm run ops:deploy:verified
 ```
 
+Direct deployment from `worker/` is intentionally disabled. Do not run a bare `wrangler deploy` for OPS production. The canonical command above renders `worker/wrangler.production.jsonc` with the reviewed production entry point and bindings before deployment.
+
 This command builds, renders canonical bindings, deploys Worker/Web/PWA assets, verifies the signed fixed APK, and compares protected D1 counts before and after. It does not run a D1 migration, Sheet bootstrap, historical backfill, marker call, database creation, or Queue creation.
 
 Read [`deploy/cloudflare/README.md`](deploy/cloudflare/README.md) for Cloudflare resource and credential scopes.

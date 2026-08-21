@@ -134,6 +134,7 @@ assert.equal(OPERATIONAL_TASK_AUDIENCE_POLICY.unknown_shift_fallback, 'DAILY')
 
 const entrySource = readFileSync('worker/src/entry.js', 'utf8')
 const audienceSource = readFileSync('worker/src/operational-task-audience.js', 'utf8')
+const bootstrapSource = readFileSync('worker/src/realtime-task-bootstrap-d1.js', 'utf8')
 
 assert(
   entrySource.indexOf('const taskAssignmentResponse = await guardOperationalTaskAssignment')
@@ -146,11 +147,14 @@ assert(
   'assignment guard must run before TaskPhoto mutation validation',
 )
 assert(
-  entrySource.indexOf('await applyOperationalTaskPolicyResponse')
-    < entrySource.indexOf('await applyOperationalTaskAudienceResponse'),
-  'audience decoration must run after canonical task policy filtering',
+  bootstrapSource.indexOf('await applyOperationalTaskPolicyResponse')
+    < bootstrapSource.indexOf('await applyOperationalTaskAudienceResponse'),
+  'audience decoration must run after canonical task policy filtering inside the D1 bootstrap owner',
 )
-assert.match(entrySource, /realtime-resilience-v23-device-outbox-batch-sync/)
+assert.doesNotMatch(entrySource, /applyOperationalTaskPolicyResponse/)
+assert.doesNotMatch(entrySource, /applyOperationalTaskAudienceResponse/)
+assert.match(entrySource, /const WORKER_REVISION = 'realtime-resilience-v\d+-[^']+'/)
+assert.match(bootstrapSource, /published-pack-d1-only-v1/)
 assert.match(audienceSource, /attendance_required: false/)
 assert.match(audienceSource, /visibility_scope: 'assigned_outlet_members'/)
 assert.match(audienceSource, /unassigned_access: 'view_only'/)
@@ -166,6 +170,7 @@ console.log('ASSIGNMENT_FIELDS_RETAINED=true')
 console.log('UNASSIGNED_ACCESS=VIEW_ONLY')
 console.log('TASK_ACTION_ASSIGNMENT_GUARD=true')
 console.log('TASK_PHOTO_ASSIGNMENT_GUARD=true')
+console.log('TASK_POLICY_AND_AUDIENCE_OWNER=d1_bootstrap')
 console.log('UNKNOWN_SHIFT_FALLBACK=DAILY')
 console.log('TASK_AUDIENCE_D1_WRITES=false')
 console.log('D1_MIGRATION_RUN=false')

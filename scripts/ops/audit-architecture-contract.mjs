@@ -5,13 +5,17 @@ import process from 'node:process'
 const root = process.cwd()
 const failures = []
 
+function absolute(relativePath) {
+  return path.join(root, relativePath)
+}
+
 function file(relativePath) {
-  const absolute = path.join(root, relativePath)
-  if (!existsSync(absolute)) {
+  const target = absolute(relativePath)
+  if (!existsSync(target)) {
     failures.push(`Missing required file: ${relativePath}`)
     return ''
   }
-  return readFileSync(absolute, 'utf8')
+  return readFileSync(target, 'utf8')
 }
 
 function requireText(relativePath, needle, description = needle) {
@@ -28,174 +32,136 @@ function requireBefore(relativePath, first, second, description) {
   const content = file(relativePath)
   const firstIndex = content.indexOf(first)
   const secondIndex = content.indexOf(second)
-  if (firstIndex < 0 || secondIndex < 0 || firstIndex >= secondIndex) failures.push(`${relativePath}: ${description}`)
+  if (firstIndex < 0 || secondIndex < 0 || firstIndex >= secondIndex) {
+    failures.push(`${relativePath}: ${description}`)
+  }
 }
 
-const manifestPath = 'web/public/app-release.json'
-let manifest = {}
-try {
-  manifest = JSON.parse(file(manifestPath))
-} catch (error) {
-  failures.push(`${manifestPath}: invalid JSON (${error.message})`)
+function requireAbsent(relativePath, description = 'obsolete path must stay removed') {
+  if (existsSync(absolute(relativePath))) failures.push(`${relativePath}: ${description}`)
 }
 
-const apkVersion = String(manifest.apk_version || '').trim()
-const minimumApkVersion = String(manifest.minimum_apk_version || '').trim()
-const pwaVersion = String(manifest.pwa_version || '').trim()
-const minimumPwaVersion = String(manifest.minimum_pwa_version || '').trim()
-const apkAssetName = String(manifest.apk_asset_name || '').trim()
-
-if (!apkVersion) failures.push(`${manifestPath}: apk_version is required`)
-if (apkVersion !== minimumApkVersion) failures.push(`${manifestPath}: apk_version and minimum_apk_version must match for a forced release`)
-if (manifest.force_update !== true) failures.push(`${manifestPath}: force_update must be true for the canonical mandatory release`)
-if (!pwaVersion) failures.push(`${manifestPath}: pwa_version is required`)
-if (pwaVersion !== minimumPwaVersion) failures.push(`${manifestPath}: pwa_version and minimum_pwa_version must match`)
-if (manifest.pwa_force_update !== true) failures.push(`${manifestPath}: pwa_force_update must be true`)
-if (apkAssetName !== 'stupiaks-ops-task-sop-alarm.apk') failures.push(`${manifestPath}: canonical APK asset name changed unexpectedly`)
-if (!String(manifest.apk_url || '').includes('/android-release-latest/stupiaks-ops-task-sop-alarm.apk')) failures.push(`${manifestPath}: apk_url is not the fixed canonical release URL`)
-
-requireText('web/src/components/AppUpdateBanner.jsx', `const CURRENT_RELEASE = '${apkVersion}'`, 'CURRENT_RELEASE matching app-release.json')
-requireText('web/src/components/AppUpdateBanner.jsx', 'Number(asset.size || 0) < 1_000_000', 'minimum APK size verification')
-requireText('web/src/components/AppUpdateBanner.jsx', "cache: 'no-store'", 'no-store release manifest fetch')
-requireText('web/src/components/AppUpdateBanner.jsx', 'AUTO_OPEN_COOLDOWN_MS', 'mandatory update auto-open cooldown')
-requireText('web/src/main.jsx', `const SHELL_VERSION = '${pwaVersion}'`, 'PWA shell version matching app-release.json')
-
-const mainSource = file('web/src/main.jsx')
-const serviceWorkerMatch = mainSource.match(/navigator\.serviceWorker\.register\(['"]([^'"]+)['"]/) 
-if (!serviceWorkerMatch) {
-  failures.push('web/src/main.jsx: versioned service worker registration not found')
-} else {
-  const serviceWorkerPath = serviceWorkerMatch[1].replace(/^\//, '')
-  const serviceWorkerFile = `web/public/${serviceWorkerPath}`
-  requireText(serviceWorkerFile, pwaVersion, 'PWA version token')
-  requireText(serviceWorkerFile, 'self.skipWaiting()', 'skipWaiting activation')
-  requireText(serviceWorkerFile, 'caches.delete', 'old cache deletion')
-  requireText(serviceWorkerFile, 'self.clients.claim()', 'client takeover')
+function parseJson(relativePath) {
+  try {
+    return JSON.parse(file(relativePath))
+  } catch (error) {
+    failures.push(`${relativePath}: invalid JSON (${error.message})`)
+    return {}
+  }
 }
 
-requireText('scripts/setup-android.mjs', '@capacitor/camera@^8', 'Capacitor Camera plugin installation')
-requireText('scripts/setup-android.mjs', '@capacitor/app@^8', 'Capacitor App plugin installation')
-requireText('web/src/App.jsx', "import NativeMediaCaptureBridge from '@/components/NativeMediaCaptureBridge'", 'native media capture bridge import')
-requireText('web/src/App.jsx', '<NativeMediaCaptureBridge />', 'native media capture bridge mount')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', "capacitor.isPluginAvailable?.('Camera')", 'native Camera availability check')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', "capacitor.registerPlugin?.('Camera')", 'explicit native Camera proxy registration')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'camera.takePhoto', 'native camera invocation')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', "cameraDirection: 'REAR'", 'official rear-camera enum value')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', "app.addListener('appRestoredResult'", 'Android restored camera result handling')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'publishTaskPhotoCapture', 'direct native capture delivery into Task state')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'PENDING_CAPTURE_KEY', 'persisted native capture context')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'RESTORED_RESULT_KEY', 'persisted restored camera result')
-forbidText('web/src/components/NativeMediaCaptureBridge.jsx', 'new DataTransfer()', 'synthetic DataTransfer bridge for native camera result')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'input.showPicker()', 'direct Web/PWA picker fallback')
-requireText('web/src/components/NativeMediaCaptureBridge.jsx', 'event.stopImmediatePropagation()', 'hidden input click suppression')
-requireText('web/src/pages/OperationalTasksRealtime.jsx', 'subscribeTaskPhotoCapture', 'Task consumes native photo capture event directly')
-requireText('web/src/pages/OperationalTasksRealtime.jsx', 'announceTaskPhotoCaptureConsumer(task.id)', 'restored native photo can be replayed when Task opens')
-requireText('web/src/pages/OperationalTasksRealtime.jsx', 'data-task-photo-task-id={task.id}', 'native photo capture task context')
-requireText('web/src/pages/OperationalTasksRealtime.jsx', 'data-task-photo-outlet-id={outletId}', 'native photo capture outlet context')
+const packageJson = parseJson('package.json')
+const workerPackage = parseJson('worker/package.json')
+const productionTemplate = parseJson('worker/wrangler.production.example.jsonc')
+const release = parseJson('web/public/app-release.json')
 
-forbidText('web/src/pages/OperationalTasksLive.jsx', 'AUTOSAVE_DELAY_MS', 'fixed Task autosave delay')
-forbidText('web/src/pages/OperationalTasksLive.jsx', 'autosaveTimer', 'timer-based Task autosave scheduler')
-forbidText('web/src/pages/OperationalTasksLive.jsx', 'scheduleSave', 'per-interaction Task autosave scheduler')
-forbidText('web/src/pages/OperationalTasksLive.jsx', 'requestIdleCallback', 'idle Task autosave')
-forbidText('web/src/pages/OperationalTasksLive.jsx', 'cancelIdleCallback', 'idle Task autosave cancellation')
-forbidText('web/src/pages/OperationalTasksLive.jsx', "document.addEventListener('focusout'", 'blur-triggered Task save')
-forbidText('web/src/pages/OperationalTasksLive.jsx', 'setInterval(', 'interval Task save')
-requireText('web/src/pages/OperationalTasksLive.jsx', "['保存进度', '完成任务']", 'explicit Task save actions')
-requireText('web/src/pages/OperationalTasksLive.jsx', 'flushDirtyDraftOnce', 'one-shot dirty draft protection')
-requireText('web/src/pages/OperationalTasksLive.jsx', "window.addEventListener('pagehide', flushDirtyDraftOnce)", 'leave-page one-shot draft flush')
-requireText('web/src/pages/OperationalTasksLive.jsx', "document.visibilityState === 'hidden'", 'background one-shot draft flush')
-requireText('web/src/pages/OperationalTasksLive.jsx', 'pendingCloseButton.current = closeButton', 'save-before-close drawer guard')
-requireText('web/src/pages/OperationalTasksLive.jsx', 'observeSaveCompletion', 'event-based save completion observation')
+// Canonical production identity and bindings.
+if (productionTemplate.name !== 'stupiaks-ops') failures.push('production Worker name must be stupiaks-ops')
+if (productionTemplate.main !== 'src/entry-master-watch.js') failures.push('production entry must be src/entry-master-watch.js')
+if (productionTemplate.d1_databases?.[0]?.binding !== 'OPS_DB') failures.push('production OPS_DB binding is missing')
+if (productionTemplate.d1_databases?.[0]?.database_name !== 'stupiaks-ops-realtime') failures.push('production D1 database name changed unexpectedly')
+if (productionTemplate.kv_namespaces?.[0]?.binding !== 'APP_DATA_PACKS') failures.push('production APP_DATA_PACKS binding is missing')
+if (productionTemplate.r2_buckets?.[0]?.binding !== 'MEDIA_BUCKET') failures.push('production MEDIA_BUCKET binding is missing')
+if (productionTemplate.queues?.producers?.[0]?.binding !== 'SHEET_SYNC_QUEUE') failures.push('production SHEET_SYNC_QUEUE binding is missing')
+if (productionTemplate.vars?.LOCAL_AUTH_MODE !== 'enabled') failures.push('production local auth must remain enabled')
+if (productionTemplate.vars?.MEDIA_PRIMARY_STORAGE !== 'cloudflare-r2') failures.push('Cloudflare R2 must remain canonical media storage')
+const crons = new Set(productionTemplate.triggers?.crons || [])
+if (!crons.has('*/2 * * * *') || !crons.has('0 * * * *')) failures.push('canonical watcher/safety crons are missing')
 
-requireText('web/src/lib/viewport-geometry.js', 'window.visualViewport', 'Visual Viewport API tracking')
-requireText('web/src/lib/viewport-geometry.js', "--chefops-viewport-height", 'visual viewport height CSS variable')
-requireText('web/src/lib/viewport-geometry.js', "--chefops-viewport-bottom", 'visual viewport bottom CSS variable')
-requireText('web/src/lib/viewport-geometry.js', "chefops:viewport-changed", 'viewport change event')
-requireText('web/src/main.jsx', 'installViewportGeometry()', 'viewport geometry installed before app render')
-requireText('web/src/main.jsx', "import '@/responsive-overlays-v33.css'", 'responsive overlay override stylesheet')
-requireText('web/src/viewport.css', 'var(--chefops-viewport-height)', 'shell uses real visual viewport height')
-requireText('web/src/viewport.css', "data-chefops-keyboard='open'", 'software keyboard layout state')
-requireText('web/src/responsive-overlays-v33.css', '.chefops-viewport-overlay', 'viewport-constrained full-screen overlays')
-requireText('web/src/responsive-overlays-v33.css', '.chefops-drawer-content', 'responsive drawer geometry')
-requireText('web/src/responsive-overlays-v33.css', '@media (min-width: 640px)', 'tablet layout breakpoint')
-requireText('web/src/responsive-overlays-v33.css', '@media (min-width: 1024px)', 'desktop layout breakpoint')
-requireText('web/src/components/MobileSheet.jsx', 'z-[900]', 'sheet above app navigation')
-requireText('web/src/components/MobileSheet.jsx', 'absolute bottom-0', 'sheet positioned inside viewport container')
-requireText('web/src/components/AppDrawer.jsx', 'z-[880]', 'drawer overlay above app navigation')
-requireText('web/src/components/AppDrawer.jsx', "data-fullscreen={fullScreen ? 'true' : 'false'}", 'responsive full-screen drawer mode')
+// A second production-named Wrangler config must never reappear.
+requireAbsent('worker/wrangler.jsonc', 'unsafe default production-named Wrangler config must stay removed')
+requireText('worker/package.json', 'Direct worker deploy is disabled', 'direct Worker deployment kill switch')
+forbidText('worker/package.json', '"deploy": "wrangler deploy"', 'bare Worker production deploy')
 
-requireText('worker/src/operational-task-policy.js', "const RETAINED_TEMPLATE_ID = 'tmpl-rr-opening-checklist-v3'", 'canonical retained Opening Preparation template')
-requireText('worker/src/operational-task-policy.js', "new Set(['tmpl-rr-daily-standards-v4'])", 'retired overlapping Daily Standards template')
-requireText('worker/src/operational-task-policy.js', 'const TASK_PHOTO_LIMIT = 10', 'ten-photo Task policy')
-requireText('worker/src/operational-task-policy.js', '同类物品请放在同一张照片一起拍摄', 'group matching items photo guidance')
-requireText('worker/src/operational-task-policy.js', 'applyOperationalTaskPolicyResponse', 'bootstrap response policy')
-requireText('web/src/lib/operational-task-policy.js', 'installOperationalTaskPolicy', 'client cache-resilience task policy')
-requireText('web/src/lib/operational-task-policy.js', 'const TASK_PHOTO_LIMIT = 10', 'client ten-photo policy')
-requireText('web/src/lib/operational-task-policy.js', "url?.pathname !== '/api/tasks/operational/bootstrap'", 'client bootstrap policy route')
-requireText('web/src/lib/operational-task-policy.js', 'chefops-photo-policy-guidance', 'in-flow staff guidance')
-requireText('web/src/main.jsx', 'installOperationalTaskPolicy()', 'operational task policy installed before render')
-requireText('web/src/main.jsx', "import '@/operational-task-policy.css'", 'operational task guidance styling')
-requireText('worker/src/media-rules.js', 'max_files: 10', 'ten-photo Task and Issue fallback rules')
-forbidText('worker/src/media-rules.js', 'max_files: 4', 'old Urgent Issue four-photo limit')
-requireText('web/src/components/ProtectedRoute.jsx', "const SENSITIVE_MANAGER_PATHS = new Set(['/ops-control'])", 'manager-only sensitive Ops Control route')
-requireText('web/src/components/ProtectedRoute.jsx', "<Navigate to=\"/tasks\"", 'staff redirect from sensitive access route')
-requireText('web/src/App.jsx', '<Route path="/tasks" element={<Tasks />} />', 'staff-visible Daily Tasks route')
-requireText('web/src/App.jsx', '<Route path="/training" element={<Training />} />', 'staff-visible Training route')
-requireText('web/src/App.jsx', '<Route path="/sop/:sopId" element={<GuidedSop />} />', 'staff-visible SOP route')
-requireText('docs/TASK-PHOTO-ACCESS-POLICY.md', 'Historical `Task` records are not deleted or rewritten', 'history preservation statement')
-requireText('docs/TASK-PHOTO-ACCESS-POLICY.md', 'Ops Control (`/ops-control`) requires `manager` level or above', 'sensitive access policy')
+// Root production commands must resolve to the single verified deployer.
+if (packageJson.scripts?.deploy !== 'npm run ops:deploy:verified') failures.push('root deploy must resolve to ops:deploy:verified')
+if (packageJson.scripts?.['ops:deploy:verified'] !== 'bash scripts/deploy-master-watch-now.sh') failures.push('ops:deploy:verified must use the canonical deployer')
+for (const staleCommand of ['deploy:secrets', 'ops:migrate:local-auth', 'ops:activate:local-auth', 'deploy:workers-builds']) {
+  if (Object.prototype.hasOwnProperty.call(packageJson.scripts || {}, staleCommand)) failures.push(`obsolete package command must stay removed: ${staleCommand}`)
+}
 
-const entrySource = file('worker/src/entry.js')
-const revisionMatch = entrySource.match(/const WORKER_REVISION = ['"]([^'"]+)['"]/) 
-const workerRevision = String(revisionMatch?.[1] || '').trim()
-if (!workerRevision) failures.push('worker/src/entry.js: WORKER_REVISION is required')
+// Canonical Worker chain and D1-first routes.
+requireText('worker/src/entry-master-watch.js', "from './entry-local-auth.js'", 'master-watch to local-auth canonical chain')
 requireText('worker/src/entry.js', "import { handleD1Labels } from './realtime-labels-d1.js'", 'D1 Label router import')
-requireBefore('worker/src/entry.js', 'const d1LabelsResponse = await handleD1Labels', 'const appResponse = await app.fetch', 'D1 Label router must run before legacy app.fetch fallback')
-requireText('worker/src/entry.js', "runtimeUrl.searchParams.set('legacy_seed', '0')", 'legacy Sheet hydration disabled for realtime data reads')
-requireText('worker/src/entry.js', "import { applyOperationalTaskPolicyResponse } from './operational-task-policy.js'", 'server operational policy import')
-requireBefore('worker/src/entry.js', 'await overlayOperationalBootstrapResponse', 'await applyOperationalTaskPolicyResponse', 'operational policy must run after D1 bootstrap overlay')
+requireBefore('worker/src/entry.js', 'const d1LabelsResponse = await handleD1Labels', 'let response = await app.fetch', 'D1 Label router must execute before legacy app fallback')
+requireText('worker/src/entry.js', "runtimeUrl.searchParams.set('legacy_seed', '0')", 'runtime Sheet hydration must remain disabled')
+requireText('worker/src/entry.js', "import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'", 'D1 Close Up mutation router')
+requireText('worker/src/entry.js', "import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'", 'atomic D1 Stock Count router')
 
-requireText('worker/src/label-d1-store.js', "const LABEL_MUTATION_ENTITIES = new Set(['PrinterProfile', 'FoodLabel', 'LabelPrintLog'])", 'approved Label mutation entity allow-list')
-requireText('worker/src/label-d1-store.js', 'INSERT INTO ops_records', 'canonical record mutation')
-requireText('worker/src/label-d1-store.js', 'INSERT INTO ops_mutations', 'idempotent mutation journal')
-requireText('worker/src/label-d1-store.js', 'INSERT INTO sheet_sync_outbox', 'durable Sheet mirror outbox')
-requireText('worker/src/label-d1-store.js', 'await db.batch(statements)', 'atomic D1 batch')
-requireText('worker/src/label-d1-store.js', "listD1Rows(env, 'LabelProduct'", 'D1 LabelProduct catalog read')
-requireText('worker/src/label-d1-store.js', "listD1Rows(env, 'LabelRule'", 'D1 LabelRule catalog read')
-requireText('worker/src/label-d1-operations.js', "entity: 'FoodLabel'", 'FoodLabel D1 mutation')
-requireText('worker/src/label-d1-operations.js', "entity: 'LabelPrintLog'", 'LabelPrintLog D1 mutation')
-requireText('worker/src/label-d1-printer.js', "entity: 'PrinterProfile'", 'PrinterProfile D1 mutation')
-
-const deployScript = 'scripts/deploy-realtime-ops-now.sh'
-forbidText(deployScript, 'd1 migrations apply', 'automatic D1 migration in normal deployment')
-forbidText(deployScript, 'd1 create', 'automatic D1 database creation in normal deployment')
-forbidText(deployScript, 'queues create', 'automatic Queue creation in normal deployment')
-forbidText(deployScript, 'migrate-once', 'directory bootstrap marker call in normal deployment')
-forbidText(deployScript, 'legacy_seed=1', 'legacy Sheet hydration in normal deployment')
-requireText(deployScript, 'D1_MIGRATION_RUN=false', 'explicit no-migration result marker')
-requireText(deployScript, 'D1_COUNTS_UNCHANGED=true', 'protected D1 count verification marker')
-requireText(deployScript, 'FIXED_APK_MATCH=true', 'fixed APK SHA verification marker')
+// Canonical deploy must never migrate, backfill, create production resources, or call bootstrap endpoints.
+const deployScript = 'scripts/deploy-master-watch-now.sh'
 requireText(deployScript, 'npm run ops:audit:contract', 'architecture audit before deployment')
-requireText(deployScript, 'verify-production-release.mjs', 'production Worker/PWA/APK verifier')
+requireText(deployScript, 'npm run build', 'build before deployment')
+requireText(deployScript, 'npm run cf:render', 'canonical production config render')
+requireText(deployScript, 'npx wrangler deploy --config worker/wrangler.production.jsonc', 'canonical Wrangler deployment')
+requireText(deployScript, 'D1_MIGRATION_RUN=false', 'explicit no-migration result marker')
+requireText(deployScript, 'D1_BACKFILL_RUN=false', 'explicit no-backfill result marker')
+requireText(deployScript, 'D1_DIRECT_WRITE_RUN=false', 'explicit no-direct-D1-write result marker')
+forbidText(deployScript, 'd1 migrations apply', 'automatic D1 migration')
+forbidText(deployScript, 'd1 create', 'automatic D1 creation')
+forbidText(deployScript, 'queues create', 'automatic Queue creation')
+forbidText(deployScript, '/migrate-once', 'directory migration endpoint call')
+forbidText(deployScript, 'run-approved-backfill.sh', 'historical backfill during deploy')
 
-requireText('scripts/ops/d1-readonly-audit.sh', 'assert_select_only', 'SELECT-only query guard')
-requireText('scripts/ops/d1-readonly-audit.sh', 'assert_zero_writes', 'zero-write metadata guard')
-requireText('scripts/ops/build-safe-backfill.mjs', 'ON CONFLICT(entity, entity_id) DO NOTHING', 'insert-only conflict protection')
-requireText('scripts/ops/build-safe-backfill.mjs', 'connects_to_d1: false', 'offline SQL generation contract')
-requireText('scripts/ops/run-approved-backfill.sh', 'APPROVE_D1_BACKFILL', 'explicit backfill approval')
-requireText('scripts/ops/run-approved-backfill.sh', 'ROLLBACK-NOT-AUTOMATIC', 'no automatic broad rollback')
-
-requireText('.github/workflows/android-apk.yml', 'Resolve manifest release contract', 'manifest-derived Android version contract')
-requireText('.github/workflows/android-apk.yml', 'Audit canonical OPS architecture contract', 'Android release architecture gate')
-forbidText('.github/workflows/android-apk.yml', 'ANDROID_VERSION_NAME: 4.5.15', 'stale hard-coded Android release version')
-requireText('.github/workflows/deploy-cloudflare.yml', "if: github.event_name == 'workflow_dispatch'", 'explicit manual production deployment gate')
+// GitHub push validates; only explicit manual dispatch may deploy.
+requireText('.github/workflows/deploy-cloudflare.yml', "if: github.event_name == 'workflow_dispatch'", 'manual production deployment gate')
 forbidText('.github/workflows/deploy-cloudflare.yml', 'd1 migrations apply', 'D1 migration in Cloudflare workflow')
+requireText('.github/workflows/deploy-cloudflare.yml', 'PRODUCTION_DEPLOYMENT_RUN=false', 'push validation must state no deployment')
 
+// D1 write semantics that must remain durable and idempotent.
+requireText('worker/src/label-d1-store.js', 'INSERT INTO ops_records', 'canonical Label record mutation')
+requireText('worker/src/label-d1-store.js', 'INSERT INTO ops_mutations', 'Label idempotent mutation journal')
+requireText('worker/src/label-d1-store.js', 'INSERT INTO sheet_sync_outbox', 'Label durable mirror outbox')
+requireText('worker/src/label-d1-store.js', 'await db.batch(statements)', 'atomic Label D1 batch')
+requireText('scripts/ops/d1-readonly-audit.sh', 'assert_select_only', 'SELECT-only D1 audit guard')
+requireText('scripts/ops/d1-readonly-audit.sh', 'assert_zero_writes', 'zero-write D1 audit guard')
+requireText('scripts/ops/build-safe-backfill.mjs', 'ON CONFLICT(entity, entity_id) DO NOTHING', 'insert-only historical backfill conflict guard')
+requireText('scripts/ops/run-approved-backfill.sh', 'APPROVE_D1_BACKFILL', 'explicit historical backfill approval')
+requireText('scripts/ops/run-approved-backfill.sh', 'ROLLBACK-NOT-AUTOMATIC', 'no automatic broad backfill rollback')
+
+// Release contract remains coupled across manifest/PWA/APK.
+const apkVersion = String(release.apk_version || '').trim()
+const pwaVersion = String(release.pwa_version || '').trim()
+if (!apkVersion || apkVersion !== String(release.minimum_apk_version || '').trim()) failures.push('APK forced-release version contract is invalid')
+if (release.force_update !== true) failures.push('APK canonical release must force update')
+if (!pwaVersion || pwaVersion !== String(release.minimum_pwa_version || '').trim()) failures.push('PWA forced-release version contract is invalid')
+if (release.pwa_force_update !== true) failures.push('PWA canonical release must force update')
+requireText('web/src/components/AppUpdateBanner.jsx', `const CURRENT_RELEASE = '${apkVersion}'`, 'APK release version matching manifest')
+requireText('web/src/main.jsx', `const SHELL_VERSION = '${pwaVersion}'`, 'PWA shell version matching manifest')
+
+// Sensitive UI access must remain gated; server authorization remains separately tested.
+requireText('web/src/components/ProtectedRoute.jsx', "const SENSITIVE_MANAGER_PATHS = new Set(['/ops-control'])", 'sensitive Ops Control route guard')
+requireText('web/src/App.jsx', '<Route path="/ops-control" element={<OwnerOnly><OpsControl /></OwnerOnly>} />', 'Owner-only Ops Control route')
+
+// Historical deployment/migration artifacts are intentionally retired and must not return.
+for (const obsoletePath of [
+  'scripts/deploy-realtime-ops-now.sh',
+  'scripts/deploy-task-realtime-fix-now.sh',
+  'scripts/deploy-stock-media-v13-now.sh',
+  'scripts/deploy-stock-history-v14-now.sh',
+  'scripts/deploy-d1-source-of-truth-v15-now.sh',
+  'scripts/deploy-d1-directory-v16-now.sh',
+  'scripts/restore-d1-directory-v17-now.sh',
+  'scripts/deploy-roster-sop-v11-now.sh',
+  'scripts/deploy-roster-sop-v12-now.sh',
+  'scripts/deploy-stale-aware-ops-now.sh',
+  'scripts/restore-directory-from-master-sheet.sql',
+  'scripts/repair-roster-2026-08-02.sql',
+  'scripts/register-sales-template.mjs',
+  'scripts/test-closeup-gas.mjs',
+  'scripts/configure-production-integrations.sh',
+  'scripts/render-wrangler-local-auth-transition.mjs',
+  'scripts/ops/apply-local-auth-migration.sh',
+  'scripts/ops/activate-local-auth-production.sh',
+  'scripts/ops/test-local-auth-production-activation.mjs',
+]) requireAbsent(obsoletePath)
+
+requireText('.gitignore', '.deployments/', 'transient deployment artifacts ignored')
+requireText('.gitignore', '.ops-deploy-status/', 'transient deployment status ignored')
+requireText('.gitignore', '.ops-deploy-trigger/', 'transient deployment triggers ignored')
 requireText('README.md', 'D1 is the canonical runtime database', 'canonical D1 architecture statement')
-forbidText('README.md', 'Google Sheets — owner-controlled operational source data', 'outdated Sheet source-of-truth statement')
-requireText('AGENTS.md', 'Do not run a D1 migration as part of a normal deployment', 'migration guardrail')
-forbidText('deploy/cloudflare/README.md', 'Google Sheets remain the owner-controlled source of truth', 'outdated Sheet source-of-truth statement')
-requireText('docs/OPS-D1-PRODUCTION-RUNBOOK.md', 'Required evidence before saying “done”', 'authoritative completion evidence section')
+requireText('README.md', 'Direct deployment from `worker/` is intentionally disabled', 'single production deployment path documentation')
+requireText('AGENTS.md', 'Do not run a D1 migration as part of a normal deployment', 'normal deployment migration guardrail')
 
 if (failures.length) {
   console.error('OPS architecture contract audit failed:')
@@ -204,33 +170,14 @@ if (failures.length) {
 }
 
 console.log('OPS_ARCHITECTURE_CONTRACT_OK=true')
-console.log(`WORKER_REVISION=${workerRevision}`)
+console.log('CANONICAL_PRODUCTION_ENTRY=src/entry-master-watch.js')
+console.log('SINGLE_PRODUCTION_DEPLOY_PATH=true')
+console.log('BARE_WORKER_DEPLOY_DISABLED=true')
+console.log('OBSOLETE_DEPLOYERS_REMOVED=true')
+console.log('NORMAL_DEPLOYMENT_RUNS_MIGRATION=false')
+console.log('NORMAL_DEPLOYMENT_RUNS_BACKFILL=false')
+console.log('NORMAL_DEPLOYMENT_DIRECT_D1_WRITE=false')
+console.log('D1_LABEL_ROUTING_BEFORE_LEGACY=true')
+console.log('SAFE_BACKFILL_GUARDS_PRESENT=true')
 console.log(`APK_VERSION=${apkVersion}`)
 console.log(`PWA_VERSION=${pwaVersion}`)
-console.log('D1_LABEL_ROUTING_BEFORE_LEGACY=true')
-console.log('LABEL_MUTATIONS_ATOMIC=true')
-console.log('NATIVE_CAMERA_CAPTURE_BRIDGE=true')
-console.log('REGISTERED_NATIVE_CAMERA_PROXY=true')
-console.log('NATIVE_CAMERA_DIRECT_TASK_CHANNEL=true')
-console.log('ANDROID_CAMERA_RESTORED_RESULT=true')
-console.log('NATIVE_CAMERA_SYNTHETIC_DATATRANSFER=false')
-console.log('WEB_CAMERA_PICKER_FALLBACK=true')
-console.log('EVENT_DRIVEN_TASK_SAVE=true')
-console.log('TASK_SAVE_INTERVAL=false')
-console.log('TASK_SAVE_ON_INPUT=false')
-console.log('TASK_SAVE_ON_CHANGE=false')
-console.log('TASK_SAVE_ON_FOCUSOUT=false')
-console.log('TASK_SAVE_EXPLICIT_BUTTONS=true')
-console.log('TASK_SAVE_DIRTY_CLOSE_ONCE=true')
-console.log('TASK_SAVE_DIRTY_BACKGROUND_ONCE=true')
-console.log('FIXED_AUTOSAVE_SECONDS=false')
-console.log('VISUAL_VIEWPORT_LAYOUT=true')
-console.log('PHONE_TABLET_DESKTOP_OVERLAYS=true')
-console.log('CANONICAL_OPENING_TASK_ONLY=true')
-console.log('TASK_AND_ISSUE_PHOTO_LIMIT=10')
-console.log('MATCHING_ITEMS_GROUP_PHOTO_GUIDANCE=true')
-console.log('STAFF_TASK_SOP_ACCESS=true')
-console.log('OPS_CONTROL_MANAGER_ONLY=true')
-console.log('NORMAL_DEPLOYMENT_RUNS_MIGRATION=false')
-console.log('SAFE_BACKFILL_GUARDS_PRESENT=true')
-console.log('FIXED_APK_VERIFICATION_REQUIRED=true')

@@ -35,7 +35,7 @@ assert(
     < entrySource.indexOf('const realtimeDataResponse = await handleRealtimeDataApi'),
   'batch router must run before the single-mutation realtime data router',
 )
-assert.match(entrySource, /realtime-resilience-v23-device-outbox-batch-sync/)
+assert.match(entrySource, /const WORKER_REVISION = 'realtime-resilience-v\d+-[^']+'/)
 
 assert.match(sheetBackupSource, /Google Sheets is a downstream backup only/)
 assert.match(sheetBackupSource, /retry: \(\) => message\.ack\(\)/)

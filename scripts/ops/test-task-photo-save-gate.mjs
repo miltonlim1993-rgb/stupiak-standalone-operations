@@ -81,7 +81,7 @@ assert(actionSource.includes('response_patches'), 'Worker must support field-lev
 assert(actionSource.includes("mutationError?.code !== 'realtime_version_conflict'"), 'Worker must reconcile one concurrent D1 version conflict')
 
 assert(entrySource.includes('handlePrimaryMediaUpload'), 'canonical Worker entry must intercept Task file uploads before the legacy app handler')
-assert(entrySource.indexOf('handlePrimaryMediaUpload(request') < entrySource.indexOf('const appResponse = await app.fetch'), 'primary Task media upload must run before legacy app fallback')
+assert(entrySource.indexOf('handlePrimaryMediaUpload(request') < entrySource.indexOf('let response = await app.fetch'), 'primary Task media upload must run before legacy app fallback')
 assert(mediaUploadSource.includes("const UPLOAD_PATH = 'r2-primary-no-sheet-audit-v1'"), 'Task media upload must expose the R2-primary path marker')
 assert(mediaUploadSource.includes("const TASK_PHOTO_FOLDER = 'Task Checklist Photos'"), 'R2 acknowledgement bypass must be scoped to Task evidence only')
 assert(mediaUploadSource.includes('request.clone().formData()'), 'Task upload scope must be inspected without consuming the real request body')

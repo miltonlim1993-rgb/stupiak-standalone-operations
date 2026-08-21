@@ -14,4 +14,7 @@ worker/wrangler.production.jsonc
 *.apk
 *.aab
 _patch_backups/
+.deployments/
+.ops-deploy-status/
+.ops-deploy-trigger/
 .DS_Store

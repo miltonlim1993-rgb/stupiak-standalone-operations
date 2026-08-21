@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev --config wrangler.dev.jsonc --port 8787",
-    "deploy": "wrangler deploy",
-    "check": "wrangler deploy --dry-run"
+    "deploy": "node -e \"console.error('Direct worker deploy is disabled. Run npm run ops:deploy:verified from the repository root.'); process.exit(1)\"",
+    "check": "wrangler deploy --dry-run --config wrangler.dev.jsonc"
   },
   "dependencies": {
     "jose": "^6.1.0"

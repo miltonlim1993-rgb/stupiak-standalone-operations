@@ -1,4 +1,0 @@
-curl_status=0
-marker_present=false
-checked_at=2026-08-01T08:12:34Z
-health_response={"ok":true,"service":"chefops-api","storage":{"layout":"master-plus-yearly-operations","masterConfigured":true,"trainingConfigured":true,"operationYears":[2026]}}

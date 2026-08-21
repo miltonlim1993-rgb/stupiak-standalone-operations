@@ -55,13 +55,25 @@ function syncView(row) {
 
 export async function handleRealtimeCloseUpSync(request, env, url) {
   const match = url.pathname.match(/^\/api\/close-up\/([^/]+)\/(sync|sync-status)$/)
-  if (!match || !env.OPS_DB?.prepare) return null
+  if (!match) return null
 
   try {
+    if (!env.OPS_DB?.prepare) {
+      const error = new Error('Close Up D1 database is unavailable')
+      error.status = 503
+      error.code = 'close_up_d1_unavailable'
+      throw error
+    }
+
     const id = decodeURIComponent(match[1])
     const action = match[2]
     const row = await closeUpRow(env, id)
-    if (!row) return null
+    if (!row) {
+      const error = new Error('Close Up record was not found in D1')
+      error.status = 404
+      error.code = 'close_up_not_found'
+      throw error
+    }
 
     const user = await getCurrentUser(request, env)
     const record = parseJson(row.payload_json, {}) || {}
@@ -71,7 +83,12 @@ export async function handleRealtimeCloseUpSync(request, env, url) {
       return json(request, env, syncView(row))
     }
 
-    if (action !== 'sync' || request.method !== 'POST') return null
+    if (action !== 'sync' || request.method !== 'POST') {
+      const error = new Error('Method not allowed')
+      error.status = 405
+      error.code = 'method_not_allowed'
+      throw error
+    }
     if (!row.mirror_mutation_id) {
       const error = new Error('No Sheet backup outbox entry exists for this Close Up record')
       error.status = 409
