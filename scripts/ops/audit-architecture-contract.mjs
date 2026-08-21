@@ -83,7 +83,7 @@ for (const staleCommand of ['deploy:secrets', 'ops:migrate:local-auth', 'ops:act
 // Canonical Worker chain and D1-first routes.
 requireText('worker/src/entry-master-watch.js', "from './entry-local-auth.js'", 'master-watch to local-auth canonical chain')
 requireText('worker/src/entry.js', "import { handleD1Labels } from './realtime-labels-d1.js'", 'D1 Label router import')
-requireBefore('worker/src/entry.js', 'const d1LabelsResponse = await handleD1Labels', 'const appResponse = await app.fetch', 'D1 Label router must execute before legacy app fallback')
+requireBefore('worker/src/entry.js', 'const d1LabelsResponse = await handleD1Labels', 'let response = await app.fetch', 'D1 Label router must execute before legacy app fallback')
 requireText('worker/src/entry.js', "runtimeUrl.searchParams.set('legacy_seed', '0')", 'runtime Sheet hydration must remain disabled')
 requireText('worker/src/entry.js', "import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'", 'D1 Close Up mutation router')
 requireText('worker/src/entry.js', "import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'", 'atomic D1 Stock Count router')
