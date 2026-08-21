@@ -25,6 +25,12 @@ for (const [method, pathname] of [
 ]) assert.equal(owner(method, pathname), 'auth_d1')
 
 for (const [method, pathname] of [
+  ['GET', '/api/notifications'],
+  ['POST', '/api/notifications/push'],
+  ['PATCH', '/api/notifications/notification-1/read'],
+]) assert.equal(owner(method, pathname), 'notifications_d1')
+
+for (const [method, pathname] of [
   ['GET', '/api/entities/User'],
   ['POST', '/api/entities/User'],
   ['PATCH', '/api/entities/User/user-1'],
@@ -57,7 +63,7 @@ for (const entity of [
   assert.equal(owner('POST', `/api/entities/${entity}`), 'realtime_d1')
   assert.equal(owner('PATCH', `/api/entities/${entity}/record-1`), 'realtime_d1')
   assert.equal(owner('DELETE', `/api/entities/${entity}/record-1`), 'realtime_d1')
-  assert.equal(owner('GET', `/api/entities/${entity}`), '', `${entity} reads remain compatibility-only until migration is proven complete`)
+  assert.equal(owner('GET', `/api/entities/${entity}`), '', `${entity} generic reads remain compatibility-only until migration is proven complete`)
 }
 
 // These routes still intentionally use the remaining compatibility runtime.
@@ -65,7 +71,6 @@ for (const entity of [
 assert.equal(owner('POST', '/api/tasks/operational/bootstrap'), '')
 assert.equal(owner('GET', '/api/entities/LabelRule'), '')
 assert.equal(owner('POST', '/api/entities/InventoryCatalog'), '')
-assert.equal(owner('GET', '/api/notifications'), '')
 
 const blockedRequest = new Request('https://ops.invalid/api/stock-counts/batch', { method: 'POST' })
 const blocked = canonicalFallbackBlockedResponse(blockedRequest, new URL(blockedRequest.url))
@@ -83,6 +88,12 @@ assert(
     < entry.indexOf('const appResponse = await app.fetch'),
   'canonical fallback fence must run before the legacy app fetch',
 )
+assert.match(entry, /handleD1Notifications/)
+assert(
+  entry.indexOf('const notificationResponse = await handleD1Notifications')
+    < entry.indexOf('const appResponse = await app.fetch'),
+  'D1 Notification router must run before the legacy app fetch',
+)
 assert.doesNotMatch(entry, /handleD1DirectoryBootstrap/)
 assert.doesNotMatch(entry, /migrate-once/)
 assert.doesNotMatch(entry, /handleRealtimeWorkflowApi/)
@@ -92,6 +103,7 @@ assert.match(entry, /return flushPendingSheetMirrors\(runEnv, 50\)/)
 
 console.log('CANONICAL_ROUTE_FENCE_TEST_OK=true')
 console.log('D1_CANONICAL_ROUTES_CANNOT_FALL_BACK_TO_SHEETS=true')
+console.log('NOTIFICATION_DEDICATED_API_D1_ONLY=true')
 console.log('GENERIC_REALTIME_SHEET_WRITES_BLOCKED=true')
 console.log('GENERIC_REALTIME_COMPAT_READS_REMAIN=true')
 console.log('HYBRID_WORKFLOW_ROUTER_ACTIVE=false')
