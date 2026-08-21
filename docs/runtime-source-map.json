@@ -1,0 +1,133 @@
+{
+  "schema": "stupiaks-ops-runtime-source-map-v1",
+  "status": "p0-0-in-progress",
+  "policy": {
+    "operational_structured_source_of_truth": "cloudflare-d1",
+    "operational_media_source_of_truth": "cloudflare-r2",
+    "realtime_transport": "cloudflare-durable-objects",
+    "async_side_effects": "cloudflare-queues",
+    "google_sheets_operational_role": "async-mirror-reporting-only",
+    "staff_sheet_hydration_allowed": false,
+    "canonical_route_legacy_fallback_allowed": false,
+    "production_deploy_from_this_branch": false
+  },
+  "canonical_routes": [
+    { "method": "POST", "path": "/api/auth/google", "owner": "cloudflare-auth", "store": "d1-directory" },
+    { "method": "POST", "path": "/api/auth/logout", "owner": "cloudflare-auth", "store": "session" },
+    { "method": "GET", "path": "/api/auth/me", "owner": "cloudflare-auth", "store": "d1-directory" },
+    { "method": "PATCH", "path": "/api/auth/me", "owner": "cloudflare-auth", "store": "d1-directory" },
+    { "method": "POST", "path": "/api/users/:id/access", "owner": "d1-directory-api", "store": "d1-directory" },
+    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/User[/...]​", "owner": "d1-directory-api", "store": "d1-directory" },
+    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/Outlet[/...]​", "owner": "d1-directory-api", "store": "d1-directory" },
+
+    { "method": "POST", "path": "/api/tasks/operational/bootstrap", "owner": "realtime-task-bootstrap-d1", "store": "d1+published-app-pack" },
+    { "method": "POST", "path": "/api/tasks/operational/action", "owner": "realtime-task-action-d1", "store": "d1" },
+    { "method": "POST", "path": "/api/realtime/mutations[TaskPhoto]", "owner": "realtime-task-photo", "store": "d1+r2" },
+
+    { "method": "POST", "path": "/api/stock-counts/batch", "owner": "realtime-stock-batch-json", "store": "d1" },
+    { "method": "POST", "path": "/api/attendance/import", "owner": "realtime-attendance-roster", "store": "d1" },
+    { "method": "POST", "path": "/api/close-up/upsert", "owner": "realtime-closeup-upsert-d1", "store": "d1", "side_effect": "async-sales-reporting" },
+    { "method": "POST", "path": "/api/close-up/:id/sync", "owner": "realtime-closeup-sync", "store": "d1", "side_effect": "sales-reporting" },
+    { "method": "GET", "path": "/api/close-up/:id/sync-status", "owner": "realtime-closeup-sync", "store": "d1" },
+
+    { "method": "GET", "path": "/api/notifications", "owner": "realtime-notifications-d1", "store": "d1" },
+    { "method": "POST", "path": "/api/notifications/push", "owner": "realtime-notifications-d1", "store": "d1", "side_effect": "async-sheet-mirror" },
+    { "method": "PATCH", "path": "/api/notifications/:id/read", "owner": "realtime-notifications-d1", "store": "d1", "side_effect": "async-sheet-mirror" },
+
+    { "method": "GET", "path": "/api/labels/catalog", "owner": "realtime-labels-d1", "store": "d1+published-app-pack" },
+    { "method": "POST", "path": "/api/labels/create", "owner": "realtime-labels-d1", "store": "d1" },
+    { "method": "POST", "path": "/api/labels/:id/reprint", "owner": "realtime-labels-d1", "store": "d1" },
+    { "method": "POST", "path": "/api/labels/source/:id/finish", "owner": "realtime-labels-d1", "store": "d1" },
+    { "method": "GET|POST|PUT", "path": "/api/labels/printer-profile", "owner": "realtime-labels-d1", "store": "d1" },
+    { "method": "GET|POST|PATCH|DELETE", "path": "/api/entities/PrinterProfile[/...]​", "owner": "realtime-labels-d1", "store": "d1" },
+
+    { "method": "GET", "path": "/api/entities/{Task,TaskPhoto,UrgentIssue,StockCount,CloseUp,FoodLabel,Attendance,Receipt,TrainingAssignment,TrainingProgress,TrainingAcknowledgement,TrainingAttempt}", "owner": "realtime-generic-entity-read-d1", "store": "d1" },
+    { "method": "POST|PATCH|DELETE", "path": "/api/entities/{REALTIME_ENTITY}[/...]​", "owner": "canonical-route-fence", "store": "blocked-legacy-write", "replacement": "/api/realtime/mutations or dedicated D1 workflow route" },
+
+    { "method": "POST", "path": "/api/realtime/mutations", "owner": "realtime-store", "store": "d1", "side_effect": "d1-outbox->queue->sheet-mirror" },
+    { "method": "GET", "path": "/api/realtime/records", "owner": "realtime-store", "store": "d1", "staff_legacy_seed_forced_off": true },
+    { "method": "POST", "path": "/api/realtime/mutations/batch", "owner": "realtime-mutation-batch", "store": "d1" },
+    { "method": "POST", "path": "/api/realtime/data/sync/retry", "owner": "realtime-store", "store": "d1-outbox" },
+
+    { "method": "POST", "path": "/api/files/upload", "owner": "realtime-media-upload", "store": "r2-primary" },
+    { "method": "GET", "path": "/api/realtime/ticket|/api/realtime/connect|/api/realtime/status", "owner": "realtime", "store": "durable-object+kv-ticket" }
+  ],
+  "async_mirror_and_reporting": [
+    {
+      "name": "sheet_sync_outbox",
+      "authority": "non-canonical",
+      "source": "d1 committed mutation",
+      "destination": "google-sheets",
+      "retry_owner": "d1-outbox",
+      "queue_retry_is_secondary_only_if_d1_retry_state_cannot_be_persisted": true
+    },
+    {
+      "name": "close_up_yearly_sales_reporting",
+      "authority": "reporting-only",
+      "source": "d1 CloseUp record",
+      "destination": "yearly Google Sales report",
+      "retained": true,
+      "reason": "writes _RelationDaily/_CashShiftLog and yearly reporting outputs; not operational source of truth"
+    }
+  ],
+  "master_configuration_compatibility": {
+    "status": "temporarily-retained",
+    "rule": "master/admin configuration may remain Google Sheet/App Pack sourced until a dedicated D1 master migration is accepted; staff operational records may not depend on Sheet reads/writes",
+    "known_entities": [
+      "InventoryCatalog",
+      "OutletStockList",
+      "TaskTemplate",
+      "TaskTemplatePhoto",
+      "PaymentMethod",
+      "PositionMaster",
+      "AppSetting",
+      "MediaRule",
+      "SOP",
+      "SOPStep",
+      "SOPAsset",
+      "TrainingCourse",
+      "TrainingLesson",
+      "TrainingQuiz",
+      "TrainingQuestion",
+      "LabelProduct",
+      "LabelRule"
+    ]
+  },
+  "retired_runtime": [
+    "d1-directory runtime bootstrap/import/hydration",
+    "/api/internal/d1-directory/migrate-once",
+    "realtime-workflows.js canonical entry routing",
+    "index.js scheduled runtime from canonical entry",
+    "generic REALTIME entity Sheet writes",
+    "legacy CloseUp fallback after D1 miss",
+    "legacy Notification dedicated Sheet API routing",
+    "legacy Operational Task bootstrap routing"
+  ],
+  "remaining_audit": [
+    {
+      "area": "index.js",
+      "goal": "classify every remaining reachable route as master/config compatibility, dedicated external integration, or dead runtime; remove dead operational implementations"
+    },
+    {
+      "area": "/api/tasks/ensure",
+      "goal": "prove no live consumer remains, then retire or replace with canonical D1 behavior"
+    },
+    {
+      "area": "master/config generic entity mutations",
+      "goal": "ensure admin-only scope and define migration order; do not mislabel them as operational D1 migration"
+    },
+    {
+      "area": "FeedMe-named Sales registry identifiers",
+      "goal": "decouple OPS outlet identity from POS-specific identifiers while preserving reporting compatibility"
+    }
+  ],
+  "hard_gates": [
+    "No staff read may trigger Google Sheet bootstrap, hydration or import",
+    "No operational write may depend on Google Sheet success",
+    "A committed D1 write remains successful when Sheet mirror/reporting fails",
+    "Already-canonical routes must never silently fall back to index.js Sheet implementations",
+    "Browser/client role checks are UX only; authorization is server-side",
+    "No cleanup branch production deployment",
+    "No D1 migration or backfill in P0-0 cleanup"
+  ]
+}
