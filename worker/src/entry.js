@@ -272,7 +272,10 @@ export default {
       const canonicalFallbackResponse = canonicalFallbackBlockedResponse(request, url)
       if (canonicalFallbackResponse) return withApiHeaders(request, env, canonicalFallbackResponse)
 
-      let response = await app.fetch(request, runEnv, ctx)
+      // Keep this stable boundary marker for architecture tests and route audits.
+      // D1/R2 canonical handlers above must always execute before app.fetch.
+      const appResponse = await app.fetch(request, runEnv, ctx)
+      let response = appResponse
       if (url.pathname === '/api/health' && request.method === 'GET') {
         response = await augmentHealthResponse(response, runEnv)
       }
