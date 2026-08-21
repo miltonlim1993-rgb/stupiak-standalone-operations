@@ -13,6 +13,7 @@ function owner(method, pathname) {
 assert.equal(owner('POST', '/api/close-up/upsert'), 'close_up_d1')
 assert.equal(owner('POST', '/api/close-up/closeup-1/sync'), 'close_up_d1')
 assert.equal(owner('GET', '/api/close-up/closeup-1/sync-status'), 'close_up_d1')
+assert.equal(owner('POST', '/api/tasks/operational/bootstrap'), 'task_bootstrap_d1')
 assert.equal(owner('POST', '/api/tasks/operational/action'), 'task_action_d1')
 assert.equal(owner('POST', '/api/attendance/import'), 'attendance_roster_d1')
 assert.equal(owner('POST', '/api/stock-counts/batch'), 'stock_count_d1')
@@ -68,7 +69,6 @@ for (const entity of [
 
 // These routes still intentionally use the remaining compatibility runtime.
 // Do not fence them until their complete canonical replacements are proven.
-assert.equal(owner('POST', '/api/tasks/operational/bootstrap'), '')
 assert.equal(owner('GET', '/api/entities/LabelRule'), '')
 assert.equal(owner('POST', '/api/entities/InventoryCatalog'), '')
 
@@ -85,15 +85,24 @@ const entry = fs.readFileSync('worker/src/entry.js', 'utf8')
 assert.match(entry, /canonicalFallbackBlockedResponse/)
 assert(
   entry.indexOf('const canonicalFallbackResponse = canonicalFallbackBlockedResponse')
-    < entry.indexOf('const appResponse = await app.fetch'),
+    < entry.indexOf('let response = await app.fetch'),
   'canonical fallback fence must run before the legacy app fetch',
 )
 assert.match(entry, /handleD1Notifications/)
 assert(
   entry.indexOf('const notificationResponse = await handleD1Notifications')
-    < entry.indexOf('const appResponse = await app.fetch'),
+    < entry.indexOf('let response = await app.fetch'),
   'D1 Notification router must run before the legacy app fetch',
 )
+assert.match(entry, /handleD1OperationalBootstrap/)
+assert(
+  entry.indexOf('const taskBootstrapResponse = await handleD1OperationalBootstrap')
+    < entry.indexOf('let response = await app.fetch'),
+  'D1 operational bootstrap must run before the legacy app fetch',
+)
+assert.doesNotMatch(entry, /overlayOperationalBootstrapResponse/)
+assert.doesNotMatch(entry, /applyOperationalTaskPolicyResponse/)
+assert.doesNotMatch(entry, /applyOperationalTaskAudienceResponse/)
 assert.doesNotMatch(entry, /handleD1DirectoryBootstrap/)
 assert.doesNotMatch(entry, /migrate-once/)
 assert.doesNotMatch(entry, /handleRealtimeWorkflowApi/)
@@ -101,8 +110,18 @@ assert.doesNotMatch(entry, /from '\.\/realtime-workflows\.js'/)
 assert.doesNotMatch(entry, /app\.scheduled\(/)
 assert.match(entry, /return flushPendingSheetMirrors\(runEnv, 50\)/)
 
+const taskBootstrap = fs.readFileSync('worker/src/realtime-task-bootstrap-d1.js', 'utf8')
+assert.match(taskBootstrap, /published-pack-d1-only-v1/)
+assert.match(taskBootstrap, /overlayOperationalBootstrapResponse/)
+assert.match(taskBootstrap, /applyOperationalTaskPolicyResponse/)
+assert.match(taskBootstrap, /applyOperationalTaskAudienceResponse/)
+assert.doesNotMatch(taskBootstrap, /from '\.\/sheets\.js'/)
+assert.doesNotMatch(taskBootstrap, /listRecords\(/)
+assert.doesNotMatch(taskBootstrap, /findRecord\(/)
+
 console.log('CANONICAL_ROUTE_FENCE_TEST_OK=true')
 console.log('D1_CANONICAL_ROUTES_CANNOT_FALL_BACK_TO_SHEETS=true')
+console.log('TASK_OPERATIONAL_BOOTSTRAP_D1_ONLY=true')
 console.log('NOTIFICATION_DEDICATED_API_D1_ONLY=true')
 console.log('GENERIC_REALTIME_SHEET_WRITES_BLOCKED=true')
 console.log('GENERIC_REALTIME_COMPAT_READS_REMAIN=true')
