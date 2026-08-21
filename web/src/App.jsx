@@ -14,6 +14,7 @@ import MobileNavigation from '@/components/MobileNavigation'
 import ProtectedRoute from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import AppUpdateBanner from '@/components/AppUpdateBanner'
+import StagingEnvironmentBanner from '@/components/StagingEnvironmentBanner'
 import RealtimeBridge from '@/components/RealtimeBridge'
 import SubmissionLockOverlay from '@/components/SubmissionLockOverlay'
 import NativeMediaCaptureBridge from '@/components/NativeMediaCaptureBridge'
@@ -102,6 +103,7 @@ function AppRoutes() {
 export default function App() {
   return (
     <AuthProvider>
+      <StagingEnvironmentBanner />
       <AppUpdateBanner global />
       <NativeMediaCaptureBridge />
       <RosterTaskAssignmentManager />
