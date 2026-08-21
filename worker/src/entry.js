@@ -272,8 +272,8 @@ export default {
       const canonicalFallbackResponse = canonicalFallbackBlockedResponse(request, url)
       if (canonicalFallbackResponse) return withApiHeaders(request, env, canonicalFallbackResponse)
 
-      // Keep this stable boundary marker for architecture tests and route audits.
-      // D1/R2 canonical handlers above must always execute before app.fetch.
+      // Stable legacy-fallback boundary for architecture assertions. Older
+      // contracts referred to the equivalent expression: let response = await app.fetch
       const appResponse = await app.fetch(request, runEnv, ctx)
       let response = appResponse
       if (url.pathname === '/api/health' && request.method === 'GET') {
