@@ -30,17 +30,20 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout isolated maintenance branch
+      - id: checkout
+        name: Checkout isolated maintenance branch
         uses: actions/checkout@v4
         with:
           ref: emergency/web-maintenance-2026-08-21
 
-      - uses: actions/setup-node@v4
+      - id: setup
+        uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
 
-      - name: Require existing Cloudflare deployment credential
+      - id: credential
+        name: Require existing Cloudflare deployment credential
         run: |
           test -n "$CLOUDFLARE_API_TOKEN" || {
             echo "CLOUDFLARE_API_TOKEN is unavailable; refusing to guess or recreate credentials." >&2
@@ -48,18 +51,22 @@ jobs:
           }
           test -n "$CLOUDFLARE_ACCOUNT_ID"
 
-      - name: Install exact dependencies
+      - id: install
+        name: Install exact dependencies
         run: npm ci
 
-      - name: Validate maintenance source and normal build
+      - id: build
+        name: Validate maintenance source and normal build
         run: |
           node --check worker/src/entry-web-maintenance.js
           npm run build
 
-      - name: Render canonical production bindings
+      - id: render
+        name: Render canonical production bindings
         run: npm run cf:render
 
-      - name: Switch deployed entry to maintenance and force Worker-first assets
+      - id: config
+        name: Switch deployed entry to maintenance and force Worker-first assets
         run: |
           node <<'NODE'
           const fs = require('fs')
@@ -81,10 +88,12 @@ jobs:
           echo "D1_RESOURCE_CREATION_RUN=false"
           echo "PRODUCTION_BUSINESS_DATA_MUTATION=false"
 
-      - name: Deploy maintenance gate only
+      - id: deploy
+        name: Deploy maintenance gate only
         run: npx wrangler deploy --config worker/wrangler.production.jsonc
 
-      - name: Verify web is paused and health remains available
+      - id: verify
+        name: Verify web is paused and health remains available
         run: |
           root_code="$(curl -sS -o /tmp/root.html -w '%{http_code}' "$OPS_PRODUCTION_ORIGIN/")"
           test "$root_code" = "503"
@@ -102,18 +111,30 @@ jobs:
           echo "PRODUCTION_URL_CHANGED=false"
           echo "PRODUCTION_DATABASE_CHANGED=false"
 
-      - name: Record verified maintenance activation
-        if: success()
+      - name: Record maintenance deployment result
+        if: always()
         run: |
-          gh issue create \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "[OPS] WEB_MAINTENANCE_ACTIVE 2026-08-21" \
-            --body $'Verified production maintenance gate is active.\n\n- Root web request: 503\n- Browser API request: 503 web_maintenance\n- /api/health: 200\n- D1 migration: false\n- D1 backfill: false\n- Production business-data mutation: false\n- Deployed source branch: emergency/web-maintenance-2026-08-21\n- Cleanup PR #95 was not deployed.'
+          TITLE="[OPS] WEB_MAINTENANCE_DIAGNOSTIC 2026-08-21 run-${GITHUB_RUN_ID}"
+          BODY=$(cat <<EOF
+          Emergency maintenance workflow diagnostic.
 
-      - name: Record maintenance deployment failure
-        if: failure()
-        run: |
-          gh issue create \
-            --repo "$GITHUB_REPOSITORY" \
-            --title "[OPS] WEB_MAINTENANCE_FAILED 2026-08-21" \
-            --body $'Emergency maintenance deployment failed before verified activation. Do not assume web access is paused. No D1 migration or backfill is part of this workflow.'
+          Run: ${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}
+          Commit: ${GITHUB_SHA}
+
+          checkout=${{ steps.checkout.outcome }}
+          setup=${{ steps.setup.outcome }}
+          credential=${{ steps.credential.outcome }}
+          install=${{ steps.install.outcome }}
+          build=${{ steps.build.outcome }}
+          render=${{ steps.render.outcome }}
+          config=${{ steps.config.outcome }}
+          deploy=${{ steps.deploy.outcome }}
+          verify=${{ steps.verify.outcome }}
+
+          WEB_MAINTENANCE_ACTIVE=${{ steps.verify.outcome == 'success' }}
+          D1_MIGRATION_RUN=false
+          D1_BACKFILL_RUN=false
+          PRODUCTION_BUSINESS_DATA_MUTATION=false
+          EOF
+          )
+          gh issue create --repo "$GITHUB_REPOSITORY" --title "$TITLE" --body "$BODY"
