@@ -19,6 +19,7 @@ const CANONICAL_ONLY_EXACT = new Map([
   ['POST /api/close-up/upsert', 'close_up_d1'],
   ['POST /api/tasks/operational/bootstrap', 'task_bootstrap_d1'],
   ['POST /api/tasks/operational/action', 'task_action_d1'],
+  ['POST /api/tasks/ensure', 'retired_task_ensure'],
   ['POST /api/attendance/import', 'attendance_roster_d1'],
   ['POST /api/stock-counts/batch', 'stock_count_d1'],
   ['POST /api/auth/google', 'auth_d1'],
