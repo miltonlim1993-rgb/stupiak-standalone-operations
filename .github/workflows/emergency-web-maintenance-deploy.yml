@@ -8,10 +8,11 @@ on:
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
   group: emergency-ops-web-maintenance
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   OPS_PRODUCTION_ORIGIN: https://stupiaks-ops.sporkburger19.workers.dev
@@ -27,6 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout isolated maintenance branch
         uses: actions/checkout@v4
@@ -91,8 +93,24 @@ jobs:
 
           health_code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$OPS_PRODUCTION_ORIGIN/api/health")"
           test "$health_code" = "200"
-          grep -Fq 'web-maintenance-2026-08-21-v1' <(curl -sSI "$OPS_PRODUCTION_ORIGIN/api/health")
+          curl -sSI "$OPS_PRODUCTION_ORIGIN/api/health" | grep -Fiq 'x-chefops-maintenance: web-maintenance-2026-08-21-v1'
 
           echo "WEB_MAINTENANCE_ACTIVE=true"
           echo "PRODUCTION_URL_CHANGED=false"
           echo "PRODUCTION_DATABASE_CHANGED=false"
+
+      - name: Record verified maintenance activation
+        if: success()
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "[OPS] WEB_MAINTENANCE_ACTIVE 2026-08-21" \
+            --body $'Verified production maintenance gate is active.\n\n- Root web request: 503\n- Browser API request: 503 web_maintenance\n- /api/health: 200\n- D1 migration: false\n- D1 backfill: false\n- Production business-data mutation: false\n- Deployed source branch: emergency/web-maintenance-2026-08-21\n- Cleanup PR #95 was not deployed.'
+
+      - name: Record maintenance deployment failure
+        if: failure()
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "[OPS] WEB_MAINTENANCE_FAILED 2026-08-21" \
+            --body $'Emergency web-maintenance workflow failed before verified activation. Inspect this workflow run before assuming production web access is paused.\n\nNo D1 migration or backfill is part of this workflow.'
