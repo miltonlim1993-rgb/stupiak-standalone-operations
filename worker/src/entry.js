@@ -37,7 +37,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v25-canonical-route-fence'
+const WORKER_REVISION = 'realtime-resilience-v26-no-legacy-scheduled-runtime'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -293,11 +293,12 @@ export default {
     return env.ASSETS.fetch(request)
   },
 
-  async scheduled(event, env, ctx) {
-    const runEnv = runtimeEnv(env, ctx)
-    const jobs = [flushPendingSheetMirrors(runEnv, 50)]
-    if (typeof app.scheduled === 'function') jobs.push(app.scheduled(event, runEnv, ctx))
-    return Promise.all(jobs)
+  async scheduled(_event, env, _ctx) {
+    const runEnv = runtimeEnv(env, _ctx)
+    // D1 outbox owns all Google Sheet backup/report retries. Master-data pack
+    // publication is handled by entry-master-watch.js. Never call index.js's
+    // legacy scheduled runtime, which previously duplicated both jobs.
+    return flushPendingSheetMirrors(runEnv, 50)
   },
 
   async queue(batch, env, ctx) {
