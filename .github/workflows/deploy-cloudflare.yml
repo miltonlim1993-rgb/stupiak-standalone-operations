@@ -1,25 +1,17 @@
-name: Validate and deploy canonical OPS Worker
+name: Emergency deploy OPS web maintenance gate
 
 on:
-  workflow_dispatch:
   push:
     branches: [main]
     paths:
-      - 'web/**'
-      - 'worker/**'
-      - 'scripts/ops/**'
-      - 'scripts/deploy-realtime-ops-now.sh'
-      - 'scripts/render-wrangler-production.mjs'
-      - 'package.json'
-      - 'package-lock.json'
       - '.github/workflows/deploy-cloudflare.yml'
-      - '.github/workflows/ops-architecture-contract.yml'
 
 permissions:
   contents: read
+  issues: write
 
 concurrency:
-  group: cloudflare-production-${{ github.event_name }}
+  group: cloudflare-production-emergency-maintenance
   cancel-in-progress: true
 
 env:
@@ -32,63 +24,96 @@ env:
   VITE_GOOGLE_LOGIN_CLIENT_ID: ${{ secrets.VITE_GOOGLE_LOGIN_CLIENT_ID }}
 
 jobs:
-  validate-and-optional-deploy:
+  deploy-maintenance-gate:
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout isolated maintenance branch
+        uses: actions/checkout@v4
+        with:
+          ref: emergency/web-maintenance-2026-08-21
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
+
+      - name: Require existing Cloudflare deployment credential
+        run: |
+          test -n "$CLOUDFLARE_API_TOKEN" || {
+            echo "CLOUDFLARE_API_TOKEN is unavailable; refusing to guess or recreate credentials." >&2
+            exit 1
+          }
+          test -n "$CLOUDFLARE_ACCOUNT_ID"
+
       - name: Install exact dependencies
         run: npm ci
-      - name: Audit canonical OPS architecture contract
-        run: npm run ops:audit:contract
-      - name: Build Web and Worker dry-run
-        run: npm run build
+
+      - name: Validate maintenance source and normal build
+        run: |
+          node --check worker/src/entry-web-maintenance.js
+          npm run build
+
       - name: Render canonical production bindings
         run: npm run cf:render
-      - name: Validate rendered resources
+
+      - name: Switch deployed entry to maintenance and force Worker-first assets
         run: |
-          grep -Fq '"main": "src/entry-master-watch.js"' worker/wrangler.production.jsonc
+          node <<'NODE'
+          const fs = require('fs')
+          const path = 'worker/wrangler.production.jsonc'
+          const config = JSON.parse(fs.readFileSync(path, 'utf8'))
+          config.main = 'src/entry-web-maintenance.js'
+          config.assets = config.assets || {}
+          config.assets.run_worker_first = true
+          fs.writeFileSync(path, JSON.stringify(config, null, 2) + '\n')
+          NODE
+          grep -Fq '"main": "src/entry-web-maintenance.js"' worker/wrangler.production.jsonc
+          grep -Fq '"run_worker_first": true' worker/wrangler.production.jsonc
           grep -Fq '"database_name": "stupiaks-ops-realtime"' worker/wrangler.production.jsonc
           grep -Fq '"database_id": "080c13d7-e2f5-4c01-a1ca-aa00094d6fc0"' worker/wrangler.production.jsonc
           grep -Fq '"queue": "stupiaks-ops-sheet-sync"' worker/wrangler.production.jsonc
           grep -Fq '"bucket_name": "stupiaks-ops-media"' worker/wrangler.production.jsonc
-          grep -Fq '"*/2 * * * *"' worker/wrangler.production.jsonc
-      - name: Record push validation result
-        if: github.event_name == 'push'
-        run: |
-          echo "PUSH_VALIDATION_COMPLETE=true"
-          echo "PRODUCTION_DEPLOYMENT_RUN=false"
-          echo "A normal main push does not deploy production. Use an explicit workflow dispatch or the trusted local Wrangler command."
-      - name: Require Cloudflare credentials for explicit deployment
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          test -n "$CLOUDFLARE_API_TOKEN" || {
-            echo "Manual deployment requested, but GitHub Actions cannot read CLOUDFLARE_API_TOKEN." >&2
-            echo "Do not recreate a token automatically. Use the trusted local Wrangler deployment or configure the repository Actions secret." >&2
-            exit 1
-          }
-          test -n "$CLOUDFLARE_ACCOUNT_ID"
-      - name: Deploy Worker and Web/PWA assets without migrations
-        if: github.event_name == 'workflow_dispatch'
-        run: |
           echo "D1_MIGRATION_RUN=false"
           echo "D1_BACKFILL_RUN=false"
           echo "D1_RESOURCE_CREATION_RUN=false"
-          npx wrangler deploy --config worker/wrangler.production.jsonc
-      - name: Verify canonical production Worker, PWA and fixed signed APK
-        if: github.event_name == 'workflow_dispatch'
-        env:
-          OPS_VERIFY_OUTPUT_DIR: ${{ runner.temp }}/ops-production-verification
-          OPS_APK_OUTPUT: ${{ runner.temp }}/Stupiaks-Ops-latest.apk
-        run: npm run ops:verify:production
-      - uses: actions/upload-artifact@v4
-        if: github.event_name == 'workflow_dispatch' && always()
-        with:
-          name: ops-production-verification
-          path: ${{ runner.temp }}/ops-production-verification/
-          if-no-files-found: warn
+          echo "PRODUCTION_BUSINESS_DATA_MUTATION=false"
+
+      - name: Deploy maintenance gate only
+        run: npx wrangler deploy --config worker/wrangler.production.jsonc
+
+      - name: Verify web is paused and health remains available
+        run: |
+          root_code="$(curl -sS -o /tmp/root.html -w '%{http_code}' "$OPS_PRODUCTION_ORIGIN/")"
+          test "$root_code" = "503"
+          grep -Fq 'Stupiak OPS web access is paused' /tmp/root.html
+
+          api_code="$(curl -sS -o /tmp/api.json -w '%{http_code}' "$OPS_PRODUCTION_ORIGIN/api/auth/me")"
+          test "$api_code" = "503"
+          grep -Fq 'web_maintenance' /tmp/api.json
+
+          health_code="$(curl -sS -o /tmp/health.json -w '%{http_code}' "$OPS_PRODUCTION_ORIGIN/api/health")"
+          test "$health_code" = "200"
+          curl -sSI "$OPS_PRODUCTION_ORIGIN/api/health" | grep -Fiq 'x-chefops-maintenance: web-maintenance-2026-08-21-v1'
+
+          echo "WEB_MAINTENANCE_ACTIVE=true"
+          echo "PRODUCTION_URL_CHANGED=false"
+          echo "PRODUCTION_DATABASE_CHANGED=false"
+
+      - name: Record verified maintenance activation
+        if: success()
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "[OPS] WEB_MAINTENANCE_ACTIVE 2026-08-21" \
+            --body $'Verified production maintenance gate is active.\n\n- Root web request: 503\n- Browser API request: 503 web_maintenance\n- /api/health: 200\n- D1 migration: false\n- D1 backfill: false\n- Production business-data mutation: false\n- Deployed source branch: emergency/web-maintenance-2026-08-21\n- Cleanup PR #95 was not deployed.'
+
+      - name: Record maintenance deployment failure
+        if: failure()
+        run: |
+          gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "[OPS] WEB_MAINTENANCE_FAILED 2026-08-21" \
+            --body $'Emergency maintenance deployment failed before verified activation. Do not assume web access is paused. No D1 migration or backfill is part of this workflow.'
