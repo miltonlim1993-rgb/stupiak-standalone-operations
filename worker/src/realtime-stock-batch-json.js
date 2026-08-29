@@ -2,6 +2,12 @@ import { getAppPackModule, getPublishedAppPack } from './app-pack.js'
 import { getCurrentUser } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
 import { assertAssignedOutletAccess, assignedOutletIds } from './permissions.js'
+import {
+  createAcceptedObservation,
+  normalizeObservedQuantity,
+  stockBatchFingerprint,
+  stockLineMutationId,
+} from './stock-count-observation.js'
 
 function now() {
   return new Date().toISOString()
@@ -49,14 +55,6 @@ function safeKey(value) {
     .slice(0, 72)
 }
 
-async function digest(value) {
-  const bytes = new TextEncoder().encode(String(value || ''))
-  const hash = await crypto.subtle.digest('SHA-256', bytes)
-  return [...new Uint8Array(hash)]
-    .map((byte) => byte.toString(16).padStart(2, '0'))
-    .join('')
-}
-
 async function publishedStockList(env, outletId) {
   const manifest = await getPublishedAppPack(env, outletId)
   const inventoryInfo = manifest?.modules?.inventory
@@ -77,11 +75,17 @@ async function publishedStockList(env, outletId) {
   return rows
 }
 
-async function replayResult(db, mutationId) {
+async function replayResult(db, mutationId, requestFingerprint = '') {
   const row = await db.prepare(
     'SELECT result_json FROM ops_mutations WHERE mutation_id = ? LIMIT 1',
   ).bind(mutationId).first()
   const result = parseJson(row?.result_json, null)
+  if (result && requestFingerprint && result.request_fingerprint !== requestFingerprint) {
+    const error = new Error('Mutation identity was already used for a different stock-count request')
+    error.status = 409
+    error.code = 'stock_count_idempotency_conflict'
+    throw error
+  }
   return result ? { ...result, replayed: true } : null
 }
 
@@ -335,17 +339,39 @@ async function saveAtomicBatch(request, env) {
 
   const normalizedForId = rawItems.map((item) => ({
     stock_list_id: String(item.stock_list_id || ''),
-    actual_qty: Number(item.actual_qty),
+    actual_qty: normalizeObservedQuantity(item.actual_qty),
   }))
+  const seenStockListIds = new Set()
+  for (const item of normalizedForId) {
+    if (!item.stock_list_id || seenStockListIds.has(item.stock_list_id)) {
+      const error = new Error('Each stock_list_id must be present exactly once in a stock-count batch')
+      error.status = 400
+      error.code = 'duplicate_stock_count_line'
+      throw error
+    }
+    seenStockListIds.add(item.stock_list_id)
+  }
+  const requestFingerprint = await stockBatchFingerprint({
+    outletId,
+    countDate,
+    items: normalizedForId,
+  })
   const suppliedMutationId = String(
     body.mutation_id || request.headers.get('X-ChefOps-Mutation-Id') || '',
   ).trim()
+  if (suppliedMutationId
+      && (suppliedMutationId.length > 128 || !/^[\x21-\x7e]+$/u.test(suppliedMutationId))) {
+    const error = new Error('mutation_id must contain 1-128 visible ASCII characters')
+    error.status = 400
+    error.code = 'invalid_mutation_id'
+    throw error
+  }
   const baseMutationId = (
     suppliedMutationId
-    || `stock-batch:${await digest(JSON.stringify({ outletId, countDate, items: normalizedForId }))}`
-  ).slice(0, 150)
+    || `stock-batch:${requestFingerprint}`
+  )
 
-  const replay = await replayResult(env.OPS_DB, baseMutationId)
+  const replay = await replayResult(env.OPS_DB, baseMutationId, requestFingerprint)
   if (replay) return replay
 
   const [stockListRows, d1Query] = await Promise.all([
@@ -384,9 +410,20 @@ async function saveAtomicBatch(request, env) {
   const commits = []
   for (const input of rawItems) {
     const stockList = stockListById.get(String(input.stock_list_id || ''))
-    if (!stockList) continue
-    const actualQty = Number(input.actual_qty)
-    if (!Number.isFinite(actualQty) || actualQty < 0) continue
+    if (!stockList) {
+      const error = new Error('Stock-count line is not in the current published outlet stock list')
+      error.status = 409
+      error.code = 'stock_count_catalog_conflict'
+      throw error
+    }
+    const canonicalQuantity = normalizeObservedQuantity(input.actual_qty)
+    const actualQty = Number(canonicalQuantity)
+    if (!String(stockList.item_id || '').trim() || !String(stockList.count_uom || '').trim()) {
+      const error = new Error('Published stock-count line lacks item or count-UOM causal identity')
+      error.status = 409
+      error.code = 'stock_count_catalog_identity_incomplete'
+      throw error
+    }
 
     const itemAliases = aliases(stockList)
     const existing = itemAliases.map((alias) => sameDateByAlias.get(alias)).find(Boolean) || null
@@ -431,7 +468,7 @@ async function saveAtomicBatch(request, env) {
     }
     delete record.__realtime
 
-    const mutationId = `${baseMutationId}:${safeKey(stockList.stock_list_id)}`.slice(0, 160)
+    const mutationId = await stockLineMutationId(baseMutationId, stockList.stock_list_id)
     const message = {
       mutation_id: mutationId,
       entity: 'StockCount',
@@ -449,6 +486,8 @@ async function saveAtomicBatch(request, env) {
       operation,
       version,
       record,
+      stockList,
+      canonicalQuantity,
       message,
       createdAt: existing?.__realtime?.created_at || existing?.created_date || timestamp,
       createdBy: existing?.__realtime?.created_by || existing?.created_by || user.email,
@@ -456,6 +495,8 @@ async function saveAtomicBatch(request, env) {
         stock_list_id: stockList.stock_list_id,
         item_id: stockList.item_id,
         stock_count_id: id,
+        source_count_version: version,
+        source_line_mutation_id: mutationId,
         item_name: stockList.item_name,
         actual_qty: actualQty,
         expected_qty: expectedQty,
@@ -475,6 +516,18 @@ async function saveAtomicBatch(request, env) {
     throw error
   }
 
+  const acceptedObservations = []
+  for (const commit of commits) {
+    const observation = await createAcceptedObservation({
+      secret: env.STATVARA_STOCK_COUNT_BRIDGE_SECRET,
+      batchMutationId: baseMutationId,
+      outletId,
+      commit,
+      user,
+    })
+    if (observation) acceptedObservations.push(observation)
+  }
+
   const responseBody = {
     ok: true,
     replayed: false,
@@ -489,6 +542,11 @@ async function saveAtomicBatch(request, env) {
     committed_at: timestamp,
     sync_status: 'pending',
     source: 'cloudflare-package+d1',
+    request_fingerprint: requestFingerprint,
+    accepted_observations: acceptedObservations,
+    reconciliation_bridge_status: acceptedObservations.length === commits.length
+      ? 'signed'
+      : 'unavailable',
   }
 
   const requestedAt = String(body.requested_at || timestamp)
@@ -509,7 +567,7 @@ async function saveAtomicBatch(request, env) {
   try {
     await persistAtomicBatch(env, rows)
   } catch (error) {
-    const concurrentReplay = await replayResult(env.OPS_DB, baseMutationId)
+    const concurrentReplay = await replayResult(env.OPS_DB, baseMutationId, requestFingerprint)
     if (concurrentReplay) return concurrentReplay
     throw error
   }
