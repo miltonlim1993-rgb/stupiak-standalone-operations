@@ -16,6 +16,8 @@ export type BatchStatus =
   | 'pending_print'
   | 'cancelled';
 
+export type SourceStage = 'unclassified' | 'first_hand' | 'second_hand' | 'third_hand';
+
 export interface ProductMaster {
   productId: string;
   enabled: boolean;
@@ -51,6 +53,16 @@ export interface ExpiryRule {
   sourceProductName?: string;
   outputProductId?: string;
   outputProductName?: string;
+  /** Web v26 name: each printed child label consumes this many source slots. */
+  consumePerLabel?: number;
+  sourceUsageMode?: 'tracked' | 'terminal' | 'manual' | string;
+  sourceCapacity?: number;
+  sourceUnit?: string;
+  sourceTier?: number;
+  sourceStage?: SourceStage;
+  requiredSourceTier?: number;
+  fifoReprintLocked?: boolean;
+  /** Backward-compatible alias used by the first V2 draft. */
   sourceConsumptionQuantity?: number;
 }
 
@@ -64,12 +76,23 @@ export interface LabelBatch {
   storageCondition: string;
   madeAt: string;
   expiryAt: string;
+  /** Source capacity. For tier 1/2 this is the number of labels initially printed. */
   initialQuantity: number;
+  /** Remaining source capacity. */
   remainingQuantity: number;
+  /** Source-capacity unit, normally "label" for parity with web v26. */
   quantityUnit: string;
+  /** Optional business/content quantity printed on the label, separate from source capacity. */
+  contentQuantity?: number;
+  contentQuantityUnit?: string;
+  /** Number of identical physical labels created by this batch record. */
+  printQuantity?: number;
+  sourceTier?: number;
+  sourceStage?: SourceStage;
   sourceBatchId?: string;
   sourceAction?: LabelAction;
   sourceExpiryAt?: string;
+  sourceConsumedQuantity?: number;
   status: BatchStatus;
   staffName?: string;
   createdAt: string;
@@ -84,6 +107,8 @@ export interface SourceEligibilityResult {
     | 'WRONG_OUTLET'
     | 'WRONG_PRODUCT'
     | 'ACTION_NOT_ALLOWED'
+    | 'WRONG_TIER'
+    | 'SOURCE_CHAIN_INCOMPLETE'
     | 'EXPIRED'
     | 'EXHAUSTED'
     | 'NOT_FIFO'
@@ -97,7 +122,10 @@ export interface DraftLabelRequest {
   staffName: string;
   product: ProductMaster;
   rule: ExpiryRule;
+  /** Business quantity/weight requested by ExpiryRules, not number of printed labels. */
   quantity: number;
+  /** Number of physical labels to create. Web v26 calls this print_quantity. */
+  printQuantity?: number;
   sourceBatch?: LabelBatch;
   madeAt: string;
   manualExpiryAt?: string;
