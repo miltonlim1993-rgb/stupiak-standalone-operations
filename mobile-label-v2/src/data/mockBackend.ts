@@ -1,15 +1,15 @@
 import { consumeSourceLocally } from '../domain/engine';
+import { restoreSourceQuantity, ReservedBatch } from '../domain/rollback';
 import { DraftLabel, ExpiryRule, LabelBatch, ProductMaster } from '../domain/types';
 import { LabelBackend } from './backend';
 
 const nowIso = () => new Date().toISOString();
-
 const barcodeFor = (batchId: string) => `LBL:${batchId}`;
 
 export class MockLabelBackend implements LabelBackend {
   private products: ProductMaster[];
   private rules: ExpiryRule[];
-  private batches: LabelBatch[];
+  private batches: ReservedBatch[];
   private counter = 1;
 
   constructor(seed?: {
@@ -66,7 +66,7 @@ export class MockLabelBackend implements LabelBackend {
     const batchId = `V2-${outletCode}-${dateKey}-${running}`;
     const quantity = request.rule.requiresQuantity ? request.quantity : 1;
 
-    const batch: LabelBatch = {
+    const batch: ReservedBatch = {
       batchId,
       barcodeValue: barcodeFor(batchId),
       outletName: request.outletName,
@@ -85,6 +85,7 @@ export class MockLabelBackend implements LabelBackend {
       sourceBatchId: request.sourceBatch?.batchId,
       sourceAction: request.sourceBatch?.action,
       sourceExpiryAt: request.sourceBatch?.expiryAt,
+      sourceConsumedQuantity: draft.sourceConsumeQuantity,
       status: 'pending_print',
       staffName: request.staffName,
       createdAt: nowIso(),
@@ -116,16 +117,10 @@ export class MockLabelBackend implements LabelBackend {
         (item) => item.batchId === pending.sourceBatchId,
       );
       if (sourceIndex >= 0) {
-        const source = this.batches[sourceIndex];
-        const restored = Math.min(
-          source.initialQuantity,
-          source.remainingQuantity + 1,
+        this.batches[sourceIndex] = restoreSourceQuantity(
+          this.batches[sourceIndex],
+          pending,
         );
-        this.batches[sourceIndex] = {
-          ...source,
-          remainingQuantity: restored,
-          status: restored > 0 ? 'active' : source.status,
-        };
       }
     }
 
