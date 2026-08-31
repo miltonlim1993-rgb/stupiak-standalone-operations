@@ -14,6 +14,7 @@ export interface ExecutePrintInput {
   printer: LabelPrinter;
   tspl: TsplBuilder;
   printerTarget: PrinterTarget;
+  /** Web v26 print_quantity: physical label count and tracked source capacity. */
   copies?: number;
   now?: Date;
 }
@@ -37,8 +38,16 @@ export async function executePrintWorkflow(
   input: ExecutePrintInput,
 ): Promise<ExecutePrintResult> {
   const now = input.now || new Date();
-  const copies = Math.max(1, Number(input.copies || 1));
-  const draft = createDraftLabel(input.request, input.allBatches, now);
+  const copies = Number(input.copies || input.request.printQuantity || 1);
+  if (!Number.isInteger(copies) || copies < 1 || copies > 100) {
+    throw new Error('Print quantity must be a whole number from 1 to 100.');
+  }
+
+  const request: DraftLabelRequest = {
+    ...input.request,
+    printQuantity: copies,
+  };
+  const draft = createDraftLabel(request, input.allBatches, now);
   const pending = await input.backend.reserveDraft(draft);
 
   try {
