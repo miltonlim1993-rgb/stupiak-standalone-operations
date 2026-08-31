@@ -4,6 +4,7 @@ import {
   eligibleSources,
   validateSource,
 } from './engine';
+import { applyWebV26Hierarchy } from './policy';
 import { ExpiryRule, LabelBatch, ProductMaster } from './types';
 
 const product: ProductMaster = {
@@ -12,7 +13,7 @@ const product: ProductMaster = {
   productName: 'Chicken Popcorn L',
 };
 
-const openRule: ExpiryRule = {
+const rawOpenRule: ExpiryRule = {
   id: 'chicken-popcorn-l-open-chiller',
   productId: product.productId,
   productName: product.productName,
@@ -30,8 +31,8 @@ const openRule: ExpiryRule = {
   sourceProductName: product.productName,
   outputProductId: product.productId,
   outputProductName: product.productName,
-  sourceConsumptionQuantity: 1,
 };
+const openRule = applyWebV26Hierarchy(rawOpenRule);
 
 const source = (overrides: Partial<LabelBatch> = {}): LabelBatch => ({
   batchId: 'SP-RRKCH-20260831-0001',
@@ -45,14 +46,17 @@ const source = (overrides: Partial<LabelBatch> = {}): LabelBatch => ({
   expiryAt: '2026-09-05T01:00:00.000Z',
   initialQuantity: 40,
   remainingQuantity: 40,
-  quantityUnit: 'pack',
+  quantityUnit: 'label',
+  printQuantity: 40,
+  sourceTier: 1,
+  sourceStage: 'first_hand',
   status: 'active',
   createdAt: '2026-08-31T01:00:00.000Z',
   ...overrides,
 });
 
 describe('SP Label Printing V2 source engine', () => {
-  it('enforces Prepare 40 -> only 40 one-unit Open consumptions', () => {
+  it('enforces Prepare 40 printed labels -> only 40 one-label Open consumptions', () => {
     let batch = source();
     for (let i = 0; i < 40; i += 1) {
       const draft = createDraftLabel(
@@ -62,6 +66,7 @@ describe('SP Label Printing V2 source engine', () => {
           product,
           rule: openRule,
           quantity: 1,
+          printQuantity: 1,
           sourceBatch: batch,
           madeAt: '2026-08-31T02:00:00.000Z',
         },
@@ -82,6 +87,7 @@ describe('SP Label Printing V2 source engine', () => {
           product,
           rule: openRule,
           quantity: 1,
+          printQuantity: 1,
           sourceBatch: batch,
           madeAt: '2026-08-31T02:00:00.000Z',
         },
@@ -89,6 +95,26 @@ describe('SP Label Printing V2 source engine', () => {
         new Date('2026-08-31T02:00:00.000Z'),
       ),
     ).toThrow(/no longer active|no remaining quantity/i);
+  });
+
+  it('deducts print_quantity x consumePerLabel exactly like web v26', () => {
+    const batch = source();
+    const draft = createDraftLabel(
+      {
+        outletName: 'RR-KCH',
+        staffName: 'Tester',
+        product,
+        rule: openRule,
+        quantity: 1,
+        printQuantity: 5,
+        sourceBatch: batch,
+        madeAt: '2026-08-31T02:00:00.000Z',
+      },
+      [batch],
+      new Date('2026-08-31T02:00:00.000Z'),
+    );
+    expect(draft.sourceConsumeQuantity).toBe(5);
+    expect(consumeSourceLocally(batch, draft.sourceConsumeQuantity).remainingQuantity).toBe(35);
   });
 
   it('forces the oldest eligible source first', () => {
@@ -118,8 +144,14 @@ describe('SP Label Printing V2 source engine', () => {
     expect(draft.expiryAt).toBe('2026-08-31T02:30:00.000Z');
   });
 
-  it('blocks wrong source action', () => {
-    const batch = source({ action: 'Freeze' });
-    expect(validateSource(batch, [batch], openRule, 'RR-KCH').reason).toBe('ACTION_NOT_ALLOWED');
+  it('allows all first-hand web-v26 actions for Open and blocks a non-first-hand source', () => {
+    expect(validateSource(source({ action: 'Freeze' }), [source({ action: 'Freeze' })], openRule, 'RR-KCH').ok).toBe(true);
+    expect(validateSource(source({ action: 'Cooked', sourceTier: 3 }), [source({ action: 'Cooked', sourceTier: 3 })], openRule, 'RR-KCH').reason).toBe('WRONG_TIER');
+  });
+
+  it('requires a linked second-hand Open source for third-hand Refill/Cooked', () => {
+    const refillRule = applyWebV26Hierarchy({ ...rawOpenRule, id: 'refill', action: 'Refill' });
+    const unlinkedOpen = source({ action: 'Open', sourceTier: 2, sourceStage: 'second_hand' });
+    expect(validateSource(unlinkedOpen, [unlinkedOpen], refillRule, 'RR-KCH').reason).toBe('SOURCE_CHAIN_INCOMPLETE');
   });
 });
