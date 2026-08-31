@@ -1,3 +1,4 @@
+import { normalizeCatalogRules } from '../domain/policy';
 import { ExpiryRule, LabelBatch, ProductMaster } from '../domain/types';
 
 export const demoProducts: ProductMaster[] = [
@@ -10,7 +11,7 @@ export const demoProducts: ProductMaster[] = [
   },
 ];
 
-export const demoRules: ExpiryRule[] = [
+const rawDemoRules: ExpiryRule[] = [
   {
     id: 'chicken-popcorn-l-prepare-chiller',
     productId: 'chicken-popcorn-l',
@@ -47,7 +48,6 @@ export const demoRules: ExpiryRule[] = [
     sourceProductName: 'Chicken Popcorn L',
     outputProductId: 'chicken-popcorn-l',
     outputProductName: 'Chicken Popcorn L',
-    sourceConsumptionQuantity: 1,
   },
   {
     id: 'chicken-popcorn-l-refill-chiller',
@@ -67,9 +67,10 @@ export const demoRules: ExpiryRule[] = [
     sourceProductName: 'Chicken Popcorn L',
     outputProductId: 'chicken-popcorn-l',
     outputProductName: 'Chicken Popcorn L',
-    sourceConsumptionQuantity: 1,
   },
 ];
+
+export const demoRules: ExpiryRule[] = normalizeCatalogRules(rawDemoRules);
 
 export const demoBatches: LabelBatch[] = [
   {
@@ -84,7 +85,12 @@ export const demoBatches: LabelBatch[] = [
     expiryAt: '2026-09-05T01:00:00.000Z',
     initialQuantity: 40,
     remainingQuantity: 40,
-    quantityUnit: 'pack',
+    quantityUnit: 'label',
+    contentQuantity: 1,
+    contentQuantityUnit: 'pack',
+    printQuantity: 40,
+    sourceTier: 1,
+    sourceStage: 'first_hand',
     status: 'active',
     staffName: 'Demo',
     createdAt: '2026-08-31T01:00:00.000Z',
