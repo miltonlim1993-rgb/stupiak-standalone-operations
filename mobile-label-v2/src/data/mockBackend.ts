@@ -1,4 +1,5 @@
 import { consumeSourceLocally } from '../domain/engine';
+import { labelSourceStage, labelSourceTier } from '../domain/policy';
 import { restoreSourceQuantity, ReservedBatch } from '../domain/rollback';
 import { DraftLabel, ExpiryRule, LabelBatch, ProductMaster } from '../domain/types';
 import { LabelBackend } from './backend';
@@ -64,7 +65,10 @@ export class MockLabelBackend implements LabelBackend {
     const outletCode = request.outletName.toUpperCase().replace(/[^A-Z0-9]/g, '') || 'OUTLET';
     const running = String(this.counter++).padStart(4, '0');
     const batchId = `V2-${outletCode}-${dateKey}-${running}`;
-    const quantity = request.rule.requiresQuantity ? request.quantity : 1;
+    const printQuantity = Math.max(1, Number(request.printQuantity || 1));
+    const tier = Number(request.rule.sourceTier || 0) || labelSourceTier(request.rule.action);
+    const tracked = tier === 1 || tier === 2 || request.rule.sourceUsageMode === 'tracked';
+    const sourceCapacity = tracked ? printQuantity : 0;
 
     const batch: ReservedBatch = {
       batchId,
@@ -79,9 +83,14 @@ export class MockLabelBackend implements LabelBackend {
       storageCondition: request.rule.storageCondition,
       madeAt: request.madeAt,
       expiryAt: draft.expiryAt,
-      initialQuantity: quantity,
-      remainingQuantity: quantity,
-      quantityUnit: request.rule.quantityUnit || 'unit',
+      initialQuantity: sourceCapacity,
+      remainingQuantity: sourceCapacity,
+      quantityUnit: request.rule.sourceUnit || 'label',
+      contentQuantity: request.rule.requiresQuantity ? request.quantity : undefined,
+      contentQuantityUnit: request.rule.requiresQuantity ? request.rule.quantityUnit || '' : undefined,
+      printQuantity,
+      sourceTier: tier,
+      sourceStage: labelSourceStage(tier),
       sourceBatchId: request.sourceBatch?.batchId,
       sourceAction: request.sourceBatch?.action,
       sourceExpiryAt: request.sourceBatch?.expiryAt,
