@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   build-v2-beta:
-    name: Build isolated V2 debug APK
+    name: Build isolated V2 installable APK
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -49,16 +49,24 @@ jobs:
           CI: '1'
         run: npx expo prebuild --platform android --clean
 
-      - name: Build debug APK
+      - name: Verify beta package isolation
+        run: |
+          grep -R "com.stupiak.splabelprinting.v2beta" android/app/build.gradle android/app/src/main/AndroidManifest.xml android/app/src/main/java || true
+          if grep -R "applicationId ['\"]com.sp.labelprinting['\"]" android/app/build.gradle; then
+            echo "Production package id detected in V2 build; refusing to build."
+            exit 1
+          fi
+
+      - name: Build standalone beta APK
         run: |
           chmod +x android/gradlew
           cd android
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease
 
       - name: Upload V2 APK artifact
         uses: actions/upload-artifact@v4
         with:
           name: sp-label-printing-v2-beta-apk
-          path: mobile-label-v2/android/app/build/outputs/apk/debug/app-debug.apk
+          path: mobile-label-v2/android/app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 14
