@@ -6,9 +6,12 @@
     "baseUrl": "."
   },
   "include": [
-    "App.tsx",
+    "AppV2.tsx",
     "index.ts",
     "src/**/*.ts",
     "src/**/*.tsx"
+  ],
+  "exclude": [
+    "App.tsx"
   ]
 }
