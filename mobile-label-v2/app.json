@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "SP Label Printing V2",
+    "slug": "sp-label-printing-v2-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "scheme": "splabelv2",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow SP Label Printing V2 to scan food label barcodes."
+        }
+      ],
+      "expo-router"
+    ],
+    "android": {
+      "package": "com.stupiak.splabelprinting.v2beta",
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.CAMERA",
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.ACCESS_WIFI_STATE"
+      ]
+    },
+    "extra": {
+      "backendMode": "mock",
+      "productionGasTouched": false
+    }
+  }
+}
