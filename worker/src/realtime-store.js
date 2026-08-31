@@ -219,6 +219,17 @@ async function applyMutation(env, user, body) {
   const existing = await findRealtimeRecord(db, entity, entityId)
   const existingRecord = existing ? (parseJson(existing.payload_json, {}) || {}) : null
 
+  if (entity === 'CloseUp' && (
+    String(body.payload?.shift_id || existingRecord?.shift_id || '').toLowerCase() === 'night'
+    || body.payload?.authority_contract
+    || existingRecord?.authority_contract
+  )) {
+    const error = new Error('Night closing mutations must use the authoritative Cash Close API')
+    error.status = 409
+    error.code = 'cash_close_v1_required'
+    throw error
+  }
+
   if (operation === 'create' && existing && !existing.deleted_at) {
     const error = new Error(`${entity} record already exists`)
     error.status = 409

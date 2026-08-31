@@ -68,7 +68,7 @@ assert.match(taskServerSource, /expected_version: task\.__realtime\.version/)
 assert.match(taskServerSource, /mutationError\?\.code !== 'realtime_version_conflict'/)
 
 assert.match(stockServerSource, /body\.mutation_id \|\| request\.headers\.get\('X-ChefOps-Mutation-Id'\)/)
-assert.match(stockServerSource, /const replay = await replayResult\(env\.OPS_DB, baseMutationId\)/)
+assert.match(stockServerSource, /const replay = await replayResult\(env\.OPS_DB, baseMutationId, requestFingerprint\)/)
 assert.match(stockServerSource, /await persistAtomicBatch\(env, rows\)/)
 assert(
   stockServerSource.indexOf('await persistAtomicBatch(env, rows)') < stockServerSource.indexOf('const sideEffects = Promise.all'),

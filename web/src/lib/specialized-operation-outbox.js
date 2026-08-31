@@ -230,6 +230,9 @@ async function invalidateCanonicalCache(operation, result) {
   } else if (operation.kind === 'close-up-upsert') {
     record = result?.record || result || null
     entity = 'CloseUp'
+  } else if (operation.kind.startsWith('cash-close-')) {
+    record = result?.record || null
+    entity = 'CloseUp'
   }
 
   if (!record?.id || !entity) return

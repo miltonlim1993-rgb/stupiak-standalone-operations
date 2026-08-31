@@ -54,6 +54,10 @@ function closeUpScope(payload) {
   return `closeup:${payload.outlet_id || ''}:${payload.business_date || ''}:${identity}`
 }
 
+function cashCloseScope(payload) {
+  return `cash-close:${payload.outlet_id || ''}:${payload.business_date || ''}:${payload.shift_id || 'night'}`
+}
+
 async function pendingOperation(kind, scopeKey) {
   const rows = await listSpecializedOperations({ kind, scopeKey, status: 'queued_device' })
   return rows.at(-1) || null
@@ -515,6 +519,70 @@ function installOpsClientWrappers() {
       })
     }
     return response
+  }
+
+  opsClient.cashClose.submit = async (rawPayload = {}) => {
+    const payload = { ...(rawPayload || {}) }
+    const scopeKey = cashCloseScope(payload)
+    return submitSpecializedOperation({
+      kind: 'cash-close-submit',
+      path: '/api/cash-close/submit',
+      payload,
+      outlet_id: payload.outlet_id,
+      entity_hint: 'CloseUp',
+      scope_key: scopeKey,
+      attention_key: scopeKey,
+    }, {
+      queuedResult: (_operation, base) => ({
+        ...base,
+        authoritative: false,
+        provisional: true,
+        status: 'queued_device',
+      }),
+    })
+  }
+
+  opsClient.cashClose.review = async (rawPayload = {}) => {
+    const payload = { ...(rawPayload || {}) }
+    const scopeKey = `cash-close-review:${payload.close_id || ''}`
+    return submitSpecializedOperation({
+      kind: 'cash-close-review',
+      path: '/api/cash-close/review',
+      payload,
+      outlet_id: payload.outlet_id,
+      entity_hint: 'CloseUp',
+      entity_id_hint: payload.close_id,
+      scope_key: scopeKey,
+      attention_key: scopeKey,
+    }, {
+      queuedResult: (_operation, base) => ({
+        ...base,
+        authoritative: false,
+        provisional: true,
+        status: 'queued_device',
+      }),
+    })
+  }
+
+  opsClient.cashClose.correct = async (rawPayload = {}) => {
+    const payload = { ...(rawPayload || {}) }
+    const scopeKey = `cash-close-correct:${payload.original_close_id || ''}`
+    return submitSpecializedOperation({
+      kind: 'cash-close-correct',
+      path: '/api/cash-close/correct',
+      payload,
+      outlet_id: payload.outlet_id,
+      entity_hint: 'CloseUp',
+      scope_key: scopeKey,
+      attention_key: scopeKey,
+    }, {
+      queuedResult: (_operation, base) => ({
+        ...base,
+        authoritative: false,
+        provisional: true,
+        status: 'queued_device',
+      }),
+    })
   }
 }
 

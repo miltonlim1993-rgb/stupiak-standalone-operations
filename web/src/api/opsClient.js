@@ -474,6 +474,26 @@ export const opsClient = {
       return request(`/api/close-up/${encodeURIComponent(id)}/sync${suffix}`, { method: 'POST' })
     },
   },
+  cashClose: {
+    context({ outletId, businessDate, shiftId = 'night' }) {
+      const params = new URLSearchParams({
+        outlet_id: outletId,
+        business_date: businessDate,
+        shift_id: shiftId,
+        _: String(Date.now()),
+      })
+      return request(`/api/cash-close/context?${params}`)
+    },
+    submit(payload) {
+      return request('/api/cash-close/submit', { method: 'POST', body: payload })
+    },
+    review(payload) {
+      return request('/api/cash-close/review', { method: 'POST', body: payload })
+    },
+    correct(payload) {
+      return request('/api/cash-close/correct', { method: 'POST', body: payload })
+    },
+  },
   stockCounts: {
     saveBatch(payload) {
       return request('/api/stock-counts/batch', { method: 'POST', body: payload })

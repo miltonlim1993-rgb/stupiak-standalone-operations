@@ -10,6 +10,7 @@ import { handleRealtimeMutationBatch } from './realtime-mutation-batch.js'
 import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'
+import { handleCashCloseApi } from './cash-close-d1.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
 import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
 import { handleD1OperationalTaskAction } from './realtime-task-action-d1.js'
@@ -37,7 +38,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v23-device-outbox-batch-sync'
+const WORKER_REVISION = 'realtime-resilience-v23-device-outbox-batch-sync+statvara-slice-006-cash-close-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -63,6 +64,11 @@ const ENTITY_MODULE = {
 
 function isApiPath(pathname) {
   return pathname === '/api' || pathname.startsWith('/api/')
+}
+
+function legacyCloseUpMutationBlocked(request, url) {
+  return ['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method)
+    && /^\/api\/entities\/CloseUp(?:\/|$)/.test(url.pathname)
 }
 
 function runtimeEnv(env, ctx) {
@@ -107,7 +113,7 @@ function apiCorsHeaders(request, env) {
   return {
     'Access-Control-Allow-Origin': allowOrigin,
     'Access-Control-Allow-Credentials': 'true',
-    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Directory-Migration-Secret, X-ChefOps-Client-Id, X-ChefOps-Mutation-Id, X-Requested-With',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type, X-ChefOps-Native, X-ChefOps-Pack-Secret, X-ChefOps-Directory-Migration-Secret, X-ChefOps-Client-Id, X-ChefOps-Mutation-Id, X-Statvara-Cash-Timestamp, X-Statvara-Cash-Signature, X-Requested-With',
     'Access-Control-Allow-Methods': 'GET, POST, PATCH, PUT, DELETE, OPTIONS',
     'Access-Control-Max-Age': '600',
     'Access-Control-Expose-Headers': 'X-ChefOps-Worker-Revision, X-ChefOps-Media-Upload-Path',
@@ -180,6 +186,13 @@ export default {
         })
       }
 
+      if (legacyCloseUpMutationBlocked(request, url)) {
+        const error = new Error('Close Up mutations must use the command-specific cash custody APIs')
+        error.status = 409
+        error.code = 'cash_close_command_api_required'
+        return withApiHeaders(request, env, errorResponse(request, env, error))
+      }
+
       const directoryBootstrapResponse = await handleD1DirectoryBootstrap(request, runEnv, url)
       if (directoryBootstrapResponse) return withApiHeaders(request, env, directoryBootstrapResponse)
 
@@ -203,6 +216,16 @@ export default {
 
       const attendanceRosterResponse = await handleRealtimeAttendanceRosterImport(request, runEnv, url)
       if (attendanceRosterResponse) return withApiHeaders(request, env, attendanceRosterResponse)
+
+      const cashCloseResponse = ['/api/cash-close/submit', '/api/cash-close/review', '/api/cash-close/correct'].includes(url.pathname)
+        ? await withSubmissionLock(
+            request,
+            runEnv,
+            url,
+            () => handleCashCloseApi(request, runEnv, url),
+          )
+        : await handleCashCloseApi(request, runEnv, url)
+      if (cashCloseResponse) return withApiHeaders(request, env, cashCloseResponse)
 
       const atomicStockResponse = url.pathname === '/api/stock-counts/batch'
         ? await withSubmissionLock(

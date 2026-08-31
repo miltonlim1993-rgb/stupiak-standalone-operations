@@ -22,15 +22,38 @@ function database(env) {
   return env.OPS_DB
 }
 
-async function describeLock(request, url, user) {
+async function describeLock(request, url, user, env) {
   if (request.method !== 'POST') return null
   const isTask = url.pathname === '/api/tasks/operational/action'
   const isStock = url.pathname === '/api/stock-counts/batch'
-  if (!isTask && !isStock) return null
+  const isCash = ['/api/cash-close/submit', '/api/cash-close/review', '/api/cash-close/correct'].includes(url.pathname)
+  if (!isTask && !isStock && !isCash) return null
 
   const body = await readJson(request.clone())
+  let cashRecord = null
+  if (isCash && url.pathname !== '/api/cash-close/submit') {
+    const closeId = String(body.close_id || body.original_close_id || '').trim()
+    if (!closeId) {
+      const error = new Error('close_id or original_close_id is required')
+      error.status = 400
+      error.code = 'cash_close_id_required'
+      throw error
+    }
+    cashRecord = await database(env).prepare(`
+      SELECT outlet_id, business_date, payload_json
+      FROM ops_records
+      WHERE entity = 'CloseUp' AND entity_id = ? AND deleted_at = ''
+      LIMIT 1
+    `).bind(closeId).first()
+    if (!cashRecord) {
+      const error = new Error('Authoritative Close Up was not found')
+      error.status = 404
+      error.code = 'cash_close_not_found'
+      throw error
+    }
+  }
   const outletId = String(
-    body.outlet_id || user.outlet_id || assignedOutletIds(user)[0] || '',
+    body.outlet_id || cashRecord?.outlet_id || user.outlet_id || assignedOutletIds(user)[0] || '',
   ).trim()
   if (!outletId) {
     const error = new Error('Your account is not assigned to an outlet')
@@ -39,6 +62,26 @@ async function describeLock(request, url, user) {
     throw error
   }
   assertAssignedOutletAccess(user, outletId)
+
+  if (isCash) {
+    const stored = cashRecord?.payload_json ? JSON.parse(cashRecord.payload_json) : null
+    const businessDate = String(body.business_date || cashRecord?.business_date || stored?.business_date || '').trim()
+    const shiftId = String(body.shift_id || stored?.shift_id || 'night').trim().toLowerCase()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDate)) {
+      const error = new Error('business_date must use YYYY-MM-DD')
+      error.status = 400
+      error.code = 'invalid_business_date'
+      throw error
+    }
+    return {
+      scopeKey: `cash-close:${outletId}:${businessDate}:${shiftId}`,
+      outletId,
+      resourceType: 'cash-close',
+      resourceId: `${businessDate}:${shiftId}`,
+      action: url.pathname.split('/').at(-1),
+      label: 'Cash Close',
+    }
+  }
 
   if (isTask) {
     const action = String(body.action || '').trim().toLowerCase()
@@ -214,7 +257,7 @@ function lockedError(lock) {
 export async function withSubmissionLock(request, env, url, operation) {
   try {
     const user = await getCurrentUser(request, env)
-    const descriptor = await describeLock(request, url, user)
+    const descriptor = await describeLock(request, url, user, env)
     if (!descriptor) return operation()
 
     const clientId = String(request.headers.get('X-ChefOps-Client-Id') || '').trim()

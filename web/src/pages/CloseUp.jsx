@@ -108,6 +108,9 @@ export default function CloseUp() {
   const [error, setError] = useState('')
   const [existing, setExisting] = useState(null)
   const [recent, setRecent] = useState([])
+  const [cashContext, setCashContext] = useState(null)
+  const [reviewReason, setReviewReason] = useState('')
+  const [correcting, setCorrecting] = useState(false)
 
   useEffect(() => {
     if (!countedBy && defaultStaff) setCountedBy(defaultStaff)
@@ -146,6 +149,11 @@ export default function CloseUp() {
   const recordedTotal = phase === 'handover'
     ? incomingCash
     : actualCash + (phase === 'night' ? ePaymentTotal : 0)
+  const expectedBasis = phase === 'night' ? cashContext?.expected_basis : null
+  const expectedCash = money(expectedBasis?.expected_cash)
+  const expectedPayments = money(expectedBasis?.expected_channels_total)
+  const previewVariance = (actualCash - expectedCash) + (ePaymentTotal - expectedPayments)
+  const canReview = ['supervisor', 'manager', 'owner'].includes(String(user?.role || '').toLowerCase())
 
   function resetDraft(nextPhase = phase) {
     setExisting(null)
@@ -159,6 +167,8 @@ export default function CloseUp() {
     setNotes('')
     setMessage('')
     setError('')
+    setReviewReason('')
+    setCorrecting(false)
     if (nextPhase === 'handover') setHandoverEventKey(newHandoverKey())
   }
 
@@ -182,17 +192,26 @@ export default function CloseUp() {
     setError('')
     try {
       const year = Number(date.slice(0, 4))
-      const rows = await opsClient.entities.CloseUp.filter(
-        { outlet_id: outletId, business_date: date },
-        '-submitted_at,-created_date',
-        100,
-        { year },
-      )
-      const datedRows = rows || []
+      const [rows, authoritativeContext] = await Promise.all([
+        opsClient.entities.CloseUp.filter(
+          { outlet_id: outletId, business_date: date },
+          '-submitted_at,-created_date',
+          100,
+          { year },
+        ),
+        phase === 'night'
+          ? opsClient.cashClose.context({ outletId, businessDate: date, shiftId: 'night' })
+          : Promise.resolve(null),
+      ])
+      setCashContext(authoritativeContext)
+      const combined = new Map((rows || []).map((row) => [row.id, row]))
+      for (const row of authoritativeContext?.history || []) combined.set(row.id, row)
+      const datedRows = [...combined.values()]
       setRecent(datedRows)
 
       let row = null
       if (preferredRecordId) row = datedRows.find((item) => item.id === preferredRecordId) || null
+      else if (phase === 'night') row = authoritativeContext?.current_close || null
       else if (phase !== 'handover') row = datedRows.find((item) => item.shift_id === phase) || null
 
       if (row) hydrate(row)
@@ -241,6 +260,39 @@ export default function CloseUp() {
     try {
       const year = Number(date.slice(0, 4))
       const isHandover = phase === 'handover'
+      if (phase === 'night') {
+        if (!expectedBasis?.id) throw new Error('No signed FeedMe expected snapshot is available for this outlet and date.')
+        if (existing?.status === 'submitted' && !correcting) throw new Error('This Close Up is awaiting independent review and cannot be edited.')
+        if (existing?.status === 'completed' && !correcting) throw new Error('Completed evidence is immutable. Start a linked correction to change the count.')
+        const authoritativePayload = {
+          outlet_id: outletId,
+          business_date: date,
+          shift_id: 'night',
+          expected_basis_id: expectedBasis.id,
+          expected_basis_digest: expectedBasis.source_digest,
+          denominations: Object.fromEntries(DENOMINATIONS.map((value) => [String(value), String(denominations[String(value)] || 0)])),
+          actual_channels: Object.fromEntries(electronicMethods.map((method) => [method.code, String(payments[method.code] || 0)])),
+          variance_reason: notes.trim(),
+        }
+        const response = correcting
+          ? await opsClient.cashClose.correct({
+              ...authoritativePayload,
+              original_close_id: existing.id,
+              correction_reason: notes.trim(),
+            })
+          : await opsClient.cashClose.submit(authoritativePayload)
+        if (response?.queued_device) {
+          setMessage('Closing count is saved on this device and remains provisional until the server reauthorizes and accepts it.')
+          return
+        }
+        const saved = response.record
+        setExisting(saved)
+        setActiveRecordId(saved.id)
+        setCorrecting(false)
+        setMessage(correcting ? 'Correction submitted for independent review. The original remains immutable.' : 'Closing count accepted by D1 and submitted for independent review.')
+        await loadCloseUp(saved.id)
+        return
+      }
       const eventKey = existing?.event_key || (isHandover
         ? handoverEventKey
         : `${outletId}|${date}|${phase}`)
@@ -293,6 +345,42 @@ export default function CloseUp() {
     }
   }
 
+  async function review(decision) {
+    if (!existing?.id) return
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      const response = await opsClient.cashClose.review({
+        close_id: existing.id,
+        outlet_id: outletId,
+        decision,
+        reason: reviewReason.trim(),
+        acknowledge_expected_drift: Boolean(cashContext?.expected_drift),
+      })
+      if (response?.queued_device) {
+        setMessage('Review is queued on this device and is not authoritative until server acceptance.')
+        return
+      }
+      setMessage(decision === 'accept' ? 'Close Up completed by authoritative review.' : 'Close Up rejected; the submitted evidence remains retained.')
+      setReviewReason('')
+      await loadCloseUp(response.record?.id || existing.id)
+    } catch (err) {
+      setError(err.message || 'Unable to review Close Up')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  function beginCorrection() {
+    setCorrecting(true)
+    setDenominations({})
+    setPayments({})
+    setNotes('')
+    setMessage('Enter the corrected count and a mandatory correction reason. The completed original will not be changed.')
+    setError('')
+  }
+
   async function retrySalesSync() {
     if (!existing?.id) return
     setSaving(true)
@@ -313,7 +401,9 @@ export default function CloseUp() {
 
   const submitLabel = saving
     ? 'Saving…'
-    : existing
+    : correcting
+      ? 'Submit linked correction'
+      : existing
       ? phase === 'handover' ? 'Update handover' : 'Update actuals'
       : phase === 'handover' ? 'Save handover' : 'Submit actuals'
 
@@ -323,7 +413,7 @@ export default function CloseUp() {
         <h1 className="text-xl font-bold">Close Up</h1>
         <p className="mt-0.5 text-xs text-muted-foreground">Opening, unlimited handovers and closing actuals. Every event is retained in the yearly report log.</p>
       </div>
-      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${existing ? 'bg-emerald-100 text-emerald-700' : 'bg-muted text-muted-foreground'}`}>{existing ? 'Submitted' : 'New entry'}</span>
+      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${existing?.status === 'completed' ? 'bg-emerald-100 text-emerald-700' : existing ? 'bg-amber-100 text-amber-800' : 'bg-muted text-muted-foreground'}`}>{correcting ? 'Correction draft' : existing?.status || 'New entry'}</span>
     </div>
     <PageNotifications page="/close-up" limit={2} />
 
@@ -398,6 +488,14 @@ export default function CloseUp() {
         />}
 
         {phase === 'night' ? <>
+          <section className="rounded-2xl border border-sky-200 bg-sky-50/50 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div><h2 className="text-sm font-semibold">FeedMe expected basis</h2><p className="mt-1 text-xs text-muted-foreground">External input only. It never proves physical custody or completes Close Up.</p></div>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${expectedBasis ? 'bg-sky-100 text-sky-700' : 'bg-red-100 text-red-700'}`}>{expectedBasis ? 'Signed snapshot' : 'Unavailable'}</span>
+            </div>
+            {expectedBasis ? <div className="mt-3 grid gap-2 sm:grid-cols-3"><Summary label="Expected cash" value={expectedCash} /><Summary label="Expected channels" value={expectedPayments} /><Summary label="Snapshot time" valueText={expectedBasis.observed_at || '—'} /></div> : null}
+            {cashContext?.expected_drift ? <p className="mt-3 rounded-lg bg-amber-100 p-2 text-xs text-amber-800">FeedMe has a newer snapshot. Historical completed variance remains bound to its original basis.</p> : null}
+          </section>
           <PaymentGroup title="Cashless payments" methods={cashlessMethods} payments={payments} setPayments={setPayments} />
           <PaymentGroup title="Delivery platforms" methods={deliveryMethods} payments={payments} setPayments={setPayments} />
         </> : null}
@@ -415,6 +513,7 @@ export default function CloseUp() {
               <Summary label="Cash on hand" value={actualCash} />
               <Summary label="E-payments" value={phase === 'night' ? ePaymentTotal : 0} />
               <Summary label="Recorded actual total" value={recordedTotal} strong />
+              {phase === 'night' && expectedBasis ? <Summary label="Variance preview" value={previewVariance} alert={Math.abs(previewVariance) >= 0.005} /> : null}
             </>}
           </div>
 
@@ -424,8 +523,8 @@ export default function CloseUp() {
           </div> : null}
 
           <div className="closeup-note-before-save mt-4 rounded-xl border border-border bg-muted/25 p-3">
-            <Label>{phase === 'handover' ? 'Handover note' : 'Close Up note'}</Label>
-            <Textarea className="mt-2 min-h-20 bg-background" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Optional operational note" />
+            <Label>{correcting ? 'Correction reason' : phase === 'handover' ? 'Handover note' : phase === 'night' ? 'Variance reason / closing note' : 'Close Up note'}</Label>
+            <Textarea className="mt-2 min-h-20 bg-background" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder={phase === 'night' ? 'Required when expected and actual differ' : 'Optional operational note'} />
           </div>
 
           {error ? <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p> : null}
@@ -434,9 +533,15 @@ export default function CloseUp() {
             <div className="flex items-center justify-between gap-2"><span className="font-semibold">Sales report: {existing.sync_status || 'pending'}</span>{existing.sync_status !== 'synced' ? <button type="button" onClick={retrySalesSync} className="inline-flex items-center gap-1 font-semibold"><RefreshCw className="h-3.5 w-3.5" /> Retry</button> : null}</div>
             {existing.last_sync_error ? <p className="mt-1 break-words leading-5">{existing.last_sync_error}</p> : null}
           </div> : null}
+          {phase === 'night' && existing?.status === 'submitted' && canReview ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <Label>Independent review reason</Label>
+            <Textarea className="mt-2 min-h-16 bg-white" value={reviewReason} onChange={(event) => setReviewReason(event.target.value)} placeholder="Required for variance or rejection" />
+            <div className="mt-2 grid grid-cols-2 gap-2"><Button type="button" onClick={() => review('accept')} disabled={saving}>Accept</Button><Button type="button" variant="outline" onClick={() => review('reject')} disabled={saving}>Reject</Button></div>
+          </div> : null}
           {loading ? <p className="mt-3 text-center text-[11px] text-muted-foreground">Checking previous entries in the background. You can still submit.</p> : null}
 
-          <Button type="submit" className="closeup-desktop-submit mt-4 h-11 w-full" disabled={saving || !outletId}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{submitLabel}</Button>
+          <Button type="submit" className="closeup-desktop-submit mt-4 h-11 w-full" disabled={saving || !outletId || (phase === 'night' && !expectedBasis) || (phase === 'night' && Boolean(existing) && !correcting)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{submitLabel}</Button>
+          {phase === 'night' && existing?.status === 'completed' && !correcting && canReview ? <Button type="button" variant="outline" className="mt-2 h-11 w-full" onClick={beginCorrection}>Create linked correction</Button> : null}
           {phase === 'handover' && existing ? <Button type="button" variant="outline" className="mt-2 h-11 w-full" onClick={addAnotherHandover}><Plus className="mr-2 h-4 w-4" /> Add another handover</Button> : null}
         </section>
 
@@ -459,7 +564,7 @@ export default function CloseUp() {
       </aside>
 
       <div className="chefops-mobile-action">
-        <Button type="submit" className="h-12 w-full shadow-lg" disabled={saving || !outletId}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{submitLabel}</Button>
+        <Button type="submit" className="h-12 w-full shadow-lg" disabled={saving || !outletId || (phase === 'night' && !expectedBasis) || (phase === 'night' && Boolean(existing) && !correcting)}>{saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}{submitLabel}</Button>
       </div>
     </form>
   </div>
@@ -497,11 +602,11 @@ function PaymentGroup({ title, methods, payments, setPayments }) {
   </section>
 }
 
-function Summary({ label, value, strong = false, alert = false }) {
+function Summary({ label, value, valueText = '', strong = false, alert = false }) {
   const className = alert
     ? 'bg-red-50 text-red-700'
     : strong
       ? 'bg-primary/10 text-primary'
       : 'bg-muted/60'
-  return <div className={`flex items-center justify-between rounded-xl px-3 py-2.5 ${className}`}><span className="text-xs">{label}</span><span className={`${strong ? 'text-base' : 'text-sm'} font-bold`}>{formatMoney(value)}</span></div>
+  return <div className={`flex items-center justify-between rounded-xl px-3 py-2.5 ${className}`}><span className="text-xs">{label}</span><span className={`${strong ? 'text-base' : 'text-sm'} font-bold`}>{valueText || formatMoney(value)}</span></div>
 }

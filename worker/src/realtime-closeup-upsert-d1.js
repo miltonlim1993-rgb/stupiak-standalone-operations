@@ -137,6 +137,12 @@ async function saveCloseUp(request, env) {
     error.code = 'close_up_invalid_phase'
     throw error
   }
+  if (shiftId === 'night') {
+    const error = new Error('Night closing must use the authoritative /api/cash-close contract')
+    error.status = 409
+    error.code = 'cash_close_v1_required'
+    throw error
+  }
   assertOutletAccess(user, outletId)
 
   input.outlet_id = outletId

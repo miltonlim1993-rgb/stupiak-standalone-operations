@@ -13,7 +13,7 @@ cd "$ROOT_DIR"
 assert_select_only() {
   local sql="$1"
   local normalized
-  normalized="$(printf '%s' "$sql" | tr '[:lower:]' '[:upper:]')"
+  normalized="$(printf '%s' "$sql" | tr '\n\r\t' '   ' | tr -s '[:space:]' ' ' | tr '[:lower:]' '[:upper:]')"
   if ! grep -Eq '^[[:space:]]*(SELECT|WITH)[[:space:]]' <<<"$normalized"; then
     echo "Refusing non-read-only SQL: $sql" >&2
     exit 2
