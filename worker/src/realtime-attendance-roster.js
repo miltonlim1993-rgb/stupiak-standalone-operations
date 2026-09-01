@@ -1,11 +1,12 @@
 import { getCurrentUser } from './auth.js'
 import { errorResponse, json, readJson } from './http.js'
-import { assertOutletAccess } from './permissions.js'
+import { assertAssignedOutletAccess } from './permissions.js'
 import { findDirectoryRecord } from './d1-directory-store.js'
 import { appendRecords, updateManyRecords } from './sheets.js'
 
 const ENTITY = 'Attendance'
 const IMPORT_OPERATION = 'roster_replace'
+const SCHEDULE_CONTRACT = 'statvara-duty-schedule-v1'
 const MAX_ROWS = 500
 const MAX_DATES = 14
 
@@ -79,6 +80,23 @@ async function digestText(value) {
   const bytes = new TextEncoder().encode(String(value || ''))
   const digest = await crypto.subtle.digest('SHA-256', bytes)
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, '0')).join('')
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map((key) => [key, stableValue(value[key])]))
+  }
+  return value
+}
+
+function constantTimeEqual(left, right) {
+  const a = String(left || '').toLowerCase()
+  const b = String(right || '').toLowerCase()
+  if (!a || !b || a.length !== b.length) return false
+  let mismatch = 0
+  for (let index = 0; index < a.length; index += 1) mismatch |= a.charCodeAt(index) ^ b.charCodeAt(index)
+  return mismatch === 0
 }
 
 export async function rosterEntityId(outletId, row) {
@@ -157,7 +175,7 @@ function sourceNotes(row, source, batchId) {
   ].filter(Boolean).join(' ')
 }
 
-function buildRecord(row, outletId, actor, source, batchId, existingRow, timestamp) {
+function buildRecord(row, outletId, actor, source, batchId, existingRow, timestamp, employee, timeZone) {
   const existing = parseJson(existingRow?.payload_json, {}) || {}
   const version = Number(existingRow?.version || 0) + 1
   return {
@@ -169,6 +187,17 @@ function buildRecord(row, outletId, actor, source, batchId, existingRow, timesta
     updated_by: actor.email,
     deleted_at: '',
     version,
+    authority_contract: SCHEDULE_CONTRACT,
+    record_family: 'duty_schedule_expectation',
+    source_authority: 'manager_roster_import',
+    source_batch_id: batchId,
+    source_file_name: source.file_name,
+    source_file_url: source.file_url,
+    source_drive_file_id: source.drive_file_id,
+    time_zone: timeZone,
+    employee_binding_status: employee ? 'resolved' : 'unresolved',
+    employee_id: employee?.id || '',
+    employee_email: employee?.email || '',
     staff_name: row.staff_name,
     staff_role: row.staff_role,
     date: row.date,
@@ -180,12 +209,52 @@ function buildRecord(row, outletId, actor, source, batchId, existingRow, timesta
   }
 }
 
-async function findReplay(db, mutationId) {
+async function findReplay(db, mutationId, requestFingerprint) {
   const row = await db.prepare(
     'SELECT result_json FROM ops_mutations WHERE mutation_id = ? LIMIT 1',
   ).bind(mutationId).first()
   const result = parseJson(row?.result_json, null)
+  if (result && !constantTimeEqual(result.request_fingerprint, requestFingerprint)) {
+    const error = new Error('mutation_id was already used with a different roster request')
+    error.status = 409
+    error.code = 'attendance_roster_mutation_fingerprint_mismatch'
+    throw error
+  }
   return result ? { ...result, replayed: true } : null
+}
+
+async function rosterFingerprint(outletId, normalized, replaceExisting, source, batchId, timeZone) {
+  return digestText(JSON.stringify(stableValue({
+    contract: SCHEDULE_CONTRACT,
+    outlet_id: outletId,
+    rows: normalized.rows,
+    replace_existing: replaceExisting,
+    source,
+    batch_id: batchId,
+    time_zone: timeZone,
+  })))
+}
+
+async function employeeDirectory(db, outletId) {
+  const response = await db.prepare("SELECT payload_json FROM ops_records WHERE entity = 'User' AND status = 'active' AND deleted_at = ''").all()
+  const byName = new Map()
+  for (const row of response.results || []) {
+    const user = parseJson(row.payload_json, {}) || {}
+    const outlets = [user.outlet_id]
+    const raw = String(user.outlet_ids || '').trim()
+    if (raw) {
+      const parsed = parseJson(raw, null)
+      if (Array.isArray(parsed)) outlets.push(...parsed)
+      else outlets.push(...raw.split(','))
+    }
+    if (!outlets.map(String).includes(outletId) || String(user.principal_type || 'human').toLowerCase() !== 'human') continue
+    const key = canonicalName(user.full_name).toLocaleUpperCase('en-MY')
+    if (!key) continue
+    const values = byName.get(key) || []
+    values.push(user)
+    byName.set(key, values)
+  }
+  return byName
 }
 
 function requestMutationId(request, body) {
@@ -245,7 +314,7 @@ export async function commitAttendanceRoster(request, env, actor, body) {
     error.code = 'roster_outlet_required'
     throw error
   }
-  assertOutletAccess(actor, outletId)
+  assertAssignedOutletAccess(actor, outletId)
 
   const outlet = await findDirectoryRecord(env, 'Outlet', outletId)
   if (!outlet) {
@@ -264,7 +333,10 @@ export async function commitAttendanceRoster(request, env, actor, body) {
   }
   const db = database(env)
   const mutationId = requestMutationId(request, body)
-  const replay = await findReplay(db, mutationId)
+  const batchId = String(body?.batch_id || `roster-batch:${mutationId}`).slice(0, 120)
+  const timeZone = String(env.ATTENDANCE_TIME_ZONE || 'Asia/Kuala_Lumpur').trim()
+  const requestFingerprint = await rosterFingerprint(outletId, normalized, replaceExisting, source, batchId, timeZone)
+  const replay = await findReplay(db, mutationId, requestFingerprint)
   if (replay) return replay
 
   const placeholders = normalized.dates.map(() => '?').join(', ')
@@ -282,14 +354,27 @@ export async function commitAttendanceRoster(request, env, actor, body) {
   const activeExisting = existingRows.filter((row) => !String(row.deleted_at || '').trim())
   const newIds = new Set(normalized.rows.map((row) => row.id))
   const timestamp = now()
-  const batchId = String(body?.batch_id || crypto.randomUUID()).slice(0, 120)
+  const directory = await employeeDirectory(db, outletId)
   const records = normalized.rows.map((row) => (
-    buildRecord(row, outletId, actor, source, batchId, existingById.get(row.id), timestamp)
+    buildRecord(
+      row,
+      outletId,
+      actor,
+      source,
+      batchId,
+      existingById.get(row.id),
+      timestamp,
+      (directory.get(canonicalName(row.staff_name).toLocaleUpperCase('en-MY')) || []).length === 1
+        ? directory.get(canonicalName(row.staff_name).toLocaleUpperCase('en-MY'))[0]
+        : null,
+      timeZone,
+    )
   ))
 
   const result = {
     ok: true,
     replayed: false,
+    request_fingerprint: requestFingerprint,
     mutation_id: mutationId,
     batch_id: batchId,
     outlet_id: outletId,
@@ -301,6 +386,8 @@ export async function commitAttendanceRoster(request, env, actor, body) {
       : 0,
     updated: activeExisting.filter((row) => newIds.has(String(row.entity_id))).length,
     deduplicated: normalized.duplicateCount,
+    employee_bindings_resolved: records.filter((record) => record.employee_binding_status === 'resolved').length,
+    employee_bindings_unresolved: records.filter((record) => record.employee_binding_status !== 'resolved').length,
     sync_status: 'pending',
     storage: 'd1',
     committed_at: timestamp,
@@ -396,7 +483,7 @@ export async function commitAttendanceRoster(request, env, actor, body) {
   try {
     await db.batch(statements)
   } catch (error) {
-    const concurrentReplay = await findReplay(db, mutationId)
+    const concurrentReplay = await findReplay(db, mutationId, requestFingerprint)
     if (concurrentReplay) return concurrentReplay
     throw error
   }
@@ -452,5 +539,7 @@ export const ATTENDANCE_ROSTER_POLICY = Object.freeze({
   maximum_rows: MAX_ROWS,
   maximum_dates: MAX_DATES,
   storage: 'd1',
+  authority_contract: SCHEDULE_CONTRACT,
+  employee_binding: 'server-resolved-active-d1-user-exact-name-and-outlet',
   replacement: 'soft-delete-selected-outlet-date-scheduled-rows',
 })

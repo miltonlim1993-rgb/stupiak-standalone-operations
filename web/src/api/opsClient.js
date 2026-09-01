@@ -445,6 +445,20 @@ export const opsClient = {
     importRoster(payload) {
       return request('/api/attendance/import', { method: 'POST', body: payload })
     },
+    workforceContext({ outletId, businessDate, scheduleId = '' }) {
+      const params = new URLSearchParams({ outlet_id: outletId, business_date: businessDate })
+      if (scheduleId) params.set('schedule_id', scheduleId)
+      return request(`/api/attendance/workforce/context?${params}`)
+    },
+    clockIn(payload) {
+      return request('/api/attendance/workforce/clock-in', { method: 'POST', body: payload })
+    },
+    clockOut(payload) {
+      return request('/api/attendance/workforce/clock-out', { method: 'POST', body: payload })
+    },
+    correct(payload) {
+      return request('/api/attendance/workforce/correct', { method: 'POST', body: payload })
+    },
   },
   tasks: {
     ensure(payload) {

@@ -34,7 +34,12 @@ async function describeLock(request, url, user, env) {
     '/api/payment-reconciliation/submit',
     '/api/payment-reconciliation/replace',
   ].includes(url.pathname)
-  if (!isTask && !isStock && !isCash && !isReconciliation) return null
+  const isAttendance = [
+    '/api/attendance/workforce/clock-in',
+    '/api/attendance/workforce/clock-out',
+    '/api/attendance/workforce/correct',
+  ].includes(url.pathname)
+  if (!isTask && !isStock && !isCash && !isReconciliation && !isAttendance) return null
 
   const body = await readJson(request.clone())
   let cashRecord = null
@@ -81,8 +86,30 @@ async function describeLock(request, url, user, env) {
       throw error
     }
   }
+  let attendanceRecord = null
+  if (isAttendance && url.pathname !== '/api/attendance/workforce/clock-in') {
+    const attendanceId = String(body.attendance_record_id || body.original_attendance_record_id || '').trim()
+    if (!attendanceId) {
+      const error = new Error('attendance_record_id or original_attendance_record_id is required')
+      error.status = 400
+      error.code = 'attendance_record_required'
+      throw error
+    }
+    attendanceRecord = await database(env).prepare(`
+      SELECT outlet_id, business_date, payload_json
+      FROM ops_records
+      WHERE entity = 'AttendanceRecord' AND entity_id = ? AND deleted_at = ''
+      LIMIT 1
+    `).bind(attendanceId).first()
+    if (!attendanceRecord) {
+      const error = new Error('Authoritative Attendance record was not found')
+      error.status = 404
+      error.code = 'attendance_record_not_found'
+      throw error
+    }
+  }
   const outletId = String(
-    body.outlet_id || cashRecord?.outlet_id || reconciliationRecord?.outlet_id || user.outlet_id || assignedOutletIds(user)[0] || '',
+    body.outlet_id || cashRecord?.outlet_id || reconciliationRecord?.outlet_id || attendanceRecord?.outlet_id || user.outlet_id || assignedOutletIds(user)[0] || '',
   ).trim()
   if (!outletId) {
     const error = new Error('Your account is not assigned to an outlet')
@@ -129,6 +156,26 @@ async function describeLock(request, url, user, env) {
       resourceId: `${businessDate}:${shiftId}`,
       action: url.pathname.split('/').at(-1),
       label: 'Payment Reconciliation',
+    }
+  }
+
+  if (isAttendance) {
+    const resourceId = String(
+      body.schedule_id || body.attendance_record_id || body.original_attendance_record_id || '',
+    ).trim()
+    if (!resourceId) {
+      const error = new Error('Attendance command resource identifier is required')
+      error.status = 400
+      error.code = 'attendance_resource_required'
+      throw error
+    }
+    return {
+      scopeKey: `attendance:${outletId}:${resourceId}`,
+      outletId,
+      resourceType: 'attendance',
+      resourceId,
+      action: url.pathname.split('/').at(-1),
+      label: 'Attendance',
     }
   }
 

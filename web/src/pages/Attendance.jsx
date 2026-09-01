@@ -81,6 +81,10 @@ export default function Attendance() {
   const [error, setError] = useState("");
   const [importOpen, setImportOpen] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
+  const [workforce, setWorkforce] = useState(null);
+  const [workforceLoading, setWorkforceLoading] = useState(false);
+  const [workforceSaving, setWorkforceSaving] = useState(false);
+  const [workforceError, setWorkforceError] = useState("");
   const autoAdvanced = useRef(false);
 
   useEffect(() => {
@@ -150,6 +154,49 @@ export default function Attendance() {
     return () => { cancelled = true; };
   }, [selectedDate, selectedOutletId, today, reloadKey]);
 
+  useEffect(() => {
+    if (!selectedOutletId) return;
+    let cancelled = false;
+    setWorkforceLoading(true);
+    setWorkforceError("");
+    opsClient.attendance.workforceContext({ outletId: selectedOutletId, businessDate: selectedDate })
+      .then((value) => { if (!cancelled) setWorkforce(value); })
+      .catch((err) => {
+        if (!cancelled) {
+          setWorkforce(null);
+          setWorkforceError(err.message || "Unable to load your attendance state");
+        }
+      })
+      .finally(() => { if (!cancelled) setWorkforceLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedDate, selectedOutletId, reloadKey]);
+
+  async function runAttendanceCommand(action) {
+    if (!workforce?.schedule || workforceSaving) return;
+    setWorkforceSaving(true);
+    setWorkforceError("");
+    try {
+      const mutationId = `attendance:${action}:${crypto.randomUUID()}`;
+      if (action === "clock-in") {
+        await opsClient.attendance.clockIn({
+          mutation_id: mutationId,
+          outlet_id: selectedOutletId,
+          business_date: selectedDate,
+          schedule_id: workforce.schedule.id,
+        });
+      } else {
+        await opsClient.attendance.clockOut({
+          mutation_id: mutationId,
+          outlet_id: selectedOutletId,
+          attendance_record_id: workforce.attendance_record.id,
+        });
+      }
+      setReloadKey((value) => value + 1);
+    } catch (err) {
+      setWorkforceError(err.message || "Unable to save attendance");
+    } finally { setWorkforceSaving(false); }
+  }
+
   const groups = useMemo(() => {
     const morning = rows.filter((row) => shiftName(row) === "Morning");
     const night = rows.filter((row) => shiftName(row) === "Night");
@@ -164,7 +211,7 @@ export default function Attendance() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-heading font-bold">Duty Roster</h1>
-          <p className="mt-0.5 text-xs text-muted-foreground">Scheduled team, shift and station. This is not a clock-in/out page.</p>
+          <p className="mt-0.5 text-xs text-muted-foreground">Published schedules and your authoritative attendance record.</p>
         </div>
         {["manager", "owner"].includes(String(user?.role || "")) ? (
           <Button size="sm" onClick={() => setImportOpen(true)}><FileUp className="mr-1.5 h-4 w-4" />Import PDF</Button>
@@ -201,6 +248,46 @@ export default function Attendance() {
       </section>
 
       {error ? <div className="rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div> : null}
+
+      <section className="rounded-2xl border border-border bg-card p-4" aria-label="My attendance">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <p className="text-sm font-bold">My attendance</p>
+            <p className="mt-1 text-xs text-muted-foreground">Server-accepted time only. Device time is never attendance authority.</p>
+          </div>
+          {workforce?.attendance_record?.status ? (
+            <span className="rounded-full bg-primary/10 px-2 py-1 text-[10px] font-semibold uppercase text-primary">{String(workforce.attendance_record.status).replaceAll("_", " ")}</span>
+          ) : null}
+        </div>
+        {workforceLoading ? (
+          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading authoritative state</div>
+        ) : workforce?.schedule ? (
+          <div className="mt-4 space-y-3">
+            <div className="rounded-xl bg-muted/50 p-3 text-sm">
+              <p className="font-semibold">{workforce.schedule.clock_in}–{workforce.schedule.clock_out} · {workforce.schedule.time_zone}</p>
+              <p className="mt-1 text-xs text-muted-foreground">Schedule {workforce.schedule.id} · version {workforce.schedule.__realtime?.version}</p>
+            </div>
+            {workforce.consequence ? (
+              <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+                <p className="font-semibold">Worked time recorded</p>
+                <p className="mt-1 text-xs">{Math.floor(Number(workforce.consequence.worked_seconds || 0) / 3600)}h {Math.floor((Number(workforce.consequence.worked_seconds || 0) % 3600) / 60)}m · report projection queued · payroll effect none</p>
+              </div>
+            ) : null}
+            {!workforce.attendance_record ? (
+              <Button className="w-full" disabled={workforceSaving} onClick={() => void runAttendanceCommand("clock-in")}>
+                {workforceSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Clock3 className="mr-2 h-4 w-4" />}Clock in
+              </Button>
+            ) : workforce.attendance_record.status === "clocked_in" ? (
+              <Button className="w-full" disabled={workforceSaving} onClick={() => void runAttendanceCommand("clock-out")}>
+                {workforceSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserRoundCheck className="mr-2 h-4 w-4" />}Clock out
+              </Button>
+            ) : null}
+          </div>
+        ) : (
+          <p className="mt-4 text-sm text-muted-foreground">No active D1 schedule is bound to your current employee identity for this date.</p>
+        )}
+        {workforceError ? <div className="mt-3 rounded-xl border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive">{workforceError}</div> : null}
+      </section>
 
       {loading ? (
         <div className="flex justify-center py-12"><Loader2 className="h-7 w-7 animate-spin text-muted-foreground" /></div>
