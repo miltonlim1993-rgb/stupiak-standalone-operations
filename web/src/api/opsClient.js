@@ -494,6 +494,32 @@ export const opsClient = {
       return request('/api/cash-close/correct', { method: 'POST', body: payload })
     },
   },
+  paymentReconciliation: {
+    context({ outletId, businessDate, shiftId = 'night' }) {
+      const params = new URLSearchParams({
+        outlet_id: outletId,
+        business_date: businessDate,
+        shift_id: shiftId,
+        _: String(Date.now()),
+      })
+      return request(`/api/payment-reconciliation/context?${params}`)
+    },
+    start(payload) {
+      return request('/api/payment-reconciliation/start', { method: 'POST', body: payload })
+    },
+    reveal(payload) {
+      return request('/api/payment-reconciliation/reveal', { method: 'POST', body: payload })
+    },
+    remark(payload) {
+      return request('/api/payment-reconciliation/remark', { method: 'POST', body: payload })
+    },
+    submit(payload) {
+      return request('/api/payment-reconciliation/submit', { method: 'POST', body: payload })
+    },
+    replace(payload) {
+      return request('/api/payment-reconciliation/replace', { method: 'POST', body: payload })
+    },
+  },
   stockCounts: {
     saveBatch(payload) {
       return request('/api/stock-counts/batch', { method: 'POST', body: payload })

@@ -11,6 +11,7 @@ import { OutletRealtimeHub } from './outlet-realtime-hub.js'
 import { handleRealtimeCloseUpSync } from './realtime-closeup-sync.js'
 import { handleD1CloseUpUpsert } from './realtime-closeup-upsert-d1.js'
 import { handleCashCloseApi } from './cash-close-d1.js'
+import { handlePaymentReconciliationApi } from './payment-reconciliation-d1.js'
 import { handleJsonAtomicStockCountBatch } from './realtime-stock-batch-json.js'
 import { guardCompletedOperationalTask } from './realtime-task-action-guard.js'
 import { handleD1OperationalTaskAction } from './realtime-task-action-d1.js'
@@ -38,7 +39,7 @@ import {
   processSheetMirrorQueue,
 } from './sheet-backup-queue.js'
 
-const WORKER_REVISION = 'realtime-resilience-v23-device-outbox-batch-sync+statvara-slice-006-cash-close-v1'
+const WORKER_REVISION = 'realtime-resilience-v23-device-outbox-batch-sync+statvara-slice-007-payment-reconciliation-v1'
 const PACK_MODULES = new Set(['core', 'inventory', 'tasks', 'training', 'labels'])
 const ENTITY_MODULE = {
   Outlet: 'core',
@@ -69,6 +70,11 @@ function isApiPath(pathname) {
 function legacyCloseUpMutationBlocked(request, url) {
   return ['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method)
     && /^\/api\/entities\/CloseUp(?:\/|$)/.test(url.pathname)
+}
+
+function legacyPaymentReconciliationMutationBlocked(request, url) {
+  return ['POST', 'PATCH', 'PUT', 'DELETE'].includes(request.method)
+    && /^\/api\/entities\/(?:PaymentReconciliation|FIN-PAYMENT-RECONCILIATION)(?:\/|$)/.test(url.pathname)
 }
 
 function runtimeEnv(env, ctx) {
@@ -193,6 +199,13 @@ export default {
         return withApiHeaders(request, env, errorResponse(request, env, error))
       }
 
+      if (legacyPaymentReconciliationMutationBlocked(request, url)) {
+        const error = new Error('Payment Reconciliation mutations must use the command-specific D1 lifecycle APIs')
+        error.status = 409
+        error.code = 'payment_reconciliation_command_api_required'
+        return withApiHeaders(request, env, errorResponse(request, env, error))
+      }
+
       const directoryBootstrapResponse = await handleD1DirectoryBootstrap(request, runEnv, url)
       if (directoryBootstrapResponse) return withApiHeaders(request, env, directoryBootstrapResponse)
 
@@ -226,6 +239,18 @@ export default {
           )
         : await handleCashCloseApi(request, runEnv, url)
       if (cashCloseResponse) return withApiHeaders(request, env, cashCloseResponse)
+
+      const paymentReconciliationResponse = url.pathname === '/api/payment-reconciliation/context'
+        ? await handlePaymentReconciliationApi(request, runEnv, url)
+        : url.pathname.startsWith('/api/payment-reconciliation/')
+          ? await withSubmissionLock(
+              request,
+              runEnv,
+              url,
+              () => handlePaymentReconciliationApi(request, runEnv, url),
+            )
+          : await handlePaymentReconciliationApi(request, runEnv, url)
+      if (paymentReconciliationResponse) return withApiHeaders(request, env, paymentReconciliationResponse)
 
       const atomicStockResponse = url.pathname === '/api/stock-counts/batch'
         ? await withSubmissionLock(

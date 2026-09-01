@@ -9,6 +9,7 @@ import {
   Download,
   GraduationCap,
   Printer,
+  RefreshCcwDot,
   Receipt,
   Settings,
   ShieldCheck,
@@ -19,6 +20,7 @@ import { ROLE_LEVEL } from "@/lib/ops-helpers";
 
 const commonOperations = [
   { to: "/inventory", label: "Outlet Stock List", desc: "View this outlet's enabled list and minimums", icon: Boxes },
+  { to: "/payment-reconciliation", label: "Payment Reconciliation", desc: "Compare exact FeedMe expected facts with completed D1 Close Up evidence", icon: RefreshCcwDot },
   { to: "/training", label: "SOP & Training", desc: "Read SOPs, complete courses and track progress", icon: GraduationCap },
 ];
 

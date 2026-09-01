@@ -51,6 +51,7 @@ function entityFromPath(pathname) {
   if (pathname.startsWith('/api/tasks/')) return 'Task'
   if (pathname.startsWith('/api/stock-counts/')) return 'StockCount'
   if (pathname.startsWith('/api/close-up/')) return 'CloseUp'
+  if (pathname.startsWith('/api/payment-reconciliation/')) return 'PaymentReconciliation'
   if (pathname.startsWith('/api/labels/')) return 'FoodLabel'
   if (pathname.startsWith('/api/notifications')) return 'Notification'
   if (pathname.startsWith('/api/attendance/')) return 'Attendance'

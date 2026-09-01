@@ -27,7 +27,14 @@ async function describeLock(request, url, user, env) {
   const isTask = url.pathname === '/api/tasks/operational/action'
   const isStock = url.pathname === '/api/stock-counts/batch'
   const isCash = ['/api/cash-close/submit', '/api/cash-close/review', '/api/cash-close/correct'].includes(url.pathname)
-  if (!isTask && !isStock && !isCash) return null
+  const isReconciliation = [
+    '/api/payment-reconciliation/start',
+    '/api/payment-reconciliation/reveal',
+    '/api/payment-reconciliation/remark',
+    '/api/payment-reconciliation/submit',
+    '/api/payment-reconciliation/replace',
+  ].includes(url.pathname)
+  if (!isTask && !isStock && !isCash && !isReconciliation) return null
 
   const body = await readJson(request.clone())
   let cashRecord = null
@@ -52,8 +59,30 @@ async function describeLock(request, url, user, env) {
       throw error
     }
   }
+  let reconciliationRecord = null
+  if (isReconciliation && url.pathname !== '/api/payment-reconciliation/start') {
+    const reconciliationId = String(body.reconciliation_id || body.original_reconciliation_id || '').trim()
+    if (!reconciliationId) {
+      const error = new Error('reconciliation_id or original_reconciliation_id is required')
+      error.status = 400
+      error.code = 'payment_reconciliation_id_required'
+      throw error
+    }
+    reconciliationRecord = await database(env).prepare(`
+      SELECT outlet_id, business_date, payload_json
+      FROM ops_records
+      WHERE entity = 'PaymentReconciliation' AND entity_id = ? AND deleted_at = ''
+      LIMIT 1
+    `).bind(reconciliationId).first()
+    if (!reconciliationRecord) {
+      const error = new Error('Authoritative Payment Reconciliation was not found')
+      error.status = 404
+      error.code = 'payment_reconciliation_not_found'
+      throw error
+    }
+  }
   const outletId = String(
-    body.outlet_id || cashRecord?.outlet_id || user.outlet_id || assignedOutletIds(user)[0] || '',
+    body.outlet_id || cashRecord?.outlet_id || reconciliationRecord?.outlet_id || user.outlet_id || assignedOutletIds(user)[0] || '',
   ).trim()
   if (!outletId) {
     const error = new Error('Your account is not assigned to an outlet')
@@ -80,6 +109,26 @@ async function describeLock(request, url, user, env) {
       resourceId: `${businessDate}:${shiftId}`,
       action: url.pathname.split('/').at(-1),
       label: 'Cash Close',
+    }
+  }
+
+  if (isReconciliation) {
+    const stored = reconciliationRecord?.payload_json ? JSON.parse(reconciliationRecord.payload_json) : null
+    const businessDate = String(body.business_date || reconciliationRecord?.business_date || stored?.business_date || '').trim()
+    const shiftId = String(body.shift_id || stored?.shift_id || 'night').trim().toLowerCase()
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(businessDate)) {
+      const error = new Error('business_date must use YYYY-MM-DD')
+      error.status = 400
+      error.code = 'invalid_business_date'
+      throw error
+    }
+    return {
+      scopeKey: `payment-reconciliation:${outletId}:${businessDate}:${shiftId}`,
+      outletId,
+      resourceType: 'payment-reconciliation',
+      resourceId: `${businessDate}:${shiftId}`,
+      action: url.pathname.split('/').at(-1),
+      label: 'Payment Reconciliation',
     }
   }
 
